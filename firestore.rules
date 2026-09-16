@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isUser(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function isAdmin() {
+      return signedIn() && userDoc().role == 'admin';
+    }
+
+    match /users/{uid} {
+      allow read: if isUser(uid) || isAdmin()
+        || (signedIn() && resource.data.role == 'technician');
+      allow create: if isUser(uid);
+      allow update: if isUser(uid) || isAdmin();
+    }
+
+    match /services/{id} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+
+    match /jobLocations/{jobId} {
+      allow read, update: if signedIn() && resource.data.customerId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.customerId == request.auth.uid;
+    }
+
+    match /jobs/{jobId} {
+      function isCustomer() {
+        return signedIn() && resource.data.customerId == request.auth.uid;
+      }
+      function isTech() {
+        return signedIn() && resource.data.technicianId == request.auth.uid;
+      }
+      function creatingOwnJob() {
+        return signedIn()
+          && request.resource.data.customerId == request.auth.uid
+          && request.resource.data.status in ['dispatching', 'offerPending'];
+      }
+
+      allow create: if creatingOwnJob();
+      allow read: if isCustomer() || isTech() || isAdmin()
+        || (signedIn() && userDoc().role == 'technician'
+            && resource.data.status in ['dispatching', 'offerPending', 'comparing']);
+      allow update: if isCustomer() || isTech() || isAdmin()
+        || (signedIn() && userDoc().role == 'technician'
+            && resource.data.status in ['dispatching', 'offerPending', 'comparing']);
+    }
+
+    match /jobOffers/{offerId} {
+      allow read: if signedIn() && (
+        resource.data.technicianId == request.auth.uid
+        || isAdmin()
+        || get(/databases/$(database)/documents/jobs/$(resource.data.jobId)).data.customerId == request.auth.uid
+      );
+      allow create: if signedIn();
+      allow update: if signedIn() && (
+        resource.data.technicianId == request.auth.uid
+        || isAdmin()
+        || get(/databases/$(database)/documents/jobs/$(resource.data.jobId)).data.customerId == request.auth.uid
+      );
+    }
+  }
+}

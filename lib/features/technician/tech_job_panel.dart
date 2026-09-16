@@ -1,0 +1,172 @@
+import 'package:flutter/material.dart';
+import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/strings.dart';
+import 'package:barrr/features/jobs/rating_sheet.dart';
+import 'package:barrr/features/warranty/warranty_form.dart';
+import 'package:barrr/models/app_user.dart';
+import 'package:barrr/models/job.dart';
+import 'package:barrr/models/warranty.dart';
+
+class TechJobPanel extends StatefulWidget {
+  const TechJobPanel({super.key, required this.job, required this.me});
+
+  final Job job;
+  final AppUser me;
+
+  @override
+  State<TechJobPanel> createState() => _TechJobPanelState();
+}
+
+class _TechJobPanelState extends State<TechJobPanel> {
+  final _finalPrice = TextEditingController();
+  final _received = TextEditingController();
+  bool _warranty = false;
+  WarrantyType _wType = WarrantyType.work;
+  String _wNote = '';
+
+  @override
+  void dispose() {
+    _finalPrice.dispose();
+    _received.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final job = widget.job;
+    return Material(
+      elevation: 12,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(_title(job.status), style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text(job.serviceTitle ?? ''),
+              if (job.status == JobStatus.quoted)
+                const Text('بانتظار قبول العميل للسعر المبدئي. الموقع الحقيقي مخفي.'),
+              if (job.locationRevealed)
+                Text(
+                  'موقع العميل: ${job.displayLocation.latitude.toStringAsFixed(5)}, ${job.displayLocation.longitude.toStringAsFixed(5)}',
+                ),
+              const SizedBox(height: 12),
+              ..._actions(context, job),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _title(JobStatus s) {
+    switch (s) {
+      case JobStatus.quoted:
+        return 'تم قبولك — انتظر موافقة العميل';
+      case JobStatus.enRoute:
+        return 'توجه إلى العميل';
+      case JobStatus.arrived:
+        return 'افحص السيارة وحدد السعر النهائي';
+      case JobStatus.finalQuote:
+        return 'بانتظار موافقة العميل على السعر النهائي';
+      case JobStatus.inProgress:
+        return 'يمكنك إنهاء المهمة بعد العمل';
+      case JobStatus.completed:
+        return 'قيّم العميل';
+      default:
+        return 'مهمة جارية';
+    }
+  }
+
+  List<Widget> _actions(BuildContext context, Job job) {
+    final jobs = AppScope.of(context).jobs;
+    switch (job.status) {
+      case JobStatus.enRoute:
+        return [
+          FilledButton(
+            onPressed: () => jobs.markArrived(job.id),
+            child: const Text(AppStrings.arrived),
+          ),
+        ];
+      case JobStatus.arrived:
+        return [
+          TextField(
+            controller: _finalPrice,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: AppStrings.finalPrice),
+          ),
+          const SizedBox(height: 8),
+          WarrantyForm(
+            enabled: _warranty,
+            type: _wType,
+            note: _wNote,
+            onEnabled: (v) => setState(() => _warranty = v),
+            onType: (v) => setState(() => _wType = v),
+            onNote: (v) => _wNote = v,
+          ),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: () {
+              final p = double.tryParse(_finalPrice.text);
+              if (p == null) return;
+              jobs.submitFinalQuote(
+                jobId: job.id,
+                finalPrice: p,
+                warranty: Warranty(
+                  enabled: _warranty,
+                  type: _wType,
+                  days: 2,
+                  note: _wNote.isEmpty ? null : _wNote,
+                ),
+              );
+            },
+            child: const Text('إرسال السعر النهائي'),
+          ),
+        ];
+      case JobStatus.inProgress:
+        return [
+          const Text(AppStrings.cashNote),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _received,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: AppStrings.receivedAmount),
+          ),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: () {
+              final p = double.tryParse(_received.text);
+              if (p == null) return;
+              jobs.completeJob(
+                jobId: job.id,
+                receivedAmount: p,
+                warrantyEnabled: job.warranty.enabled,
+              );
+            },
+            child: const Text(AppStrings.endJob),
+          ),
+        ];
+      case JobStatus.completed:
+        return [
+          if (job.ratings.techToCustomer == null)
+            FilledButton(
+              onPressed: () async {
+                final stars = await showRatingSheet(context, title: 'قيّم العميل');
+                if (stars == null) return;
+                await jobs.rateAsTechnician(job.id, stars);
+                await AppScope.of(context).users.applyRating(job.customerId, stars);
+                await jobs.markRatedIfDone(job.id);
+              },
+              child: const Text('تقييم العميل'),
+            )
+          else
+            const Text('تم إرسال تقييمك.'),
+        ];
+      default:
+        return const [SizedBox.shrink()];
+    }
+  }
+}
