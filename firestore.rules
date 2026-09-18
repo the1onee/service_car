@@ -15,10 +15,33 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
+      // حقول لا يملكها المستخدم: تُدار من الإدارة أو من Cloud Functions فقط.
+      function protectedFields() {
+        return [
+          'role',
+          'verified',
+          'verificationStatus',
+          'walletBalance',
+          'ratingAvg',
+          'ratingCount',
+        ];
+      }
+      function keepsProtectedFields() {
+        return !request.resource.data.diff(resource.data)
+          .affectedKeys().hasAny(protectedFields());
+      }
+
       allow read: if isUser(uid) || isAdmin()
         || (signedIn() && resource.data.role == 'technician');
-      allow create: if isUser(uid);
-      allow update: if isUser(uid) || isAdmin();
+
+      // التسجيل من التطبيق يفتح حساب عميل فقط، بمحفظة وتقييمات صفرية.
+      allow create: if isUser(uid)
+        && request.resource.data.role == 'customer'
+        && request.resource.data.walletBalance == 0
+        && request.resource.data.ratingCount == 0;
+
+      // المستخدم يعدّل بياناته العامة فقط (الاسم، العنوان، الموقع، التوفر...).
+      allow update: if isAdmin() || (isUser(uid) && keepsProtectedFields());
     }
 
     match /services/{id} {

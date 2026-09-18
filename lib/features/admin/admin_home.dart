@@ -32,7 +32,7 @@ class AdminHome extends StatelessWidget {
             itemBuilder: (context, i) {
               final t = list[i];
               return ListTile(
-                title: Text(t.name.isEmpty ? t.email : t.name),
+                title: Text(t.name.isEmpty ? t.phone : t.name),
                 subtitle: Text(
                   '${t.verificationStatus.name} — محفظة ${t.walletBalance.toStringAsFixed(0)} د.ع\n${t.phone}',
                 ),

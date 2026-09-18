@@ -1,14 +1,40 @@
 class AppStrings {
   static const appName = 'طلب الفني';
+  static const tagline = 'فني موثوق يصل إليك في أي مكان';
+
+  // المصادقة
   static const login = 'تسجيل الدخول';
   static const register = 'إنشاء حساب';
-  static const email = 'البريد الإلكتروني';
   static const password = 'كلمة المرور';
-  static const name = 'الاسم';
+  static const confirmPassword = 'تأكيد كلمة المرور';
+  static const newPassword = 'كلمة المرور الجديدة';
+  static const name = 'الاسم الكامل';
   static const phone = 'رقم الهاتف';
-  static const role = 'نوع الحساب';
+  static const address = 'العنوان';
+  static const welcomeBack = 'أهلاً بعودتك';
+  static const loginHint = 'سجّل بالهاتف وكلمة المرور للمتابعة';
+  static const registerTitle = 'حساب عميل جديد';
+  static const registerHint = 'أكمل بياناتك ثم أكّد رقم هاتفك';
+  static const customerAccountNote =
+      'يُفتح الحساب كحساب عميل. حسابات الفنيين تُنشأ عبر الإدارة.';
+  static const forgotPassword = 'نسيت كلمة المرور؟';
+  static const resetPassword = 'استعادة كلمة المرور';
+  static const noAccount = 'ليس لديك حساب؟';
+  static const haveAccount = 'لديك حساب بالفعل؟';
+  static const continueLabel = 'متابعة';
+  static const verifyPhone = 'تأكيد رقم الهاتف';
+  static const otpSentTo = 'أدخل الرمز المرسل إلى';
+  static const verifyOtp = 'تأكيد الرمز';
+  static const resendOtp = 'إعادة إرسال الرمز';
+  static const resendIn = 'إعادة الإرسال بعد';
+  static const changePhone = 'تغيير الرقم';
+  static const logout = 'تسجيل الخروج';
+
+  // الأدوار
   static const customer = 'عميل';
   static const technician = 'فني';
+
+  // الرحلة
   static const pickLocation = 'حدد موقعك على الخريطة';
   static const confirmLocation = 'تأكيد الموقع';
   static const pickService = 'اختر الخدمة';
@@ -18,7 +44,8 @@ class AppStrings {
   static const verifiedBadge = 'فني موثق';
   static const wallet = 'المحفظة';
   static const topUp = 'شحن الرصيد';
-  static const cashNote = 'الدفع نقداً للفني مباشرة. التطبيق يخصم عمولة 10% من محفظة الفني.';
+  static const cashNote =
+      'الدفع نقداً للفني مباشرة. التطبيق يخصم عمولة 10% من محفظة الفني.';
   static const accept = 'قبول';
   static const reject = 'رفض';
   static const online = 'متاح لاستقبال الطلبات';

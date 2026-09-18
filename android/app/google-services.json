@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "500429219707",
+    "project_id": "car-services-iraq",
+    "storage_bucket": "car-services-iraq.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:500429219707:android:ea9ef8f0500be088cdffde",
+        "android_client_info": {
+          "package_name": "com.barrr.barrr"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD5gXhU8YdyPJvem0R7PKec463BXqToHdU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

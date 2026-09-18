@@ -8,19 +8,30 @@
 
 الدفع نقداً بين العميل والفني. عمولة التطبيق 10% تُخصم من **محفظة الفني**. بدون توثيق أو رصيد أقل من 10,000 د.ع لا تُستقبل طلبات جديدة.
 
-## التشغيل على المتصفح
+## المصادقة
+
+- تسجيل الدخول: رقم الهاتف + كلمة المرور.
+- إنشاء الحساب: الاسم، الهاتف، كلمة المرور، العنوان — يُفتح كـ **حساب عميل** فقط.
+- Firebase لا يدعم كلمة مرور لمزوّد الهاتف، فيُربط كل رقم ببريد داخلي
+  `<digits>@phone.barrr.app` ويُستخدم رمز SMS لإثبات ملكية الرقم عند التسجيل أو استعادة كلمة المرور.
+- فعّل مزوّدَي **Phone** و**Email/Password** في Firebase Authentication.
+- للتجربة بدون فوترة: أضف أرقام اختبار في إعدادات Phone، واحذفها قبل الإطلاق.
+
+## التشغيل
 
 ```bash
 flutter pub get
-flutter run -d chrome --web-port 8080
+flutter run -d chrome --web-hostname localhost --web-port 8080
+# أو
+flutter run -d android
 ```
 
-ضع مفتاح Google Maps في `web/index.html` داخل سكربت Maps.
-أنشئ مشروع Firebase وشغّل `flutterfire configure` حتى تعمل المصادقة والطلبات.
+استبدل `YOUR_MAPS_KEY` بمفتاح Google Maps في:
+- `web/index.html`
+- `android/app/src/main/AndroidManifest.xml`
 
-## التشغيل على الهاتف
+نشر القواعد والدوال:
 
-1. `flutter create . --org com.barrr --project-name barrr --platforms android,ios`
-2. ثبّت مفتاح الخرائط وصلاحيات الموقع كما في `docs/maps-and-permissions.md`
-3. `firebase deploy --only firestore:rules,firestore:indexes,functions`
-4. `flutter run`
+```bash
+firebase deploy --only firestore:rules,firestore:indexes,functions
+```

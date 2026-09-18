@@ -11,7 +11,7 @@ class AppUser {
     required this.role,
     required this.name,
     required this.phone,
-    required this.email,
+    this.address = '',
     this.ratingAvg = 5,
     this.ratingCount = 0,
     this.fcmToken,
@@ -27,7 +27,7 @@ class AppUser {
   final UserRole role;
   final String name;
   final String phone;
-  final String email;
+  final String address;
   final double ratingAvg;
   final int ratingCount;
   final String? fcmToken;
@@ -51,7 +51,7 @@ class AppUser {
         'role': role.name,
         'name': name,
         'phone': phone,
-        'email': email,
+        'address': address,
         'ratingAvg': ratingAvg,
         'ratingCount': ratingCount,
         'fcmToken': fcmToken,
@@ -75,7 +75,7 @@ class AppUser {
       ),
       name: d['name'] as String? ?? '',
       phone: d['phone'] as String? ?? '',
-      email: d['email'] as String? ?? '',
+      address: d['address'] as String? ?? '',
       ratingAvg: (d['ratingAvg'] as num?)?.toDouble() ?? 5,
       ratingCount: (d['ratingCount'] as num?)?.toInt() ?? 0,
       fcmToken: d['fcmToken'] as String?,
@@ -105,7 +105,7 @@ class AppUser {
       role: role,
       name: name,
       phone: phone,
-      email: email,
+      address: address,
       ratingAvg: ratingAvg,
       ratingCount: ratingCount,
       fcmToken: fcmToken ?? this.fcmToken,

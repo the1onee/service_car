@@ -3,8 +3,6 @@ import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/geo.dart';
 import 'package:barrr/data/collections.dart';
 import 'package:barrr/data/service_catalog.dart';
-import 'package:barrr/demo/demo_mode.dart';
-import 'package:barrr/demo/demo_store.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/models/job_offer.dart';
 import 'package:barrr/models/warranty.dart';
@@ -19,16 +17,10 @@ class JobRepository {
   CollectionReference<Map<String, dynamic>> get _offers => _db.collection(Cols.jobOffers);
 
   Stream<Job?> watchJob(String jobId) {
-    if (DemoMode.enabled) {
-      return DemoStore.instance.map(() => DemoStore.instance.jobs[jobId]);
-    }
     return _jobs.doc(jobId).snapshots().map((d) => d.exists ? Job.fromDoc(d) : null);
   }
 
   Stream<Job?> watchActiveForCustomer(String uid) {
-    if (DemoMode.enabled) {
-      return DemoStore.instance.map(() => DemoStore.instance.activeForCustomer(uid));
-    }
     return _jobs
         .where('customerId', isEqualTo: uid)
         .orderBy('createdAt', descending: true)
@@ -38,9 +30,6 @@ class JobRepository {
   }
 
   Stream<Job?> watchActiveForTechnician(String uid) {
-    if (DemoMode.enabled) {
-      return DemoStore.instance.map(() => DemoStore.instance.activeForTechnician(uid));
-    }
     return _jobs
         .where('technicianId', isEqualTo: uid)
         .orderBy('createdAt', descending: true)
@@ -50,9 +39,6 @@ class JobRepository {
   }
 
   Stream<List<JobOffer>> watchJobQuotes(String jobId) {
-    if (DemoMode.enabled) {
-      return DemoStore.instance.map(() => DemoStore.instance.quotesFor(jobId));
-    }
     return _offers.where('jobId', isEqualTo: jobId).snapshots().map((s) {
       final list = s.docs.map(JobOffer.fromDoc).toList();
       list.sort((a, b) => (a.initialPrice ?? 1e12).compareTo(b.initialPrice ?? 1e12));
@@ -85,9 +71,6 @@ class JobRepository {
   }
 
   Stream<List<JobOffer>> watchPendingOffers(String technicianId) {
-    if (DemoMode.enabled) {
-      return DemoStore.instance.map(() => DemoStore.instance.pendingOffers(technicianId));
-    }
     return _offers
         .where('technicianId', isEqualTo: technicianId)
         .where('status', isEqualTo: 'pending')
@@ -101,14 +84,6 @@ class JobRepository {
     required String serviceTitle,
     required GeoPoint exact,
   }) async {
-    if (DemoMode.enabled) {
-      return DemoStore.instance.createJob(
-        customerId: customerId,
-        serviceId: serviceId,
-        serviceTitle: serviceTitle,
-        exact: exact,
-      );
-    }
     final ref = _jobs.doc();
     final emergency = isEmergencyService(serviceId);
     final job = Job(
@@ -132,7 +107,6 @@ class JobRepository {
   }
 
   Future<void> dispatch(String jobId) async {
-    if (DemoMode.enabled) return DemoStore.instance.dispatch(jobId);
     final jobSnap = await _jobs.doc(jobId).get();
     if (!jobSnap.exists) return;
     final job = Job.fromDoc(jobSnap);
@@ -225,14 +199,6 @@ class JobRepository {
     required String technicianName,
     required double initialPrice,
   }) async {
-    if (DemoMode.enabled) {
-      return DemoStore.instance.acceptOffer(
-        offerId: offerId,
-        technicianId: technicianId,
-        technicianName: technicianName,
-        initialPrice: initialPrice,
-      );
-    }
     final offerSnap = await _offers.doc(offerId).get();
     if (!offerSnap.exists) return false;
     final jobId = offerSnap.data()?['jobId'] as String?;
@@ -350,7 +316,6 @@ class JobRepository {
   }
 
   Future<void> closeQuoteWindow(String jobId) async {
-    if (DemoMode.enabled) return DemoStore.instance.closeQuoteWindow(jobId);
     final snap = await _jobs.doc(jobId).get();
     if (!snap.exists) return;
     final job = Job.fromDoc(snap);
@@ -377,7 +342,6 @@ class JobRepository {
   }
 
   Future<bool> customerSelectOffer(String jobId, JobOffer offer) async {
-    if (DemoMode.enabled) return DemoStore.instance.customerSelectOffer(jobId, offer);
     final snap = await _jobs.doc(jobId).get();
     if (!snap.exists) return false;
     final job = Job.fromDoc(snap);
@@ -411,7 +375,6 @@ class JobRepository {
   }
 
   Future<void> rejectOffer(String offerId) {
-    if (DemoMode.enabled) return DemoStore.instance.rejectOffer(offerId);
     return _offers.doc(offerId).update({'status': 'rejected'});
   }
 
@@ -429,7 +392,6 @@ class JobRepository {
   }
 
   Future<void> onWindowExpired(String jobId) async {
-    if (DemoMode.enabled) return DemoStore.instance.onWindowExpired(jobId);
     final snap = await _jobs.doc(jobId).get();
     if (!snap.exists) return;
     final job = Job.fromDoc(snap);
@@ -442,9 +404,6 @@ class JobRepository {
   }
 
   Future<void> maybeRedispatch(String jobId, {bool expirePending = true}) async {
-    if (DemoMode.enabled) {
-      return DemoStore.instance.maybeRedispatch(jobId, expirePending: expirePending);
-    }
     final snap = await _jobs.doc(jobId).get();
     if (!snap.exists) return;
     final job = Job.fromDoc(snap);
@@ -482,7 +441,6 @@ class JobRepository {
   }
 
   Future<void> customerAcceptQuote(String jobId) async {
-    if (DemoMode.enabled) return DemoStore.instance.customerAcceptQuote(jobId);
     final loc = await _db.collection('jobLocations').doc(jobId).get();
     final exact = loc.data()?['exact'] as GeoPoint?;
     await _jobs.doc(jobId).update({
@@ -492,7 +450,6 @@ class JobRepository {
   }
 
   Future<void> customerRejectQuote(String jobId) async {
-    if (DemoMode.enabled) return DemoStore.instance.customerRejectQuote(jobId);
     await expireOpenOffers(jobId);
     await _jobs.doc(jobId).update({
       'status': JobStatus.cancelled.name,
@@ -501,7 +458,6 @@ class JobRepository {
   }
 
   Future<void> markArrived(String jobId) {
-    if (DemoMode.enabled) return DemoStore.instance.markArrived(jobId);
     return _jobs.doc(jobId).update({'status': JobStatus.arrived.name});
   }
 
@@ -510,13 +466,6 @@ class JobRepository {
     required double finalPrice,
     required Warranty warranty,
   }) {
-    if (DemoMode.enabled) {
-      return DemoStore.instance.submitFinalQuote(
-        jobId: jobId,
-        finalPrice: finalPrice,
-        warranty: warranty,
-      );
-    }
     return _jobs.doc(jobId).update({
       'finalPrice': finalPrice,
       'warranty': warranty.toMap(),
@@ -525,7 +474,6 @@ class JobRepository {
   }
 
   Future<void> customerAcceptFinal(String jobId) {
-    if (DemoMode.enabled) return DemoStore.instance.customerAcceptFinal(jobId);
     return _jobs.doc(jobId).update({'status': JobStatus.inProgress.name});
   }
 
@@ -534,13 +482,6 @@ class JobRepository {
     required double receivedAmount,
     required bool warrantyEnabled,
   }) async {
-    if (DemoMode.enabled) {
-      return DemoStore.instance.completeJob(
-        jobId: jobId,
-        receivedAmount: receivedAmount,
-        warrantyEnabled: warrantyEnabled,
-      );
-    }
     final commission = (receivedAmount * AppConstants.commissionRate * 100).round() / 100;
     await _db.runTransaction((tx) async {
       final jobRef = _jobs.doc(jobId);
@@ -568,21 +509,18 @@ class JobRepository {
   }
 
   Future<void> rateAsCustomer(String jobId, int stars) {
-    if (DemoMode.enabled) return DemoStore.instance.rateAsCustomer(jobId, stars);
     return _jobs.doc(jobId).update({
       'ratings.customerToTech': stars,
     });
   }
 
   Future<void> rateAsTechnician(String jobId, int stars) {
-    if (DemoMode.enabled) return DemoStore.instance.rateAsTechnician(jobId, stars);
     return _jobs.doc(jobId).update({
       'ratings.techToCustomer': stars,
     });
   }
 
   Future<void> markRatedIfDone(String jobId) async {
-    if (DemoMode.enabled) return DemoStore.instance.markRatedIfDone(jobId);
     final snap = await _jobs.doc(jobId).get();
     if (!snap.exists) return;
     final job = Job.fromDoc(snap);

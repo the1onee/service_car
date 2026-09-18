@@ -1,8 +1,8 @@
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:barrr/demo/demo_mode.dart';
 import 'package:barrr/models/job_offer.dart';
 import 'package:barrr/services/job_repository.dart';
 
+/// يفضّل تنفيذ التوزيع على Cloud Functions، ويعود إلى التنفيذ المحلي عند الفشل.
 class DispatchService {
   DispatchService(this._jobs, {FirebaseFunctions? functions}) : _injected = functions;
 
@@ -11,10 +11,6 @@ class DispatchService {
   FirebaseFunctions get _functions => _injected ?? FirebaseFunctions.instance;
 
   Future<void> dispatch(String jobId) async {
-    if (DemoMode.enabled) {
-      await _jobs.dispatch(jobId);
-      return;
-    }
     try {
       await _functions.httpsCallable('dispatchJob').call({'jobId': jobId});
     } catch (_) {
@@ -28,14 +24,6 @@ class DispatchService {
     required String technicianName,
     required double initialPrice,
   }) async {
-    if (DemoMode.enabled) {
-      return _jobs.acceptOffer(
-        offerId: offerId,
-        technicianId: technicianId,
-        technicianName: technicianName,
-        initialPrice: initialPrice,
-      );
-    }
     try {
       final res = await _functions.httpsCallable('acceptOffer').call({
         'offerId': offerId,
@@ -53,10 +41,6 @@ class DispatchService {
   }
 
   Future<void> onWindowExpired(String jobId) async {
-    if (DemoMode.enabled) {
-      await _jobs.onWindowExpired(jobId);
-      return;
-    }
     try {
       await _functions.httpsCallable('onWindowExpired').call({'jobId': jobId});
     } catch (_) {
@@ -68,7 +52,6 @@ class DispatchService {
     required String jobId,
     required JobOffer offer,
   }) async {
-    if (DemoMode.enabled) return _jobs.customerSelectOffer(jobId, offer);
     try {
       final res = await _functions.httpsCallable('selectOffer').call({
         'jobId': jobId,
