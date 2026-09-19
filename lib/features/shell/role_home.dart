@@ -24,7 +24,8 @@ class _RoleHomeState extends State<RoleHome> {
     _booted = true;
     final scope = AppScope.of(context);
     scope.fcm.init(widget.profile.id);
-    scope.users.seedServicesIfNeeded();
+    // كتالوج الخدمات يُدار من لوحة التحكم، والقواعد تسمح بالكتابة للأدمن فقط.
+    if (widget.profile.isAdmin) scope.users.seedServicesIfNeeded();
   }
 
   @override

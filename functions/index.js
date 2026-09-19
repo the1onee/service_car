@@ -1,10 +1,10 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
-const { initializeApp } = require("firebase-admin/app");
+const { getApps, initializeApp } = require("firebase-admin/app");
 const { getFirestore, Timestamp } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 
-initializeApp();
+if (getApps().length === 0) initializeApp();
 const db = getFirestore();
 
 const EMERGENCY_IDS = new Set(["towing", "locks", "fuel"]);
@@ -424,3 +424,10 @@ exports.onJobStatus = onDocumentUpdated("jobs/{jobId}", async (event) => {
   const token = msg.to === "tech" ? tToken : cToken;
   await notify([token], msg.title, msg.body, { jobId, type: after.status });
 });
+
+// عمليات لوحة التحكم التي تحتاج Admin SDK. تُستدعى بعد initializeApp أعلاه.
+const adminUsers = require("./admin_users");
+exports.createUserAccount = adminUsers.createUserAccount;
+exports.deleteUserAccount = adminUsers.deleteUserAccount;
+exports.setUserPassword = adminUsers.setUserPassword;
+exports.setUserDisabled = adminUsers.setUserDisabled;

@@ -7,11 +7,33 @@ service cloud.firestore {
     function isUser(uid) {
       return signedIn() && request.auth.uid == uid;
     }
+    // ملف المستخدم قد لا يكون موجوداً بعد أثناء التسجيل، فالتحقق من الوجود
+    // ضروري قبل قراءته وإلا فشل تقييم القاعدة.
+    function profileExists() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
     function userDoc() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
+    function hasRole(role) {
+      return profileExists() && userDoc().get('role', '') == role;
+    }
     function isAdmin() {
-      return signedIn() && userDoc().role == 'admin';
+      return hasRole('admin');
+    }
+    function isTechnicianRole() {
+      return hasRole('technician');
+    }
+    // مالك المستند: يُمرَّر له حقل المعرّف من المستند.
+    function isOwner(uid) {
+      return signedIn() && uid == request.auth.uid;
+    }
+
+    // لوحة التحكم: الأدمن يقرأ ويكتب ويحذف في كل المجموعات.
+    // هذا يغطي المجموعات الحالية والجديدة دون تكرار القواعد لكل واحدة.
+    match /{document=**} {
+      allow read, write: if isAdmin();
     }
 
     match /users/{uid} {
@@ -31,7 +53,7 @@ service cloud.firestore {
           .affectedKeys().hasAny(protectedFields());
       }
 
-      allow read: if isUser(uid) || isAdmin()
+      allow read: if isUser(uid)
         || (signedIn() && resource.data.role == 'technician');
 
       // التسجيل من التطبيق يفتح حساب عميل فقط، بمحفظة وتقييمات صفرية.
@@ -41,53 +63,120 @@ service cloud.firestore {
         && request.resource.data.ratingCount == 0;
 
       // المستخدم يعدّل بياناته العامة فقط (الاسم، العنوان، الموقع، التوفر...).
-      allow update: if isAdmin() || (isUser(uid) && keepsProtectedFields());
+      allow update: if isUser(uid) && keepsProtectedFields();
     }
 
+    // كتالوج الخدمات يُدار من لوحة التحكم فقط، والتطبيق يقرأه.
     match /services/{id} {
       allow read: if signedIn();
-      allow write: if signedIn();
     }
 
     match /jobLocations/{jobId} {
-      allow read, update: if signedIn() && resource.data.customerId == request.auth.uid;
-      allow create: if signedIn() && request.resource.data.customerId == request.auth.uid;
+      allow read, update: if isOwner(resource.data.customerId);
+      allow create: if isOwner(request.resource.data.customerId);
     }
 
     match /jobs/{jobId} {
       function isCustomer() {
-        return signedIn() && resource.data.customerId == request.auth.uid;
+        return isOwner(resource.data.customerId);
       }
       function isTech() {
-        return signedIn() && resource.data.technicianId == request.auth.uid;
+        return isOwner(resource.data.technicianId);
       }
       function creatingOwnJob() {
-        return signedIn()
-          && request.resource.data.customerId == request.auth.uid
+        return isOwner(request.resource.data.customerId)
           && request.resource.data.status in ['dispatching', 'offerPending'];
+      }
+      function isOpenForBidding() {
+        return isTechnicianRole()
+          && resource.data.status in ['dispatching', 'offerPending', 'comparing'];
       }
 
       allow create: if creatingOwnJob();
-      allow read: if isCustomer() || isTech() || isAdmin()
-        || (signedIn() && userDoc().role == 'technician'
-            && resource.data.status in ['dispatching', 'offerPending', 'comparing']);
-      allow update: if isCustomer() || isTech() || isAdmin()
-        || (signedIn() && userDoc().role == 'technician'
-            && resource.data.status in ['dispatching', 'offerPending', 'comparing']);
+      allow read: if isCustomer() || isTech() || isOpenForBidding();
+      allow update: if isCustomer() || isTech() || isOpenForBidding();
     }
 
     match /jobOffers/{offerId} {
-      allow read: if signedIn() && (
-        resource.data.technicianId == request.auth.uid
-        || isAdmin()
-        || get(/databases/$(database)/documents/jobs/$(resource.data.jobId)).data.customerId == request.auth.uid
-      );
+      function jobCustomerId() {
+        return get(/databases/$(database)/documents/jobs/$(resource.data.jobId))
+          .data.customerId;
+      }
+
+      allow read: if isOwner(resource.data.technicianId) || isOwner(jobCustomerId());
       allow create: if signedIn();
-      allow update: if signedIn() && (
-        resource.data.technicianId == request.auth.uid
-        || isAdmin()
-        || get(/databases/$(database)/documents/jobs/$(resource.data.jobId)).data.customerId == request.auth.uid
-      );
+      allow update: if isOwner(resource.data.technicianId) || isOwner(jobCustomerId());
     }
+
+    // ---------------------------------------------------------------
+    // مجموعات تُدار من لوحة التحكم. الكتابة للأدمن فقط (القاعدة العامة أعلاه)،
+    // وما يلي يحدد ما يستطيع التطبيق قراءته أو إنشاءه.
+    // ---------------------------------------------------------------
+
+    // بيانات مرجعية يقرأها التطبيق: التصنيفات، السيارات، المناطق، الإعدادات.
+    match /serviceCategories/{id} {
+      allow read: if signedIn();
+    }
+    match /carBrands/{id} {
+      allow read: if signedIn();
+    }
+    match /carModels/{id} {
+      allow read: if signedIn();
+    }
+    match /carYears/{id} {
+      allow read: if signedIn();
+    }
+    match /cities/{id} {
+      allow read: if signedIn();
+    }
+    match /serviceAreas/{id} {
+      allow read: if signedIn();
+    }
+    match /appSettings/{id} {
+      allow read: if signedIn();
+    }
+
+    // الضمان: صاحب الطلب أو الفني ينشئ ويقرأ، والإدارة تتابع.
+    match /warranties/{id} {
+      allow read: if isOwner(resource.data.customerId)
+        || isOwner(resource.data.technicianId);
+      allow create: if isOwner(request.resource.data.customerId)
+        || isOwner(request.resource.data.technicianId);
+    }
+    match /warrantyClaims/{id} {
+      allow read: if isOwner(resource.data.customerId)
+        || isOwner(resource.data.technicianId);
+      allow create: if isOwner(request.resource.data.customerId);
+    }
+
+    // المحاسبة: كل طرف يرى حركاته فقط.
+    match /transactions/{id} {
+      allow read: if isOwner(resource.data.userId);
+    }
+    match /payouts/{id} {
+      allow read: if isOwner(resource.data.technicianId);
+    }
+
+    // الدعم والنزاعات: المستخدم يفتح التذكرة ويقرأ تذاكره.
+    match /supportTickets/{id} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isOwner(request.resource.data.userId);
+    }
+    match /disputes/{id} {
+      allow read: if isOwner(resource.data.customerId)
+        || isOwner(resource.data.technicianId);
+      allow create: if isOwner(request.resource.data.customerId)
+        || isOwner(request.resource.data.technicianId);
+    }
+
+    // الإشعارات: المستلم يقرأ ويعلّم إشعاره كمقروء.
+    match /notifications/{id} {
+      allow read: if isOwner(resource.data.userId);
+      allow update: if isOwner(resource.data.userId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['read', 'readAt']);
+    }
+
+    // مجموعات إدارية بحتة (adminLogs...) تكفيها القاعدة العامة أعلاه.
   }
 }

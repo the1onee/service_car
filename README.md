@@ -33,5 +33,30 @@ flutter run -d android
 نشر القواعد والدوال:
 
 ```bash
+cd functions && npm install && cd ..
 firebase deploy --only firestore:rules,firestore:indexes,functions
 ```
+
+## Cloud Functions
+
+`functions/index.js` يضم محرك التوزيع والعروض والإشعارات، وبالإضافة إليه دوال لوحة التحكم
+في `functions/admin_users.js` وكلها تتطلب أن يكون دور صاحب الطلب `admin` في `users/{uid}`:
+
+| الدالة | الغرض |
+| --- | --- |
+| `createUserAccount` | إنشاء حساب عميل أو فني بالرقم وكلمة المرور (Admin SDK يربط الرقم دون رمز SMS). |
+| `deleteUserAccount` | حذف حساب المصادقة وملف التعريف معاً. |
+| `setUserPassword` | تعيين كلمة مرور جديدة لمستخدم. |
+| `setUserDisabled` | تعطيل أو تفعيل حساب دون حذفه. |
+
+كل الدوال على المنطقة الافتراضية `us-central1` لأن التطبيق يستدعيها عبر
+`FirebaseFunctions.instance`؛ تغيير المنطقة يكسر التوزيع.
+
+`functions/phone.js` نسخة مطابقة لـ `lib/core/phone.dart`؛ أي تعديل على اشتقاق البريد
+الداخلي يجب أن يُطبَّق في الملفين معاً وفي لوحة التحكم.
+
+## لوحة التحكم (ويب)
+
+مشروع منفصل في `C:\barrr-admin` (Vite + React + TypeScript) على نفس مشروع Firebase.
+الصلاحيات: القاعدة العامة في `firestore.rules` تمنح الأدمن قراءة وكتابة وحذفاً على كل
+المجموعات، وكتالوج `services` صار للأدمن فقط بينما يقرأه التطبيق.

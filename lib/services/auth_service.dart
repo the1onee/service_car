@@ -134,17 +134,19 @@ class AuthService {
 
     try {
       await user.updateDisplayName(name.trim());
-      await _db.collection(Cols.users).doc(user.uid).set(
-            AppUser(
-              id: user.uid,
-              role: UserRole.customer,
-              name: name.trim(),
-              phone: e164,
-              address: address.trim(),
-              verified: true,
-              verificationStatus: VerificationStatus.approved,
-            ).toMap(),
-          );
+      await _db.collection(Cols.users).doc(user.uid).set({
+        ...AppUser(
+          id: user.uid,
+          role: UserRole.customer,
+          name: name.trim(),
+          phone: e164,
+          address: address.trim(),
+          verified: true,
+          verificationStatus: VerificationStatus.approved,
+        ).toMap(),
+        // تحتاجه لوحة التحكم لترتيب العملاء بتاريخ التسجيل.
+        'createdAt': FieldValue.serverTimestamp(),
+      });
     } catch (e) {
       // لا نترك حساباً بلا ملف تعريف.
       await _discardIncompleteAccount(user);
