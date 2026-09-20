@@ -146,9 +146,11 @@ class _TechnicianHomeState extends State<TechnicianHome> {
                                 child: SwitchListTile(
                                   title: Text(me.isOnline ? AppStrings.online : AppStrings.offline),
                                   subtitle: Text(
-                                    me.verified
+                                    me.verificationStatus == VerificationStatus.approved
                                         ? scope.users.walletHint(me)
-                                        : AppStrings.pendingVerify,
+                                        : me.verificationStatus == VerificationStatus.rejected
+                                            ? 'تم رفض طلب الانضمام. راجع الإدارة.'
+                                            : AppStrings.pendingVerify,
                                   ),
                                   value: me.isOnline,
                                   onChanged: _toggleOnline,

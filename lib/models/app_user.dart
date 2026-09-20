@@ -12,6 +12,7 @@ class AppUser {
     required this.name,
     required this.phone,
     this.address = '',
+    this.idCard = '',
     this.ratingAvg = 5,
     this.ratingCount = 0,
     this.fcmToken,
@@ -28,6 +29,8 @@ class AppUser {
   final String name;
   final String phone;
   final String address;
+  /// رقم البطاقة الوطنية / هوية — اختياري.
+  final String idCard;
   final double ratingAvg;
   final int ratingCount;
   final String? fcmToken;
@@ -52,6 +55,7 @@ class AppUser {
         'name': name,
         'phone': phone,
         'address': address,
+        'idCard': idCard,
         'ratingAvg': ratingAvg,
         'ratingCount': ratingCount,
         'fcmToken': fcmToken,
@@ -76,6 +80,7 @@ class AppUser {
       name: d['name'] as String? ?? '',
       phone: d['phone'] as String? ?? '',
       address: d['address'] as String? ?? '',
+      idCard: d['idCard'] as String? ?? '',
       ratingAvg: (d['ratingAvg'] as num?)?.toDouble() ?? 5,
       ratingCount: (d['ratingCount'] as num?)?.toInt() ?? 0,
       fcmToken: d['fcmToken'] as String?,
@@ -106,6 +111,7 @@ class AppUser {
       name: name,
       phone: phone,
       address: address,
+      idCard: idCard,
       ratingAvg: ratingAvg,
       ratingCount: ratingCount,
       fcmToken: fcmToken ?? this.fcmToken,

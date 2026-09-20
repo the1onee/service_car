@@ -85,6 +85,7 @@ exports.createUserAccount = onCall(async (request) => {
   const password = requirePassword(data.password);
   const name = requireString(data.name, "name");
   const address = typeof data.address === "string" ? data.address.trim() : "";
+  const idCard = typeof data.idCard === "string" ? data.idCard.trim() : "";
   const serviceIds = Array.isArray(data.serviceIds)
     ? data.serviceIds.filter((id) => typeof id === "string")
     : [];
@@ -113,6 +114,7 @@ exports.createUserAccount = onCall(async (request) => {
       name,
       phone: e164,
       address,
+      idCard,
       ratingAvg: 5,
       ratingCount: 0,
       fcmToken: null,

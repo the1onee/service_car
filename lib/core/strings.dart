@@ -13,10 +13,15 @@ class AppStrings {
   static const address = 'العنوان';
   static const welcomeBack = 'أهلاً بعودتك';
   static const loginHint = 'سجّل بالهاتف وكلمة المرور للمتابعة';
-  static const registerTitle = 'حساب عميل جديد';
-  static const registerHint = 'أكمل بياناتك ثم أكّد رقم هاتفك';
+  static const registerTitle = 'إنشاء حساب';
+  static const registerHint = 'اختر نوع الحساب، أكمل البيانات، ثم أكّد رقم هاتفك';
   static const customerAccountNote =
-      'يُفتح الحساب كحساب عميل. حسابات الفنيين تُنشأ عبر الإدارة.';
+      'حساب العميل جاهز فوراً بعد التأكيد.';
+  static const technicianAccountNote =
+      'حساب الفني يُرسل لطلب انضمام، ويُفعَّل بعد موافقة الإدارة.';
+  static const idCard = 'رقم البطاقة';
+  static const skills = 'المهارات / الخدمات';
+  static const optional = 'اختياري';
   static const forgotPassword = 'نسيت كلمة المرور؟';
   static const resetPassword = 'استعادة كلمة المرور';
   static const noAccount = 'ليس لديك حساب؟';

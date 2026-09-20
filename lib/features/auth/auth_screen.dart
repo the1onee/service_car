@@ -7,6 +7,8 @@ import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/phone.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/data/service_catalog.dart';
+import 'package:barrr/models/app_user.dart';
 import 'package:barrr/services/auth_service.dart';
 
 enum _Stage { login, register, otp }
@@ -29,9 +31,12 @@ class _AuthScreenState extends State<AuthScreen> {
   final _password = TextEditingController();
   final _confirm = TextEditingController();
   final _address = TextEditingController();
+  final _idCard = TextEditingController();
   final _otp = TextEditingController();
 
   _Stage _stage = _Stage.login;
+  UserRole _registerRole = UserRole.customer;
+  final Set<String> _skills = {};
   OtpPurpose _purpose = OtpPurpose.register;
   bool _hidePassword = true;
   bool _hideConfirm = true;
@@ -52,6 +57,7 @@ class _AuthScreenState extends State<AuthScreen> {
       _password,
       _confirm,
       _address,
+      _idCard,
       _otp,
     ]) {
       c.dispose();
@@ -129,6 +135,9 @@ class _AuthScreenState extends State<AuthScreen> {
           smsCode: _otp.text,
           name: _name.text,
           address: _address.text,
+          role: _registerRole,
+          idCard: _idCard.text,
+          serviceIds: _skills.toList(),
         );
         return;
       }
@@ -381,7 +390,15 @@ class _AuthScreenState extends State<AuthScreen> {
           subtitle: AppStrings.registerHint,
         ),
         const SizedBox(height: 14),
-        const _RoleNotice(),
+        _RolePicker(
+          role: _registerRole,
+          onChanged: (role) => setState(() {
+            _registerRole = role;
+            _error = null;
+          }),
+        ),
+        const SizedBox(height: 12),
+        _RoleNotice(role: _registerRole),
         const SizedBox(height: 16),
         Form(
           key: _registerForm,
@@ -392,7 +409,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 textInputAction: TextInputAction.next,
                 textCapitalization: TextCapitalization.words,
                 autofillHints: const [AutofillHints.name],
-                decoration: const InputDecoration(
+                  decoration: const InputDecoration(
                   labelText: AppStrings.name,
                   hintText: 'مثال: علي حسن الجابري',
                   prefixIcon: Icon(Icons.person_outline_rounded),
@@ -429,6 +446,18 @@ class _AuthScreenState extends State<AuthScreen> {
                   return null;
                 },
               ),
+              if (_registerRole == UserRole.technician) ...[
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _idCard,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: AppStrings.idCard,
+                    hintText: AppStrings.optional,
+                    prefixIcon: Icon(Icons.badge_outlined),
+                  ),
+                ),
+              ],
               const SizedBox(height: 14),
               TextFormField(
                 controller: _address,
@@ -437,15 +466,43 @@ class _AuthScreenState extends State<AuthScreen> {
                 autofillHints: const [AutofillHints.fullStreetAddress],
                 decoration: const InputDecoration(
                   labelText: AppStrings.address,
-                  hintText: 'المدينة، الحي، أقرب نقطة دالة',
+                  hintText: 'المدينة، الحي، أقرب نقطة دالة — اختياري',
                   prefixIcon: Icon(Icons.location_on_outlined),
                   alignLabelWithHint: true,
                 ),
-                validator: (v) {
-                  if ((v ?? '').trim().length < 5) return 'أدخل عنواناً واضحاً.';
-                  return null;
-                },
               ),
+              if (_registerRole == UserRole.technician) ...[
+                const SizedBox(height: 16),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    '${AppStrings.skills} (${AppStrings.optional})',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.inkSoft,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final s in seedServices)
+                      FilterChip(
+                        label: Text(s.titleAr),
+                        selected: _skills.contains(s.id),
+                        onSelected: (on) => setState(() {
+                          if (on) {
+                            _skills.add(s.id);
+                          } else {
+                            _skills.remove(s.id);
+                          }
+                        }),
+                      ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -795,15 +852,80 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _RoleNotice extends StatelessWidget {
-  const _RoleNotice();
+class _RolePicker extends StatelessWidget {
+  const _RolePicker({required this.role, required this.onChanged});
+
+  final UserRole role;
+  final ValueChanged<UserRole> onChanged;
 
   @override
   Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _roleTile(
+            label: AppStrings.customer,
+            selected: role == UserRole.customer,
+            onTap: () => onChanged(UserRole.customer),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _roleTile(
+            label: AppStrings.technician,
+            selected: role == UserRole.technician,
+            onTap: () => onChanged(UserRole.technician),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _roleTile({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.petrolTint : AppColors.canvas,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? AppColors.petrol : AppColors.outline,
+            width: selected ? 1.6 : 1,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: selected ? AppColors.petrolDark : AppColors.inkSoft,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoleNotice extends StatelessWidget {
+  const _RoleNotice({required this.role});
+
+  final UserRole role;
+
+  @override
+  Widget build(BuildContext context) {
+    final isTech = role == UserRole.technician;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.petrolTint,
+        color: isTech ? AppColors.amberTint : AppColors.petrolTint,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
@@ -811,20 +933,26 @@ class _RoleNotice extends StatelessWidget {
           Container(
             height: 34,
             width: 34,
-            decoration: const BoxDecoration(
-              color: AppColors.petrol,
+            decoration: BoxDecoration(
+              color: isTech ? AppColors.amber : AppColors.petrol,
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.person_rounded, color: Colors.white, size: 19),
+            child: Icon(
+              isTech ? Icons.handyman_rounded : Icons.person_rounded,
+              color: isTech ? AppColors.ink : Colors.white,
+              size: 19,
+            ),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Text(
-              AppStrings.customerAccountNote,
+              isTech
+                  ? AppStrings.technicianAccountNote
+                  : AppStrings.customerAccountNote,
               style: TextStyle(
                 fontSize: 12.5,
                 height: 1.5,
-                color: AppColors.petrolDark,
+                color: isTech ? AppColors.ink : AppColors.petrolDark,
                 fontWeight: FontWeight.w600,
               ),
             ),

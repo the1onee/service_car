@@ -41,9 +41,14 @@ class AuthService {
   /// صحيح أثناء إنشاء حساب لم يكتمل، ليبقى المستخدم على شاشة التحقق.
   final ValueNotifier<bool> registering = ValueNotifier(false);
 
-  /// الجلسات الصالحة فقط: الحساب الذي لم يُربط رقمه بعد هو تسجيل ناقص.
-  Stream<String?> get uidChanges =>
-      _auth.userChanges().map((u) => u?.phoneNumber == null ? null : u!.uid);
+  /// جلسة صالحة إذا رُبط الرقم، أو إذا وُجد ملف في Firestore
+  /// (حسابات تُنشئها لوحة التحكم بالبريد الداخلي دون Phone Auth).
+  Stream<String?> get uidChanges => _auth.userChanges().asyncMap((u) async {
+        if (u == null) return null;
+        if (u.phoneNumber != null) return u.uid;
+        final doc = await _db.collection(Cols.users).doc(u.uid).get();
+        return doc.exists ? u.uid : null;
+      });
 
   String? get currentUid => _auth.currentUser?.uid;
 
@@ -95,11 +100,14 @@ class AuthService {
     }
   }
 
-  /// الخطوة الثانية: تأكيد الرمز، ربط الرقم بالحساب، وكتابة ملف العميل.
+  /// الخطوة الثانية: تأكيد الرمز، ربط الرقم بالحساب، وكتابة ملف المستخدم.
   Future<void> completeRegistration({
     required String smsCode,
     required String name,
-    required String address,
+    String address = '',
+    UserRole role = UserRole.customer,
+    String idCard = '',
+    List<String> serviceIds = const [],
   }) async {
     final e164 = pendingPhone;
     final user = _auth.currentUser;
@@ -109,7 +117,14 @@ class AuthService {
         message: 'انتهت الجلسة، أعد طلب رمز التحقق.',
       );
     }
+    if (role != UserRole.customer && role != UserRole.technician) {
+      throw FirebaseAuthException(
+        code: 'invalid-argument',
+        message: 'نوع الحساب غير صالح.',
+      );
+    }
     final code = _requireCode(smsCode);
+    final isTech = role == UserRole.technician;
 
     try {
       if (kIsWeb) {
@@ -137,14 +152,17 @@ class AuthService {
       await _db.collection(Cols.users).doc(user.uid).set({
         ...AppUser(
           id: user.uid,
-          role: UserRole.customer,
+          role: role,
           name: name.trim(),
           phone: e164,
           address: address.trim(),
-          verified: true,
-          verificationStatus: VerificationStatus.approved,
+          idCard: idCard.trim(),
+          serviceIds: serviceIds,
+          verified: !isTech,
+          verificationStatus:
+              isTech ? VerificationStatus.pending : VerificationStatus.approved,
         ).toMap(),
-        // تحتاجه لوحة التحكم لترتيب العملاء بتاريخ التسجيل.
+        // تحتاجه لوحة التحكم لترتيب الحسابات بتاريخ التسجيل.
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {

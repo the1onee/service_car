@@ -53,17 +53,28 @@ service cloud.firestore {
           .affectedKeys().hasAny(protectedFields());
       }
 
-      allow read: if isUser(uid)
+      allow read: if isAdmin()
+        || isUser(uid)
         || (signedIn() && resource.data.role == 'technician');
 
-      // التسجيل من التطبيق يفتح حساب عميل فقط، بمحفظة وتقييمات صفرية.
-      allow create: if isUser(uid)
-        && request.resource.data.role == 'customer'
-        && request.resource.data.walletBalance == 0
-        && request.resource.data.ratingCount == 0;
+      // الأدمن ينشئ أي حساب؛ التطبيق ينشئ حسابه فقط وفق القيود.
+      allow create: if isAdmin()
+        || (isUser(uid)
+          && request.resource.data.walletBalance == 0
+          && request.resource.data.ratingCount == 0
+          && (
+            (request.resource.data.role == 'customer'
+              && request.resource.data.verified == true
+              && request.resource.data.verificationStatus == 'approved')
+            || (request.resource.data.role == 'technician'
+              && request.resource.data.verified == false
+              && request.resource.data.verificationStatus == 'pending')
+          ));
 
-      // المستخدم يعدّل بياناته العامة فقط (الاسم، العنوان، الموقع، التوفر...).
-      allow update: if isUser(uid) && keepsProtectedFields();
+      allow update: if isAdmin()
+        || (isUser(uid) && keepsProtectedFields());
+
+      allow delete: if isAdmin();
     }
 
     // كتالوج الخدمات يُدار من لوحة التحكم فقط، والتطبيق يقرأه.
