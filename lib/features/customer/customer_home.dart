@@ -62,6 +62,8 @@ class _CustomerHomeState extends State<CustomerHome> {
       serviceId: service.id,
       serviceTitle: service.titleAr,
       exact: GeoPoint(_pin.latitude, _pin.longitude),
+      isEmergency: service.isEmergency,
+      commissionRate: service.commissionRate,
     );
     await scope.dispatch.dispatch(jobId);
   }

@@ -83,9 +83,12 @@ class JobRepository {
     required String serviceId,
     required String serviceTitle,
     required GeoPoint exact,
+    bool? isEmergency,
+    double? commissionRate,
   }) async {
     final ref = _jobs.doc();
-    final emergency = isEmergencyService(serviceId);
+    final emergency = isEmergency ?? isEmergencyService(serviceId);
+    final rate = (commissionRate ?? AppConstants.commissionRate).clamp(0.0, 1.0);
     final job = Job(
       id: ref.id,
       customerId: customerId,
@@ -93,6 +96,7 @@ class JobRepository {
       serviceTitle: serviceTitle,
       status: JobStatus.dispatching,
       matchingMode: emergency ? MatchingMode.emergency : MatchingMode.quotes,
+      commissionRate: rate,
       approxLocation: approximate(exact),
       createdAt: DateTime.now(),
     );
@@ -482,13 +486,17 @@ class JobRepository {
     required double receivedAmount,
     required bool warrantyEnabled,
   }) async {
-    final commission = (receivedAmount * AppConstants.commissionRate * 100).round() / 100;
     await _db.runTransaction((tx) async {
       final jobRef = _jobs.doc(jobId);
       final jobSnap = await tx.get(jobRef);
       if (!jobSnap.exists) return;
       final job = jobSnap.data()!;
       final techId = job['technicianId'] as String?;
+      final rateRaw = job['commissionRate'];
+      final rate = rateRaw is num
+          ? rateRaw.toDouble().clamp(0.0, 1.0)
+          : AppConstants.commissionRate;
+      final commission = (receivedAmount * rate * 100).round() / 100;
       tx.update(jobRef, {
         'receivedAmount': receivedAmount,
         'commissionAmount': commission,

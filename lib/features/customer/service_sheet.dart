@@ -74,7 +74,15 @@ class _ServicePickerSheetState extends State<ServicePickerSheet> {
                               child: Icon(s.isEmergency ? Icons.emergency_outlined : Icons.build_outlined),
                             ),
                             title: Text(s.titleAr),
-                            subtitle: Text(s.isEmergency ? 'طوارئ: أقرب فني متاح' : 'عروض أسعار قصيرة ثم تختار'),
+                            subtitle: Text(
+                              [
+                                s.isEmergency
+                                    ? 'طوارئ: أقرب فني متاح'
+                                    : 'عروض أسعار قصيرة ثم تختار',
+                                if (s.discountPercent > 0)
+                                  'خصم ${s.discountPercent.toStringAsFixed(s.discountPercent % 1 == 0 ? 0 : 1)}%',
+                              ].join(' · '),
+                            ),
                             trailing: const Icon(Icons.chevron_left),
                             onTap: () => Navigator.pop(context, s),
                           ),

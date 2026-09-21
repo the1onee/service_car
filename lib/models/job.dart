@@ -51,6 +51,7 @@ class Job {
     this.finalPrice,
     this.receivedAmount,
     this.commissionAmount,
+    this.commissionRate,
     this.warranty = const Warranty(enabled: false),
     this.ratings = const JobRatings(),
     this.dispatchRound = 1,
@@ -75,6 +76,8 @@ class Job {
   final double? finalPrice;
   final double? receivedAmount;
   final double? commissionAmount;
+  /// لقطة نسبة العمولة وقت إنشاء الطلب (كسر، مثل 0.10).
+  final double? commissionRate;
   final Warranty warranty;
   final JobRatings ratings;
   final int dispatchRound;
@@ -114,6 +117,7 @@ class Job {
         'finalPrice': finalPrice,
         'receivedAmount': receivedAmount,
         'commissionAmount': commissionAmount,
+        'commissionRate': commissionRate,
         'warranty': warranty.toMap(),
         'ratings': ratings.toMap(),
         'dispatchRound': dispatchRound,
@@ -138,6 +142,7 @@ class Job {
       finalPrice: (d['finalPrice'] as num?)?.toDouble(),
       receivedAmount: (d['receivedAmount'] as num?)?.toDouble(),
       commissionAmount: (d['commissionAmount'] as num?)?.toDouble(),
+      commissionRate: (d['commissionRate'] as num?)?.toDouble(),
       warranty: Warranty.fromMap(d['warranty'] as Map<String, dynamic>?),
       ratings: JobRatings.fromMap(d['ratings'] as Map<String, dynamic>?),
       dispatchRound: (d['dispatchRound'] as num?)?.toInt() ?? 1,

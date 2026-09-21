@@ -90,17 +90,15 @@ class UserRepository {
 
   Future<void> seedServicesIfNeeded() => syncMvpServices();
 
+  /// يزرع خدمات الإطلاق الناقصة فقط — لا يعطّل ولا يستبدل خدمات أضافها الأدمن.
   Future<void> syncMvpServices() async {
-    final batch = _db.batch();
-    final ids = seedServices.map((s) => s.id).toSet();
-    for (final s in seedServices) {
-      batch.set(_db.collection(Cols.services).doc(s.id), s.toMap(), SetOptions(merge: true));
-    }
     final existing = await _db.collection(Cols.services).get();
-    for (final d in existing.docs) {
-      if (!ids.contains(d.id)) {
-        batch.set(d.reference, {'active': false}, SetOptions(merge: true));
-      }
+    final existingIds = existing.docs.map((d) => d.id).toSet();
+    final missing = seedServices.where((s) => !existingIds.contains(s.id)).toList();
+    if (missing.isEmpty) return;
+    final batch = _db.batch();
+    for (final s in missing) {
+      batch.set(_db.collection(Cols.services).doc(s.id), s.toMap());
     }
     await batch.commit();
   }
@@ -108,10 +106,16 @@ class UserRepository {
   Stream<List<ServiceItem>> watchServices() {
     return _db.collection(Cols.services).snapshots().map((s) {
       if (s.docs.isEmpty) return seedServices;
-      return s.docs
+      final list = s.docs
           .map((d) => ServiceItem.fromMap(d.id, d.data()))
           .where((e) => e.active)
           .toList();
+      list.sort((a, b) {
+        final byOrder = a.sortOrder.compareTo(b.sortOrder);
+        if (byOrder != 0) return byOrder;
+        return a.titleAr.compareTo(b.titleAr);
+      });
+      return list;
     });
   }
 
