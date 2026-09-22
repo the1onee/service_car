@@ -38,6 +38,24 @@ class JobRepository {
         .map(_firstActive);
   }
 
+  Stream<List<Job>> watchRecentForCustomer(String uid) {
+    return _jobs
+        .where('customerId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(20)
+        .snapshots()
+        .map((s) => s.docs.map(Job.fromDoc).toList());
+  }
+
+  Stream<List<Job>> watchRecentForTechnician(String uid) {
+    return _jobs
+        .where('technicianId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(20)
+        .snapshots()
+        .map((s) => s.docs.map(Job.fromDoc).toList());
+  }
+
   Stream<List<JobOffer>> watchJobQuotes(String jobId) {
     return _offers.where('jobId', isEqualTo: jobId).snapshots().map((s) {
       final list = s.docs.map(JobOffer.fromDoc).toList();
@@ -521,18 +539,19 @@ class JobRepository {
         return;
       }
       final wallet = (techSnap.data()?['walletBalance'] as num?)?.toDouble() ?? 0;
-      final next = ((wallet - commission) * 100).round() / 100;
+      final signedAmount = -commission;
+      final next = wallet + signedAmount;
       tx.update(jobRef, {
         'receivedAmount': receivedAmount,
         'commissionAmount': commission,
         'status': JobStatus.completed.name,
-        'warranty.startsAt': warrantyEnabled ? Timestamp.fromDate(DateTime.now()) : null,
+        if (warrantyEnabled) 'warranty.startsAt': Timestamp.fromDate(DateTime.now()),
       });
       tx.set(entryRef, {
         'userId': techId,
         'type': 'commission',
         'amount': commission,
-        'signedAmount': -commission,
+        'signedAmount': signedAmount,
         'balanceAfter': next,
         'jobId': jobId,
         'note': 'عمولة إكمال الطلب',

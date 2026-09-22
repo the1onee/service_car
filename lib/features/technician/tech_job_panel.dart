@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/strings.dart';
+import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/jobs/rating_sheet.dart';
 import 'package:barrr/features/warranty/warranty_form.dart';
 import 'package:barrr/models/app_user.dart';
@@ -56,20 +57,24 @@ class _TechJobPanelState extends State<TechJobPanel> {
   Widget build(BuildContext context) {
     final job = widget.job;
     return Material(
-      elevation: 12,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      color: AppColors.surface,
+      elevation: 16,
+      shadowColor: AppColors.slate.withValues(alpha: 0.16),
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(_title(job.status), style: Theme.of(context).textTheme.titleLarge),
+              Text(_title(job.status),
+                  style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
               Text(job.serviceTitle ?? ''),
               if (job.status == JobStatus.quoted)
-                const Text('بانتظار قبول العميل للسعر المبدئي. الموقع الحقيقي مخفي.'),
+                const Text(
+                    'بانتظار قبول العميل للسعر المبدئي. الموقع الحقيقي مخفي.'),
               if (job.locationRevealed)
                 Text(
                   'موقع العميل: ${job.displayLocation.latitude.toStringAsFixed(5)}, ${job.displayLocation.longitude.toStringAsFixed(5)}',
@@ -168,7 +173,9 @@ class _TechJobPanelState extends State<TechJobPanel> {
                     final p = _parseMoney(_received.text);
                     if (p == null || p <= 0) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('أدخل المبلغ المستلم بالأرقام، مثل 25000')),
+                        const SnackBar(
+                            content: Text(
+                                'أدخل المبلغ المستلم بالأرقام، مثل 25000')),
                       );
                       return;
                     }
@@ -182,7 +189,9 @@ class _TechJobPanelState extends State<TechJobPanel> {
                     } catch (e) {
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('تعذّر إنهاء المهمة: $e')),
+                        SnackBar(
+                            content: Text(
+                                'تعذّر إنهاء المهمة: ${_readableError(e)}')),
                       );
                     } finally {
                       if (mounted) setState(() => _busy = false);
@@ -196,10 +205,12 @@ class _TechJobPanelState extends State<TechJobPanel> {
           if (job.ratings.techToCustomer == null)
             FilledButton(
               onPressed: () async {
-                final stars = await showRatingSheet(context, title: 'قيّم العميل');
-                if (stars == null) return;
+                final users = AppScope.of(context).users;
+                final stars =
+                    await showRatingSheet(context, title: 'قيّم العميل');
+                if (stars == null || !context.mounted) return;
                 await jobs.rateAsTechnician(job.id, stars);
-                await AppScope.of(context).users.applyRating(job.customerId, stars);
+                await users.applyRating(job.customerId, stars);
                 await jobs.markRatedIfDone(job.id);
               },
               child: const Text('تقييم العميل'),
@@ -213,6 +224,20 @@ class _TechJobPanelState extends State<TechJobPanel> {
   }
 }
 
+String _readableError(Object e) {
+  final dynamic err = e;
+  try {
+    final inner = err.error;
+    if (inner != null) {
+      final dynamic boxed = inner;
+      final message = boxed.message ?? boxed.code;
+      if (message != null) return '$message';
+      return '$inner';
+    }
+  } catch (_) {}
+  return '$e';
+}
+
 double? _parseMoney(String raw) {
   var s = raw.trim();
   const arabic = '٠١٢٣٤٥٦٧٨٩';
@@ -220,7 +245,11 @@ double? _parseMoney(String raw) {
   for (var i = 0; i < arabic.length; i++) {
     s = s.replaceAll(arabic[i], latin[i]);
   }
-  s = s.replaceAll(',', '').replaceAll('٬', '').replaceAll(' ', '').replaceAll('٫', '.');
+  s = s
+      .replaceAll(',', '')
+      .replaceAll('٬', '')
+      .replaceAll(' ', '')
+      .replaceAll('٫', '.');
   if (s.isEmpty) return null;
   return double.tryParse(s);
 }

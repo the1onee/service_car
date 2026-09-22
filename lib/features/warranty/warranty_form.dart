@@ -54,7 +54,28 @@ class WarrantyForm extends StatelessWidget {
 String warrantyLabel(Warranty w) {
   if (!w.enabled) return 'بدون ضمان';
   final kind = w.type == WarrantyType.part ? 'القطعة' : 'العملية';
-  final until = w.startsAt?.add(Duration(days: w.days));
+  final until = warrantyEndsAt(w);
   if (until == null) return 'ضمان $kind لمدة ${w.days} يوم';
   return 'ضمان $kind حتى ${until.year}/${until.month}/${until.day}';
+}
+
+DateTime? warrantyEndsAt(Warranty w) {
+  if (!w.enabled || w.startsAt == null) return null;
+  final days = w.days == 0 ? AppConstants.warrantyDays : w.days;
+  return w.startsAt!.add(Duration(days: days));
+}
+
+bool warrantyIsActive(Warranty w) {
+  final end = warrantyEndsAt(w);
+  return end != null && end.isAfter(DateTime.now());
+}
+
+String warrantyRemainingLabel(Warranty w) {
+  final end = warrantyEndsAt(w);
+  if (end == null) return w.enabled ? 'بانتظار تفعيل الضمان' : 'بدون ضمان';
+  final left = end.difference(DateTime.now());
+  if (left.isNegative) return 'انتهى الضمان';
+  if (left.inHours < 1) return 'متبقي أقل من ساعة';
+  if (left.inHours < 48) return 'متبقي ${left.inHours} ساعة';
+  return 'متبقي ${left.inDays} يوم';
 }

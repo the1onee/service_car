@@ -64,8 +64,8 @@ CircleMarker coverageCircle({
     point: LatLng(centerLat, centerLng),
     radius: radiusKm * 1000,
     useRadiusInMeter: true,
-    color: const Color(0x220F766E),
-    borderColor: const Color(0xFF0F766E),
+    color: const Color(0x22F59E0B),
+    borderColor: const Color(0xFFF59E0B),
     borderStrokeWidth: 2,
   );
 }

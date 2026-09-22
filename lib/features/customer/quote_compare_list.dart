@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/strings.dart';
+import 'package:barrr/core/theme.dart';
+import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/models/job_offer.dart';
 
@@ -27,10 +29,9 @@ class QuoteCompareList extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             for (final q in quotes)
-              Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: FieldCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -39,29 +40,42 @@ class QuoteCompareList extends StatelessWidget {
                           Expanded(
                             child: Text(
                               q.technicianName ?? 'فني',
-                              style: const TextStyle(fontWeight: FontWeight.w700),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700),
                             ),
                           ),
                           if (q.verified)
-                            const Chip(
-                              label: Text(AppStrings.verifiedBadge),
-                              visualDensity: VisualDensity.compact,
+                            const StatusPill(
+                              label: AppStrings.verifiedBadge,
+                              icon: Icons.verified_outlined,
                             ),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Text('السعر المبدئي: ${q.initialPrice?.toStringAsFixed(0) ?? '-'} د.ع'),
-                      Text('التقييم: ${q.ratingAvg.toStringAsFixed(1)}'),
+                      const SizedBox(height: 8),
                       Text(
-                        'المسافة التقريبية: ${q.distanceKm == null ? '-' : '${q.distanceKm!.toStringAsFixed(1)} كم'}',
+                        q.initialPrice == null
+                            ? '-'
+                            : formatIqd(q.initialPrice!),
+                        style: const TextStyle(
+                          color: AppColors.emeraldDeep,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 18,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'التقييم ${q.ratingAvg.toStringAsFixed(1)}  ·  المسافة ${q.distanceKm == null ? '-' : '${q.distanceKm!.toStringAsFixed(1)} كم'}',
+                        style: const TextStyle(
+                            color: AppColors.inkSoft, fontSize: 12),
                       ),
                       if (selectable) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 10),
                         FilledButton(
-                          onPressed: () => AppScope.of(context).dispatch.selectOffer(
-                                jobId: job.id,
-                                offer: q,
-                              ),
+                          onPressed: () =>
+                              AppScope.of(context).dispatch.selectOffer(
+                                    jobId: job.id,
+                                    offer: q,
+                                  ),
                           child: const Text('اختيار هذا الفني'),
                         ),
                       ],

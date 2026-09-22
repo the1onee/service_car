@@ -176,7 +176,13 @@ service cloud.firestore {
     // دفتر المحفظة: الأدمن يكتب عبر القاعدة العامة. الفني ينشئ حركة عمولة فقط
     // ضمن نفس الطلب الذي يخصم الرصيد، وبمعرّف ثابت يمنع التكرار.
     match /walletEntries/{id} {
-      allow read: if isOwner(resource.data.userId);
+      allow list: if isOwner(resource.data.userId);
+      // المعاملة تقرأ commission_{jobId} قبل إنشائها، والمستند غير موجود بعد.
+      allow get: if signedIn() && (
+        (!exists(/databases/$(database)/documents/walletEntries/$(id))
+          && id.matches('commission_.+'))
+        || isOwner(resource.data.userId)
+      );
       allow create: if isOwner(request.resource.data.userId)
         && request.resource.data.type == 'commission'
         && request.resource.data.jobId is string
@@ -184,8 +190,8 @@ service cloud.firestore {
         && request.resource.data.amount is number
         && request.resource.data.amount >= 0
         && request.resource.data.signedAmount == (0 - request.resource.data.amount)
-        && get(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.technicianId == request.auth.uid
-        && get(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.status == 'inProgress'
+        && getAfter(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.technicianId == request.auth.uid
+        && getAfter(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.status == 'completed'
         && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.walletBalance
             == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.walletBalance
               + request.resource.data.signedAmount;

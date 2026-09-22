@@ -691,7 +691,7 @@ class _AuthBackdrop extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFF0C5C51), Color(0xFF117F6B), AppColors.canvas],
+            colors: [AppColors.slate, AppColors.slateMid, AppColors.canvas],
             stops: [0, 0.32, 0.66],
           ),
         ),

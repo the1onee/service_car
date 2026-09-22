@@ -7,7 +7,10 @@ import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
+import 'package:barrr/core/theme.dart';
 import 'package:barrr/data/service_catalog.dart';
+import 'package:barrr/features/jobs/orders_screen.dart';
+import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/shared/osm_map.dart';
 import 'package:barrr/features/technician/offer_overlay.dart';
 import 'package:barrr/features/technician/tech_job_panel.dart';
@@ -15,6 +18,7 @@ import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/models/job_offer.dart';
+import 'package:barrr/models/service_item.dart';
 import 'package:barrr/models/wallet_entry.dart';
 import 'package:barrr/services/user_repository.dart';
 
@@ -32,8 +36,8 @@ class _TechnicianHomeState extends State<TechnicianHome> {
   LatLng _me = const LatLng(AppConstants.defaultLat, AppConstants.defaultLng);
   JobOffer? _incoming;
   CityZone? _zone;
-
   var _booted = false;
+  var _tab = 0;
 
   @override
   void didChangeDependencies() {
@@ -63,7 +67,8 @@ class _TechnicianHomeState extends State<TechnicianHome> {
       scope.users.setGeo(widget.profile.id, GeoPoint(p.latitude, p.longitude));
       if (mounted) setState(() {});
     });
-    scope.users.setGeo(widget.profile.id, GeoPoint(_me.latitude, _me.longitude));
+    scope.users
+        .setGeo(widget.profile.id, GeoPoint(_me.latitude, _me.longitude));
   }
 
   Future<void> _toggleOnline(bool value) async {
@@ -80,7 +85,8 @@ class _TechnicianHomeState extends State<TechnicianHome> {
           'رصيدك ${result.balance.toStringAsFixed(0)} د.ع والحد الأدنى ${result.minBalance.toStringAsFixed(0)} د.ع',
         OnlineBlock.pending || OnlineBlock.none => AppStrings.pendingVerify,
       };
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
       return;
     }
     _startTracking();
@@ -107,121 +113,57 @@ class _TechnicianHomeState extends State<TechnicianHome> {
               stream: scope.jobs.watchPendingOffers(me.id),
               builder: (context, offerSnap) {
                 final offers = offerSnap.data ?? const <JobOffer>[];
-                final live = offers.where((o) => o.remainingSeconds() > 0).toList();
+                final live =
+                    offers.where((o) => o.remainingSeconds() > 0).toList();
                 if (_incoming == null && live.isNotEmpty && job == null) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (mounted) setState(() => _incoming = live.first);
                   });
                 }
-                final markers = <Marker>[
-                  pinMarker(_me, color: Colors.green),
-                  if (job != null)
-                    pinMarker(
-                      LatLng(job.displayLocation.latitude, job.displayLocation.longitude),
-                    ),
-                ];
-                final circles = <CircleMarker>[
-                  if (_zone != null)
-                    coverageCircle(
-                      centerLat: _zone!.centerLat,
-                      centerLng: _zone!.centerLng,
-                      radiusKm: _zone!.radiusKm,
-                    ),
-                ];
-                return Scaffold(
-                  appBar: AppBar(
-                    title: Text(me.name.isEmpty ? AppStrings.technician : me.name),
-                    actions: [
-                      IconButton(
-                        onPressed: () => _editServices(me),
-                        icon: const Icon(Icons.handyman_outlined),
-                      ),
-                      IconButton(
-                        onPressed: () => scope.auth.signOut(),
-                        icon: const Icon(Icons.logout),
-                      ),
-                    ],
-                  ),
-                  body: Stack(
-                    children: [
-                      OsmMap(
-                        center: _me,
-                        zoom: 14,
-                        markers: markers,
-                        circles: circles,
-                      ),
-                      if (_zone != null)
-                        Align(
-                          alignment: Alignment.topLeft,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                            child: Chip(
-                              avatar: const Icon(Icons.place_outlined, size: 18),
-                              label: Text(AppStrings.coverageLabel(_zone!.nameAr)),
-                            ),
+                return Stack(
+                  children: [
+                    FieldShell(
+                      tab: _tab,
+                      onTab: (i) => setState(() => _tab = i),
+                      items: const [
+                        FieldNavItem(
+                            icon: Icons.home_rounded, label: 'الرئيسية'),
+                        FieldNavItem(
+                            icon: Icons.receipt_long_outlined,
+                            label: 'الطلبات'),
+                        FieldNavItem(
+                            icon: Icons.account_balance_wallet_outlined,
+                            label: 'المحفظة'),
+                        FieldNavItem(
+                            icon: Icons.person_outline_rounded, label: 'حسابي'),
+                      ],
+                      body: IndexedStack(
+                        index: _tab,
+                        children: [
+                          _mapBody(me, job),
+                          OrdersScreen(
+                            stream: scope.jobs.watchRecentForTechnician(me.id),
+                            profile: me,
                           ),
-                        ),
-                      Align(
-                        alignment: Alignment.topCenter,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              StreamBuilder(
-                                stream: scope.settings.watchSettings(),
-                                builder: (context, settingsSnap) {
-                                  final min = settingsSnap.data?.minWalletBalance ??
-                                      AppConstants.minWalletBalance;
-                                  return Card(
-                                    child: SwitchListTile(
-                                      title: Text(
-                                        me.isOnline ? AppStrings.online : AppStrings.offline,
-                                      ),
-                                      subtitle: Text(
-                                        me.verificationStatus == VerificationStatus.rejected &&
-                                                !me.isApproved
-                                            ? 'تم رفض طلب الانضمام. راجع الإدارة.'
-                                            : me.isApproved
-                                                ? scope.users.walletHint(me, minBalance: min)
-                                                : AppStrings.pendingVerify,
-                                      ),
-                                      value: me.isOnline,
-                                      onChanged: _toggleOnline,
-                                    ),
-                                  );
-                                },
-                              ),
-                              Card(
-                                child: ListTile(
-                                  leading: const Icon(Icons.account_balance_wallet_outlined),
-                                  title: Text(
-                                    '${AppStrings.wallet}: ${me.walletBalance.toStringAsFixed(0)} د.ع',
-                                  ),
-                                  subtitle: const Text(AppStrings.walletAdminNote),
-                                  trailing: TextButton(
-                                    onPressed: () => _showHistory(me.id),
-                                    child: const Text(AppStrings.walletHistory),
-                                  ),
-                                ),
-                              ),
-                            ],
+                          _WalletPage(
+                            me: me,
+                            city: _zone?.nameAr,
+                            onToggle: _toggleOnline,
+                            onAccount: () => setState(() => _tab = 3),
                           ),
-                        ),
+                          _AccountPage(me: me),
+                        ],
                       ),
-                      if (job != null)
-                        Align(
-                          alignment: Alignment.bottomCenter,
-                          child: TechJobPanel(job: job, me: me),
-                        ),
-                      if (_incoming != null && job == null)
-                        OfferOverlay(
+                    ),
+                    if (_incoming != null && job == null)
+                      Positioned.fill(
+                        child: OfferOverlay(
                           offer: _incoming!,
                           technicianName: me.name,
                           onDone: () => setState(() => _incoming = null),
                         ),
-                    ],
-                  ),
+                      ),
+                  ],
                 );
               },
             );
@@ -231,95 +173,1111 @@ class _TechnicianHomeState extends State<TechnicianHome> {
     );
   }
 
-  Future<void> _showHistory(String uid) async {
-    final scope = AppScope.of(context);
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (ctx) {
-        return SafeArea(
-          child: SizedBox(
-            height: 420,
-            child: StreamBuilder<List<WalletEntry>>(
-              stream: scope.users.watchWalletEntries(uid),
-              builder: (context, snap) {
-                final rows = snap.data ?? const <WalletEntry>[];
-                if (snap.connectionState == ConnectionState.waiting && rows.isEmpty) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (rows.isEmpty) {
-                  return const Center(child: Text('لا توجد حركات بعد.'));
-                }
-                return ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: rows.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, i) {
-                    final e = rows[i];
-                    final sign = e.signedAmount >= 0 ? '+' : '';
-                    return ListTile(
-                      title: Text(e.typeLabel),
-                      subtitle: Text(e.note.isEmpty ? e.typeLabel : e.note),
-                      trailing: Text('$sign${e.signedAmount.toStringAsFixed(0)}'),
-                    );
-                  },
-                );
-              },
+  Widget _mapBody(AppUser me, Job? job) {
+    final markers = <Marker>[
+      pinMarker(_me, color: AppColors.emerald),
+      if (job != null)
+        pinMarker(
+          LatLng(job.displayLocation.latitude, job.displayLocation.longitude),
+          color: AppColors.amber,
+        ),
+    ];
+    final circles = <CircleMarker>[
+      if (_zone != null)
+        coverageCircle(
+          centerLat: _zone!.centerLat,
+          centerLng: _zone!.centerLng,
+          radiusKm: _zone!.radiusKm,
+        ),
+    ];
+    return Stack(
+      children: [
+        OsmMap(center: _me, zoom: 14, markers: markers, circles: circles),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: FieldTopBar(
+            city: _zone?.nameAr,
+            trailing: StatusPill(
+              label: me.isOnline ? 'متصل' : 'غير متصل',
+              color: me.isOnline ? AppColors.emeraldDeep : AppColors.inkSoft,
+              background:
+                  me.isOnline ? AppColors.emeraldTint : AppColors.recessed,
             ),
           ),
-        );
-      },
+        ),
+        if (job != null)
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: TechJobPanel(job: job, me: me),
+          )
+        else
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: FieldCard(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            me.isOnline
+                                ? AppStrings.online
+                                : AppStrings.offline,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'الرصيد ${formatIqd(me.walletBalance)}',
+                            style: const TextStyle(
+                                color: AppColors.inkSoft, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(value: me.isOnline, onChanged: _toggleOnline),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+enum _LedgerFilter { movements, payouts }
+
+class _WalletPage extends StatefulWidget {
+  const _WalletPage({
+    required this.me,
+    required this.onToggle,
+    required this.onAccount,
+    this.city,
+  });
+
+  final AppUser me;
+  final String? city;
+  final ValueChanged<bool> onToggle;
+  final VoidCallback onAccount;
+
+  @override
+  State<_WalletPage> createState() => _WalletPageState();
+}
+
+class _WalletPageState extends State<_WalletPage> {
+  var _filter = _LedgerFilter.movements;
+
+  @override
+  Widget build(BuildContext context) {
+    final me = widget.me;
+    final scope = AppScope.of(context);
+    return Column(
+      children: [
+        FieldTopBar(
+          city: widget.city,
+          caption: 'Wallet',
+          trailing: Material(
+            color: const Color(0xFF131B2E),
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: widget.onAccount,
+              child: const SizedBox(
+                width: 32,
+                height: 32,
+                child: Icon(Icons.person, color: Colors.white, size: 18),
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder(
+            stream: scope.settings.watchSettings(),
+            builder: (context, settingsSnap) {
+              final min = settingsSnap.data?.minWalletBalance ??
+                  AppConstants.minWalletBalance;
+              return StreamBuilder<List<Job>>(
+                stream: scope.jobs.watchRecentForTechnician(me.id),
+                builder: (context, jobSnap) {
+                  final jobs = jobSnap.data ?? const <Job>[];
+                  final jobsById = {for (final job in jobs) job.id: job};
+                  return StreamBuilder<List<WalletEntry>>(
+                    stream: scope.users.watchWalletEntries(me.id),
+                    builder: (context, entrySnap) {
+                      final entries = entrySnap.data ?? const <WalletEntry>[];
+                      final waiting = entrySnap.connectionState ==
+                              ConnectionState.waiting &&
+                          entries.isEmpty;
+                      final shown = entries.where((entry) {
+                        if (_filter == _LedgerFilter.movements) return true;
+                        return entry.type != WalletEntryType.commission;
+                      }).toList();
+                      return ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                        children: [
+                          _BalanceCard(
+                            balance: me.walletBalance,
+                            minBalance: min,
+                            online: me.isOnline,
+                            city: widget.city,
+                            onToggle: widget.onToggle,
+                          ),
+                          const SizedBox(height: 12),
+                          const _RechargeNotice(),
+                          const SizedBox(height: 12),
+                          _MetricRow(jobs: jobs),
+                          const SizedBox(height: 12),
+                          _FilterBar(
+                            filter: _filter,
+                            onChanged: (value) =>
+                                setState(() => _filter = value),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'الحركات الأخيرة',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                'تحديث فوري',
+                                style: TextStyle(
+                                  color:
+                                      AppColors.inkSoft.withValues(alpha: 0.9),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          if (waiting)
+                            const Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Center(child: CircularProgressIndicator()),
+                            )
+                          else if (shown.isEmpty)
+                            FieldCard(
+                              child: Text(
+                                _filter == _LedgerFilter.payouts
+                                    ? 'لا توجد دفعات من الإدارة بعد.'
+                                    : 'لا توجد حركات بعد.',
+                              ),
+                            )
+                          else
+                            for (final entry in shown) ...[
+                              _LedgerRow(
+                                entry: entry,
+                                job: entry.jobId == null
+                                    ? null
+                                    : jobsById[entry.jobId],
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                          const SizedBox(height: 4),
+                          _LowBalanceNote(minBalance: min),
+                        ],
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BalanceCard extends StatelessWidget {
+  const _BalanceCard({
+    required this.balance,
+    required this.minBalance,
+    required this.online,
+    required this.onToggle,
+    this.city,
+  });
+
+  final double balance;
+  final double minBalance;
+  final bool online;
+  final String? city;
+  final ValueChanged<bool> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final place = (city == null || city!.isEmpty) ? 'البصرة' : city!;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF131B2E),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppTheme.cardShadow(),
+      ),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.account_balance_wallet_outlined,
+                            color: Color(0xFF7C839B), size: 18),
+                        SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            'رصيد حساب العمليات الميدانية',
+                            style: TextStyle(
+                              color: Color(0xFF7C839B),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          formatIqd(balance, withUnit: false),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            height: 1,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'د.ع',
+                          style: TextStyle(
+                            color: Color(0xFFFFB95F),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF6FFBBE),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'الحد الأدنى: ${formatIqd(minBalance)}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF213145).withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF002113),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.sensors,
+                      color: Color(0xFF4EDEA3), size: 18),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        online ? 'متصل ومتاح لاستقبال الطلبات' : 'غير متصل',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        online
+                            ? 'جاهز للبلاغات الفورية في $place'
+                            : 'لن تصلك بلاغات حتى تعيد الاتصال',
+                        style: const TextStyle(
+                          color: Color(0xFF7C839B),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _DutySwitch(online: online, onToggle: onToggle),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DutySwitch extends StatelessWidget {
+  const _DutySwitch({required this.online, required this.onToggle});
+
+  final bool online;
+  final ValueChanged<bool> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onToggle(!online),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        width: 48,
+        height: 28,
+        padding: const EdgeInsets.all(2),
+        alignment: online
+            ? AlignmentDirectional.centerEnd
+            : AlignmentDirectional.centerStart,
+        decoration: BoxDecoration(
+          color: online ? const Color(0xFF002113) : const Color(0xFFD3E4FE),
+          borderRadius: BorderRadius.circular(99),
+        ),
+        child: Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: online ? const Color(0xFF6FFBBE) : const Color(0xFF76777D),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            online ? Icons.check : Icons.close,
+            size: 14,
+            color: online ? const Color(0xFF002113) : Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RechargeNotice extends StatelessWidget {
+  const _RechargeNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFDDB8).withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _IconBox(
+            icon: Icons.info_outline,
+            background: Color(0xFFFEA619),
+            foreground: Color(0xFF684000),
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'تنبيه شحن الرصيد الميداني',
+                  style: TextStyle(
+                    color: Color(0xFF684000),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'شحن الرصيد يتم حصراً عن طريق الإدارة أو وكلاء الشحن المعتمدين في البصرة. لا يوجد شحن إلكتروني مباشر داخل التطبيق.',
+                  style: TextStyle(
+                    color: Color(0xFF653E00),
+                    fontSize: 12,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricRow extends StatelessWidget {
+  const _MetricRow({required this.jobs});
+
+  final List<Job> jobs;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final done = jobs.where((job) =>
+        job.status == JobStatus.completed || job.status == JobStatus.rated);
+    final today = done.where((job) {
+      final date = job.createdAt;
+      return date.year == now.year &&
+          date.month == now.month &&
+          date.day == now.day;
+    }).length;
+    final collected = done.fold<double>(
+      0,
+      (total, job) => total + (job.receivedAmount ?? 0),
+    );
+    final rates =
+        done.map((job) => job.commissionRate).whereType<double>().toSet();
+    final rate = rates.length == 1 ? rates.first : AppConstants.commissionRate;
+    final rateHint = rates.length > 1 ? 'حسب الخدمة' : 'ثابتة لكل طلب';
+    return Row(
+      children: [
+        Expanded(
+          child: _MetricCard(
+            label: 'نسبة العمولة',
+            value: '${(rate * 100).toStringAsFixed(0)}%',
+            hint: rateHint,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _MetricCard(
+            label: 'المستحقات',
+            value: formatIqd(collected, withUnit: false),
+            unit: 'د.ع',
+            hint: 'تم استلامها',
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _MetricCard(
+            label: 'طلبات اليوم',
+            value: '$today',
+            hint: 'مكتملة بنجاح',
+            valueColor: const Color(0xFF855300),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MetricCard extends StatelessWidget {
+  const _MetricCard({
+    required this.label,
+    required this.value,
+    required this.hint,
+    this.unit,
+    this.valueColor = AppColors.ink,
+  });
+
+  final String label;
+  final String value;
+  final String hint;
+  final String? unit;
+  final Color valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppTheme.cardShadow(),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Color(0xFF45464D), fontSize: 11)),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Flexible(
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: valueColor,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (unit != null) ...[
+                const SizedBox(width: 2),
+                Text(unit!,
+                    style: const TextStyle(
+                        color: Color(0xFF76777D), fontSize: 11)),
+              ],
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            hint,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Color(0xFF76777D), fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterBar extends StatelessWidget {
+  const _FilterBar({required this.filter, required this.onChanged});
+
+  final _LedgerFilter filter;
+  final ValueChanged<_LedgerFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFDCE9FF),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _FilterChip(
+              label: 'سجل الحركات المالية',
+              selected: filter == _LedgerFilter.movements,
+              onTap: () => onChanged(_LedgerFilter.movements),
+            ),
+          ),
+          Expanded(
+            child: _FilterChip(
+              label: 'دفعات الإدارة',
+              selected: filter == _LedgerFilter.payouts,
+              onTap: () => onChanged(_LedgerFilter.payouts),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: selected ? AppTheme.cardShadow() : null,
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: selected ? AppColors.ink : const Color(0xFF45464D),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LedgerRow extends StatelessWidget {
+  const _LedgerRow({required this.entry, this.job});
+
+  final WalletEntry entry;
+  final Job? job;
+
+  @override
+  Widget build(BuildContext context) {
+    final credit = entry.signedAmount >= 0;
+    final title = _title();
+    final code = _code();
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppTheme.cardShadow(),
+      ),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _IconBox(
+                icon:
+                    credit ? Icons.add_card_outlined : _jobIcon(job?.serviceId),
+                background:
+                    credit ? const Color(0xFF002113) : const Color(0xFFDCE9FF),
+                foreground: credit ? const Color(0xFF4EDEA3) : AppColors.ink,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (code != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE5EEFF),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              code,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF45464D),
+                              ),
+                            ),
+                          ),
+                        Text(
+                          _walletWhen(entry.createdAt),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF76777D),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                formatIqd(entry.signedAmount, signed: true),
+                style: TextStyle(
+                  color: credit ? const Color(0xFF005236) : AppColors.danger,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF4FF),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Expanded(child: _footerLead(credit)),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'الرصيد بعدها: ${formatIqd(entry.balanceAfter)}',
+                    textAlign: TextAlign.end,
+                    style:
+                        const TextStyle(fontSize: 12, color: Color(0xFF45464D)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Future<void> _editServices(AppUser me) async {
-    final selected = {...me.serviceIds};
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setLocal) {
-            return Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+  String _title() {
+    if (entry.type == WalletEntryType.commission) {
+      final service = job?.serviceTitle;
+      if (service != null && service.isNotEmpty) return 'خصم عمولة $service';
+      return entry.note.isEmpty ? 'خصم عمولة الطلب' : entry.note;
+    }
+    if (entry.type == WalletEntryType.credit) {
+      return entry.note.isEmpty ? 'شحن رصيد نقدي عبر الإدارة' : entry.note;
+    }
+    return entry.note.isEmpty ? entry.typeLabel : entry.note;
+  }
+
+  String? _code() {
+    final id = job?.id ?? entry.jobId ?? entry.id;
+    if (id.isEmpty) return null;
+    final short = id.length > 8 ? id.substring(0, 8) : id;
+    return '#$short';
+  }
+
+  Widget _footerLead(bool credit) {
+    final received = job?.receivedAmount;
+    if (!credit && received != null) {
+      return Text.rich(
+        TextSpan(
+          style: const TextStyle(fontSize: 12, color: Color(0xFF45464D)),
+          children: [
+            const TextSpan(text: 'المستلم نقداً: '),
+            TextSpan(
+              text: formatIqd(received),
+              style: const TextStyle(
+                color: AppColors.ink,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return Text(
+      credit
+          ? 'شحن عبر الإدارة'
+          : (entry.note.isEmpty ? entry.typeLabel : entry.note),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(fontSize: 12, color: Color(0xFF45464D)),
+    );
+  }
+}
+
+class _LowBalanceNote extends StatelessWidget {
+  const _LowBalanceNote({required this.minBalance});
+
+  final double minBalance;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFDCE9FF),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFDAD6),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.warning_amber_rounded,
+                color: Color(0xFF93000A), size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'تنبيه إيقاف البلاغات التلقائي',
+                  style: TextStyle(
+                    color: AppColors.danger,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'إذا انخفض الرصيد عن ${formatIqd(minBalance)} سيتم تحويل حالتك تلقائياً إلى غير متصل حتى يتم إعادة الشحن عبر الإدارة.',
+                  style: const TextStyle(
+                    color: Color(0xFF45464D),
+                    fontSize: 12,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IconBox extends StatelessWidget {
+  const _IconBox({
+    required this.icon,
+    required this.background,
+    required this.foreground,
+  });
+
+  final IconData icon;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(icon, size: 18, color: foreground),
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  const _Stat({required this.title, required this.value});
+
+  final String title;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return FieldCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(value,
+              style:
+                  const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+          const SizedBox(height: 4),
+          Text(title,
+              style: const TextStyle(color: AppColors.inkSoft, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+}
+
+String _walletWhen(DateTime? date) {
+  if (date == null) return '';
+  final local = date.toLocal();
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final day = DateTime(local.year, local.month, local.day);
+  final hour12 = local.hour % 12 == 0 ? 12 : local.hour % 12;
+  final minute = local.minute.toString().padLeft(2, '0');
+  final suffix = local.hour < 12 ? 'ص' : 'م';
+  final clock = '$hour12:$minute $suffix';
+  if (day == today) return 'اليوم $clock';
+  if (day == today.subtract(const Duration(days: 1))) return 'أمس $clock';
+  return formatWhen(local);
+}
+
+IconData _jobIcon(String? serviceId) {
+  switch (serviceId) {
+    case 'battery':
+      return Icons.battery_charging_full;
+    case 'towing':
+      return Icons.local_shipping_outlined;
+    case 'fuel':
+      return Icons.local_gas_station_outlined;
+    default:
+      return Icons.build_outlined;
+  }
+}
+
+class _AccountPage extends StatelessWidget {
+  const _AccountPage({required this.me});
+
+  final AppUser me;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = switch (me.verificationStatus) {
+      VerificationStatus.approved => (
+          'معتمد',
+          AppColors.emeraldDeep,
+          AppColors.emeraldTint
+        ),
+      VerificationStatus.rejected => (
+          'مرفوض',
+          AppColors.danger,
+          AppColors.dangerTint
+        ),
+      VerificationStatus.pending => (
+          'قيد التدقيق',
+          const Color(0xFF92400E),
+          AppColors.amberTint
+        ),
+    };
+    return Column(
+      children: [
+        const FieldTopBar(),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            children: [
+              AccountHeader(
+                name: me.name,
+                subtitle: me.phone,
+                trailing: StatusPill(
+                    label: status.$1, color: status.$2, background: status.$3),
+              ),
+              const SizedBox(height: 12),
+              Row(
                 children: [
-                  const Text(AppStrings.myServices),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      for (final s in seedServices)
-                        FilterChip(
-                          label: Text(s.titleAr),
-                          selected: selected.contains(s.id),
-                          onSelected: (_) {
-                            setLocal(() {
-                              if (selected.contains(s.id)) {
-                                selected.remove(s.id);
-                              } else {
-                                selected.add(s.id);
-                              }
-                            });
-                          },
-                        ),
-                    ],
+                  Expanded(
+                    child: _Stat(
+                      title: 'التقييم',
+                      value: me.ratingAvg.toStringAsFixed(1),
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: () async {
-                      await AppScope.of(context).users.setServiceIds(me.id, selected.toList());
-                      if (ctx.mounted) Navigator.pop(ctx);
-                    },
-                    child: const Text('حفظ'),
-                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: _Stat(
+                          title: 'عدد التقييمات', value: '${me.ratingCount}')),
                 ],
               ),
-            );
-          },
+              const SizedBox(height: 16),
+              const SectionLabel('الخدمات المفعّلة'),
+              _Services(me: me),
+              if (me.address.trim().isNotEmpty) ...[
+                const SizedBox(height: 16),
+                FieldCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('العنوان',
+                          style: TextStyle(
+                              color: AppColors.inkSoft, fontSize: 12)),
+                      const SizedBox(height: 4),
+                      Text(me.address),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: () => signOutFrom(context),
+                icon: const Icon(Icons.logout, color: AppColors.danger),
+                label: const Text('تسجيل الخروج',
+                    style: TextStyle(color: AppColors.danger)),
+                style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.danger)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Services extends StatelessWidget {
+  const _Services({required this.me});
+
+  final AppUser me;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<ServiceItem>>(
+      stream: AppScope.of(context).users.watchServices(),
+      builder: (context, snap) {
+        final items = (snap.data == null || snap.data!.isEmpty)
+            ? seedServices
+            : snap.data!;
+        return FieldCard(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            children: [
+              for (final s in items)
+                SwitchListTile(
+                  title: Text(s.titleAr),
+                  subtitle: Text(s.category),
+                  value: me.serviceIds.contains(s.id),
+                  onChanged: (on) {
+                    final next = {...me.serviceIds};
+                    if (on) {
+                      next.add(s.id);
+                    } else {
+                      next.remove(s.id);
+                    }
+                    AppScope.of(context)
+                        .users
+                        .setServiceIds(me.id, next.toList());
+                  },
+                ),
+            ],
+          ),
         );
       },
     );
