@@ -42,15 +42,20 @@ class AppStrings {
   // الرحلة
   static const pickLocation = 'حدد موقعك على الخريطة';
   static const confirmLocation = 'تأكيد الموقع';
+  static const outsideCoverage = 'الموقع خارج نطاق التغطية الحالي. حرّك الدبوس داخل الدائرة.';
+  static String coverageLabel(String city) => 'التغطية: $city';
+  static const pickAddressOnMap = 'تحديد العنوان على الخريطة';
+  static const addressFromMap = 'تم تحديد الموقع على الخريطة';
   static const pickService = 'اختر الخدمة';
   static const searching = 'جاري البحث عن فني مناسب...';
   static const collectingQuotes = 'ننتظر عروضاً من فنيين قريبين...';
   static const compareQuotes = 'قارن العروض واختر الفني';
   static const verifiedBadge = 'فني موثق';
   static const wallet = 'المحفظة';
-  static const topUp = 'شحن الرصيد';
+  static const walletHistory = 'سجل المحفظة';
+  static const walletAdminNote = 'الشحن يتم من الإدارة. لا يمكن شحن الرصيد من التطبيق.';
   static const cashNote =
-      'الدفع نقداً للفني مباشرة. التطبيق يخصم عمولة 10% من محفظة الفني.';
+      'الدفع نقداً للفني مباشرة. التطبيق يخصم عمولة الخدمة من محفظة الفني.';
   static const accept = 'قبول';
   static const reject = 'رفض';
   static const online = 'متاح لاستقبال الطلبات';

@@ -4,6 +4,28 @@ import 'package:barrr/data/collections.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/service_item.dart';
+import 'package:barrr/models/wallet_entry.dart';
+
+enum OnlineBlock { none, pending, rejected, lowBalance }
+
+class OnlineResult {
+  const OnlineResult.ok()
+      : block = OnlineBlock.none,
+        balance = 0,
+        minBalance = 0;
+
+  const OnlineResult.blocked(
+    this.block, {
+    this.balance = 0,
+    this.minBalance = 0,
+  });
+
+  final OnlineBlock block;
+  final double balance;
+  final double minBalance;
+
+  bool get ok => block == OnlineBlock.none;
+}
 
 class UserRepository {
   UserRepository({FirebaseFirestore? db}) : _injected = db;
@@ -35,30 +57,64 @@ class UserRepository {
     return _userRef(uid).set({'fcmToken': token}, SetOptions(merge: true));
   }
 
-  Future<bool> setOnline(String uid, bool online) async {
-    if (online) {
-      final user = await get(uid);
-      if (user == null || !user.canReceiveJobs) return false;
+  Future<OnlineResult> setOnline(String uid, bool online) async {
+    if (!online) {
+      await _userRef(uid).set({'isOnline': false}, SetOptions(merge: true));
+      return const OnlineResult.ok();
     }
-    await _userRef(uid).set({'isOnline': online}, SetOptions(merge: true));
-    return true;
+    final user = await get(uid);
+    if (user == null || !user.isTechnician) {
+      return const OnlineResult.blocked(OnlineBlock.pending);
+    }
+    if (user.verificationStatus == VerificationStatus.rejected && !user.verified) {
+      return const OnlineResult.blocked(OnlineBlock.rejected);
+    }
+    if (!user.isApproved) {
+      return const OnlineResult.blocked(OnlineBlock.pending);
+    }
+    final settings = await _db.collection(Cols.appSettings).doc('main').get();
+    final min = (settings.data()?['minWalletBalance'] as num?)?.toDouble() ??
+        AppConstants.minWalletBalance;
+    if (user.walletBalance < min) {
+      return OnlineResult.blocked(
+        OnlineBlock.lowBalance,
+        balance: user.walletBalance,
+        minBalance: min,
+      );
+    }
+    await _userRef(uid).set({'isOnline': true}, SetOptions(merge: true));
+    return const OnlineResult.ok();
   }
 
   Future<void> setGeo(String uid, GeoPoint geo) {
     return _userRef(uid).set({'geo': geo}, SetOptions(merge: true));
   }
 
+  Future<void> setAddressAndGeo(String uid, {required String address, required GeoPoint geo}) {
+    return _userRef(uid).set({
+      'address': address,
+      'geo': geo,
+    }, SetOptions(merge: true));
+  }
+
   Future<void> setServiceIds(String uid, List<String> ids) {
     return _userRef(uid).set({'serviceIds': ids}, SetOptions(merge: true));
   }
 
-  Future<void> topUpWallet(String uid, double amount) async {
-    if (amount <= 0) return;
-    await _db.runTransaction((tx) async {
-      final snap = await tx.get(_userRef(uid));
-      final current = (snap.data()?['walletBalance'] as num?)?.toDouble() ?? 0;
-      tx.set(_userRef(uid), {'walletBalance': current + amount}, SetOptions(merge: true));
-    });
+  Stream<List<WalletEntry>> watchWalletEntries(String uid) {
+    return _db
+        .collection(Cols.walletEntries)
+        .where('userId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(40)
+        .snapshots()
+        .map((s) => s.docs.map(WalletEntry.fromDoc).toList());
+  }
+
+  String walletHint(AppUser user, {required double minBalance}) {
+    final min = minBalance.toStringAsFixed(0);
+    final bal = user.walletBalance.toStringAsFixed(0);
+    return 'رصيد المحفظة $bal د.ع — الحد الأدنى لاستقبال الطلبات $min د.ع';
   }
 
   Future<void> setVerification({
@@ -117,11 +173,5 @@ class UserRepository {
       });
       return list;
     });
-  }
-
-  String walletHint(AppUser user) {
-    final min = AppConstants.minWalletBalance.toStringAsFixed(0);
-    final bal = user.walletBalance.toStringAsFixed(0);
-    return 'رصيد المحفظة $bal د.ع — الحد الأدنى لاستقبال الطلبات $min د.ع';
   }
 }

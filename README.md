@@ -26,9 +26,13 @@ flutter run -d chrome --web-hostname localhost --web-port 8080
 flutter run -d android
 ```
 
-استبدل `YOUR_MAPS_KEY` بمفتاح Google Maps في:
-- `web/index.html`
-- `android/app/src/main/AndroidManifest.xml`
+### الخرائط
+
+الخرائط عبر **OpenStreetMap** (مجانية، بلا مفتاح API):
+- التطبيق: `flutter_map`
+- لوحة الأدمن: Leaflet / `react-leaflet`
+
+لا حاجة لتفعيل Google Maps أو ربط بطاقة لذلك.
 
 نشر القواعد والدوال:
 

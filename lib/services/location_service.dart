@@ -1,5 +1,5 @@
 import 'package:geolocator/geolocator.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/constants.dart';
 
 class LocationService {
@@ -14,18 +14,18 @@ class LocationService {
         permission == LocationPermission.whileInUse;
   }
 
-  Future<LatLng> currentOrDefault() async {
+  Future<LatLng> currentOrDefault({LatLng? fallback}) async {
+    final def = fallback ??
+        const LatLng(AppConstants.defaultLat, AppConstants.defaultLng);
     try {
       final ok = await ensurePermission();
-      if (!ok) {
-        return const LatLng(AppConstants.defaultLat, AppConstants.defaultLng);
-      }
+      if (!ok) return def;
       final p = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
       return LatLng(p.latitude, p.longitude);
     } catch (_) {
-      return const LatLng(AppConstants.defaultLat, AppConstants.defaultLng);
+      return def;
     }
   }
 

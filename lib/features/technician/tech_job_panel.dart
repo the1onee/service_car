@@ -23,6 +23,27 @@ class _TechJobPanelState extends State<TechJobPanel> {
   bool _warranty = false;
   WarrantyType _wType = WarrantyType.work;
   String _wNote = '';
+  var _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _seedReceived(widget.job);
+  }
+
+  @override
+  void didUpdateWidget(TechJobPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.job.id != widget.job.id) _seedReceived(widget.job);
+  }
+
+  void _seedReceived(Job job) {
+    if (_received.text.trim().isNotEmpty) return;
+    final price = job.finalPrice ?? job.initialPrice;
+    if (price != null && price > 0) {
+      _received.text = price.toStringAsFixed(0);
+    }
+  }
 
   @override
   void dispose() {
@@ -132,21 +153,42 @@ class _TechJobPanelState extends State<TechJobPanel> {
           const SizedBox(height: 8),
           TextField(
             controller: _received,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: AppStrings.receivedAmount),
+            keyboardType: const TextInputType.numberWithOptions(decimal: false),
+            textDirection: TextDirection.ltr,
+            decoration: const InputDecoration(
+              labelText: AppStrings.receivedAmount,
+              hintText: 'مثال: 25000',
+            ),
           ),
           const SizedBox(height: 12),
           FilledButton(
-            onPressed: () {
-              final p = double.tryParse(_received.text);
-              if (p == null) return;
-              jobs.completeJob(
-                jobId: job.id,
-                receivedAmount: p,
-                warrantyEnabled: job.warranty.enabled,
-              );
-            },
-            child: const Text(AppStrings.endJob),
+            onPressed: _busy
+                ? null
+                : () async {
+                    final p = _parseMoney(_received.text);
+                    if (p == null || p <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('أدخل المبلغ المستلم بالأرقام، مثل 25000')),
+                      );
+                      return;
+                    }
+                    setState(() => _busy = true);
+                    try {
+                      await jobs.completeJob(
+                        jobId: job.id,
+                        receivedAmount: p,
+                        warrantyEnabled: job.warranty.enabled,
+                      );
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('تعذّر إنهاء المهمة: $e')),
+                      );
+                    } finally {
+                      if (mounted) setState(() => _busy = false);
+                    }
+                  },
+            child: Text(_busy ? 'جارٍ الإنهاء…' : AppStrings.endJob),
           ),
         ];
       case JobStatus.completed:
@@ -169,4 +211,16 @@ class _TechJobPanelState extends State<TechJobPanel> {
         return const [SizedBox.shrink()];
     }
   }
+}
+
+double? _parseMoney(String raw) {
+  var s = raw.trim();
+  const arabic = '٠١٢٣٤٥٦٧٨٩';
+  const latin = '0123456789';
+  for (var i = 0; i < arabic.length; i++) {
+    s = s.replaceAll(arabic[i], latin[i]);
+  }
+  s = s.replaceAll(',', '').replaceAll('٬', '').replaceAll(' ', '').replaceAll('٫', '.');
+  if (s.isEmpty) return null;
+  return double.tryParse(s);
 }

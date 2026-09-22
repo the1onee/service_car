@@ -1,13 +1,16 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/phone.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/data/service_catalog.dart';
+import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/services/auth_service.dart';
 
@@ -33,6 +36,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final _address = TextEditingController();
   final _idCard = TextEditingController();
   final _otp = TextEditingController();
+  GeoPoint? _registerGeo;
 
   _Stage _stage = _Stage.login;
   UserRole _registerRole = UserRole.customer;
@@ -135,6 +139,7 @@ class _AuthScreenState extends State<AuthScreen> {
           smsCode: _otp.text,
           name: _name.text,
           address: _address.text,
+          geo: _registerGeo,
           role: _registerRole,
           idCard: _idCard.text,
           serviceIds: _skills.toList(),
@@ -191,6 +196,24 @@ class _AuthScreenState extends State<AuthScreen> {
       builder: (_) => _ForgotPasswordSheet(initialPhone: _loginPhone.text),
     );
     if (phone != null && mounted) _startPasswordReset(phone);
+  }
+
+  Future<void> _pickRegisterAddress() async {
+    final initial = _registerGeo != null
+        ? LatLng(_registerGeo!.latitude, _registerGeo!.longitude)
+        : null;
+    final picked = await pickAddressOnMap(
+      context,
+      initial: initial,
+      title: AppStrings.pickAddressOnMap,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _registerGeo = picked.geo;
+      if (_address.text.trim().isEmpty) {
+        _address.text = picked.label;
+      }
+    });
   }
 
   String _friendlyError(Object e) {
@@ -464,13 +487,32 @@ class _AuthScreenState extends State<AuthScreen> {
                 maxLines: 2,
                 textInputAction: TextInputAction.done,
                 autofillHints: const [AutofillHints.fullStreetAddress],
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: AppStrings.address,
-                  hintText: 'المدينة، الحي، أقرب نقطة دالة — اختياري',
-                  prefixIcon: Icon(Icons.location_on_outlined),
+                  hintText: 'المدينة، الحي، أقرب نقطة دالة — أو حدّد على الخريطة',
+                  prefixIcon: const Icon(Icons.location_on_outlined),
                   alignLabelWithHint: true,
+                  suffixIcon: IconButton(
+                    tooltip: AppStrings.pickAddressOnMap,
+                    onPressed: _pickRegisterAddress,
+                    icon: const Icon(Icons.map_outlined),
+                  ),
                 ),
               ),
+              if (_registerGeo != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      AppStrings.addressFromMap,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
               if (_registerRole == UserRole.technician) ...[
                 const SizedBox(height: 16),
                 Align(

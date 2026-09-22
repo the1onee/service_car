@@ -12,6 +12,18 @@ double haversineKm(double lat1, double lng1, double lat2, double lng2) {
   return 2 * earthKm * math.asin(math.sqrt(a.clamp(0.0, 1.0)));
 }
 
+/// هل النقطة داخل دائرة المركز بنصف قطر [radiusKm]؟
+bool isWithinRadiusKm({
+  required double pointLat,
+  required double pointLng,
+  required double centerLat,
+  required double centerLng,
+  required double radiusKm,
+}) {
+  if (radiusKm <= 0) return true;
+  return haversineKm(pointLat, pointLng, centerLat, centerLng) <= radiusKm;
+}
+
 GeoPoint approximate(GeoPoint exact) {
   final p = AppConstants.approxPrecision;
   return GeoPoint(

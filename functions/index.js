@@ -15,7 +15,7 @@ const QUOTE_TECHS = 8;
 const MAX_QUOTES = 3;
 const MAX_ROUNDS = 3;
 const MAX_KM = 25;
-const MIN_WALLET = 10000;
+const walletFns = require("./wallet");
 
 function isEmergencyJob(job) {
   if (job.matchingMode === "emergency") return true;
@@ -153,6 +153,7 @@ async function dispatchJobInternal(jobId) {
 
   const previous = await db.collection("jobOffers").where("jobId", "==", jobId).get();
   const used = new Set(previous.docs.map((d) => d.data().technicianId));
+  const minWallet = await walletFns.getMinWalletBalance();
 
   const origin = job.approxLocation;
   const ranked = techs.docs
@@ -174,7 +175,7 @@ async function dispatchJobInternal(jobId) {
     })
     .filter((t) => t.km <= MAX_KM)
     .filter((t) => t.verified)
-    .filter((t) => t.wallet >= MIN_WALLET)
+    .filter((t) => t.wallet >= minWallet)
     .filter((t) => !used.has(t.id))
     .sort((a, b) => a.km - b.km)
     .slice(0, emergency ? EMERGENCY_TECHS : QUOTE_TECHS);
@@ -311,7 +312,8 @@ exports.acceptOffer = onCall(async (request) => {
 
   const user = await db.collection("users").doc(uid).get();
   const userData = user.data() || {};
-  if (!userData.verified || Number(userData.walletBalance || 0) < MIN_WALLET) {
+  const minWallet = await walletFns.getMinWalletBalance();
+  if (!userData.verified || Number(userData.walletBalance || 0) < minWallet) {
     throw new HttpsError("failed-precondition", "wallet_or_verify");
   }
   const technicianName = userData.name || "فني";
@@ -431,3 +433,6 @@ exports.createUserAccount = adminUsers.createUserAccount;
 exports.deleteUserAccount = adminUsers.deleteUserAccount;
 exports.setUserPassword = adminUsers.setUserPassword;
 exports.setUserDisabled = adminUsers.setUserDisabled;
+exports.creditWallet = walletFns.creditWallet;
+exports.adjustWallet = walletFns.adjustWallet;
+exports.completeJob = walletFns.completeJob;

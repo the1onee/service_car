@@ -43,12 +43,12 @@ class AppUser {
 
   bool get isTechnician => role == UserRole.technician;
   bool get isAdmin => role == UserRole.admin;
+  bool get isApproved =>
+      verificationStatus == VerificationStatus.approved ||
+      (verified && verificationStatus != VerificationStatus.rejected);
 
   bool get canReceiveJobs =>
-      isTechnician &&
-      verified &&
-      verificationStatus == VerificationStatus.approved &&
-      walletBalance >= AppConstants.minWalletBalance;
+      isTechnician && isApproved && walletBalance >= AppConstants.minWalletBalance;
 
   Map<String, dynamic> toMap() => {
         'role': role.name,
@@ -70,7 +70,7 @@ class AppUser {
   factory AppUser.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final d = doc.data() ?? {};
     final roleRaw = d['role'] as String?;
-    final verRaw = d['verificationStatus'] as String?;
+    final verifiedFlag = d['verified'] == true;
     return AppUser(
       id: doc.id,
       role: UserRole.values.firstWhere(
@@ -87,13 +87,22 @@ class AppUser {
       isOnline: d['isOnline'] as bool? ?? false,
       geo: d['geo'] as GeoPoint?,
       serviceIds: List<String>.from(d['serviceIds'] as List? ?? const []),
-      verified: d['verified'] as bool? ?? false,
-      verificationStatus: VerificationStatus.values.firstWhere(
-        (v) => v.name == verRaw,
-        orElse: () => VerificationStatus.pending,
-      ),
+      verified: verifiedFlag,
+      verificationStatus: _statusOf(d['verificationStatus'], verifiedFlag),
       walletBalance: (d['walletBalance'] as num?)?.toDouble() ?? 0,
     );
+  }
+
+  static VerificationStatus _statusOf(Object? raw, bool verified) {
+    final name = raw is String ? raw.trim().toLowerCase() : '';
+    final status = VerificationStatus.values.firstWhere(
+      (v) => v.name == name,
+      orElse: () => VerificationStatus.pending,
+    );
+    if (status == VerificationStatus.pending && verified) {
+      return VerificationStatus.approved;
+    }
+    return status;
   }
 
   AppUser copyWith({

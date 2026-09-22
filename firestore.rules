@@ -72,7 +72,16 @@ service cloud.firestore {
           ));
 
       allow update: if isAdmin()
-        || (isUser(uid) && keepsProtectedFields());
+        || (isUser(uid) && keepsProtectedFields())
+        || (isUser(uid) && commissionDebit());
+
+      // الفني يخصم من محفظته فقط (لا يستطيع زيادة الرصيد). الزيادة للأدمن.
+      function commissionDebit() {
+        return request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly(['walletBalance', 'isOnline'])
+          && request.resource.data.walletBalance is number
+          && request.resource.data.walletBalance <= resource.data.walletBalance;
+      }
 
       allow delete: if isAdmin();
     }
@@ -160,9 +169,26 @@ service cloud.firestore {
       allow create: if isOwner(request.resource.data.customerId);
     }
 
-    // المحاسبة: كل طرف يرى حركاته فقط.
+    // المحاسبة: كل طرف يرى حركاته فقط. الكتابة عبر Cloud Functions (Admin SDK).
     match /transactions/{id} {
       allow read: if isOwner(resource.data.userId);
+    }
+    // دفتر المحفظة: الأدمن يكتب عبر القاعدة العامة. الفني ينشئ حركة عمولة فقط
+    // ضمن نفس الطلب الذي يخصم الرصيد، وبمعرّف ثابت يمنع التكرار.
+    match /walletEntries/{id} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isOwner(request.resource.data.userId)
+        && request.resource.data.type == 'commission'
+        && request.resource.data.jobId is string
+        && id == 'commission_' + request.resource.data.jobId
+        && request.resource.data.amount is number
+        && request.resource.data.amount >= 0
+        && request.resource.data.signedAmount == (0 - request.resource.data.amount)
+        && get(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.technicianId == request.auth.uid
+        && get(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.status == 'inProgress'
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.walletBalance
+            == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.walletBalance
+              + request.resource.data.signedAmount;
     }
     match /payouts/{id} {
       allow read: if isOwner(resource.data.technicianId);

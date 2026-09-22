@@ -2,16 +2,21 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/data/service_catalog.dart';
+import 'package:barrr/features/shared/osm_map.dart';
 import 'package:barrr/features/technician/offer_overlay.dart';
 import 'package:barrr/features/technician/tech_job_panel.dart';
+import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/models/job_offer.dart';
+import 'package:barrr/models/wallet_entry.dart';
+import 'package:barrr/services/user_repository.dart';
 
 class TechnicianHome extends StatefulWidget {
   const TechnicianHome({super.key, required this.profile});
@@ -26,6 +31,7 @@ class _TechnicianHomeState extends State<TechnicianHome> {
   StreamSubscription? _posSub;
   LatLng _me = const LatLng(AppConstants.defaultLat, AppConstants.defaultLng);
   JobOffer? _incoming;
+  CityZone? _zone;
 
   var _booted = false;
 
@@ -39,7 +45,12 @@ class _TechnicianHomeState extends State<TechnicianHome> {
 
   Future<void> _boot() async {
     final scope = AppScope.of(context);
-    _me = await scope.location.currentOrDefault();
+    final zone = await scope.settings.getActiveCity();
+    final fallback = zone != null
+        ? LatLng(zone.centerLat, zone.centerLng)
+        : const LatLng(AppConstants.defaultLat, AppConstants.defaultLng);
+    _me = await scope.location.currentOrDefault(fallback: fallback);
+    _zone = zone;
     if (widget.profile.isOnline) _startTracking();
     if (mounted) setState(() {});
   }
@@ -57,15 +68,19 @@ class _TechnicianHomeState extends State<TechnicianHome> {
 
   Future<void> _toggleOnline(bool value) async {
     final scope = AppScope.of(context);
-    final ok = await scope.users.setOnline(widget.profile.id, value);
+    final result = await scope.users.setOnline(widget.profile.id, value);
     if (!value) {
       _posSub?.cancel();
       return;
     }
-    if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يلزم التوثيق ورصيد محفظة كافٍ لاستقبال الطلبات')),
-      );
+    if (!result.ok && mounted) {
+      final message = switch (result.block) {
+        OnlineBlock.rejected => 'تم رفض طلب الانضمام. راجع الإدارة.',
+        OnlineBlock.lowBalance =>
+          'رصيدك ${result.balance.toStringAsFixed(0)} د.ع والحد الأدنى ${result.minBalance.toStringAsFixed(0)} د.ع',
+        OnlineBlock.pending || OnlineBlock.none => AppStrings.pendingVerify,
+      };
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       return;
     }
     _startTracking();
@@ -98,22 +113,21 @@ class _TechnicianHomeState extends State<TechnicianHome> {
                     if (mounted) setState(() => _incoming = live.first);
                   });
                 }
-                final markers = <Marker>{
-                  Marker(
-                    markerId: const MarkerId('me'),
-                    position: _me,
-                    icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-                  ),
-                };
-                if (job != null) {
-                  final loc = job.displayLocation;
-                  markers.add(
-                    Marker(
-                      markerId: const MarkerId('customer'),
-                      position: LatLng(loc.latitude, loc.longitude),
+                final markers = <Marker>[
+                  pinMarker(_me, color: Colors.green),
+                  if (job != null)
+                    pinMarker(
+                      LatLng(job.displayLocation.latitude, job.displayLocation.longitude),
                     ),
-                  );
-                }
+                ];
+                final circles = <CircleMarker>[
+                  if (_zone != null)
+                    coverageCircle(
+                      centerLat: _zone!.centerLat,
+                      centerLng: _zone!.centerLng,
+                      radiusKm: _zone!.radiusKm,
+                    ),
+                ];
                 return Scaffold(
                   appBar: AppBar(
                     title: Text(me.name.isEmpty ? AppStrings.technician : me.name),
@@ -130,11 +144,23 @@ class _TechnicianHomeState extends State<TechnicianHome> {
                   ),
                   body: Stack(
                     children: [
-                      GoogleMap(
-                        initialCameraPosition: CameraPosition(target: _me, zoom: 14),
-                        myLocationEnabled: true,
+                      OsmMap(
+                        center: _me,
+                        zoom: 14,
                         markers: markers,
+                        circles: circles,
                       ),
+                      if (_zone != null)
+                        Align(
+                          alignment: Alignment.topLeft,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                            child: Chip(
+                              avatar: const Icon(Icons.place_outlined, size: 18),
+                              label: Text(AppStrings.coverageLabel(_zone!.nameAr)),
+                            ),
+                          ),
+                        ),
                       Align(
                         alignment: Alignment.topCenter,
                         child: Padding(
@@ -142,28 +168,40 @@ class _TechnicianHomeState extends State<TechnicianHome> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Card(
-                                child: SwitchListTile(
-                                  title: Text(me.isOnline ? AppStrings.online : AppStrings.offline),
-                                  subtitle: Text(
-                                    me.verificationStatus == VerificationStatus.approved
-                                        ? scope.users.walletHint(me)
-                                        : me.verificationStatus == VerificationStatus.rejected
+                              StreamBuilder(
+                                stream: scope.settings.watchSettings(),
+                                builder: (context, settingsSnap) {
+                                  final min = settingsSnap.data?.minWalletBalance ??
+                                      AppConstants.minWalletBalance;
+                                  return Card(
+                                    child: SwitchListTile(
+                                      title: Text(
+                                        me.isOnline ? AppStrings.online : AppStrings.offline,
+                                      ),
+                                      subtitle: Text(
+                                        me.verificationStatus == VerificationStatus.rejected &&
+                                                !me.isApproved
                                             ? 'تم رفض طلب الانضمام. راجع الإدارة.'
-                                            : AppStrings.pendingVerify,
-                                  ),
-                                  value: me.isOnline,
-                                  onChanged: _toggleOnline,
-                                ),
+                                            : me.isApproved
+                                                ? scope.users.walletHint(me, minBalance: min)
+                                                : AppStrings.pendingVerify,
+                                      ),
+                                      value: me.isOnline,
+                                      onChanged: _toggleOnline,
+                                    ),
+                                  );
+                                },
                               ),
                               Card(
                                 child: ListTile(
                                   leading: const Icon(Icons.account_balance_wallet_outlined),
-                                  title: Text('${AppStrings.wallet}: ${me.walletBalance.toStringAsFixed(0)} د.ع'),
-                                  subtitle: const Text(AppStrings.cashNote),
+                                  title: Text(
+                                    '${AppStrings.wallet}: ${me.walletBalance.toStringAsFixed(0)} د.ع',
+                                  ),
+                                  subtitle: const Text(AppStrings.walletAdminNote),
                                   trailing: TextButton(
-                                    onPressed: () => _topUp(me.id),
-                                    child: const Text(AppStrings.topUp),
+                                    onPressed: () => _showHistory(me.id),
+                                    child: const Text(AppStrings.walletHistory),
                                   ),
                                 ),
                               ),
@@ -193,28 +231,46 @@ class _TechnicianHomeState extends State<TechnicianHome> {
     );
   }
 
-  Future<void> _topUp(String uid) async {
-    final amount = TextEditingController();
-    final ok = await showDialog<bool>(
+  Future<void> _showHistory(String uid) async {
+    final scope = AppScope.of(context);
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text(AppStrings.topUp),
-        content: TextField(
-          controller: amount,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'المبلغ (د.ع)'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('شحن')),
-        ],
-      ),
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: SizedBox(
+            height: 420,
+            child: StreamBuilder<List<WalletEntry>>(
+              stream: scope.users.watchWalletEntries(uid),
+              builder: (context, snap) {
+                final rows = snap.data ?? const <WalletEntry>[];
+                if (snap.connectionState == ConnectionState.waiting && rows.isEmpty) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (rows.isEmpty) {
+                  return const Center(child: Text('لا توجد حركات بعد.'));
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: rows.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, i) {
+                    final e = rows[i];
+                    final sign = e.signedAmount >= 0 ? '+' : '';
+                    return ListTile(
+                      title: Text(e.typeLabel),
+                      subtitle: Text(e.note.isEmpty ? e.typeLabel : e.note),
+                      trailing: Text('$sign${e.signedAmount.toStringAsFixed(0)}'),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
-    final value = double.tryParse(amount.text.replaceAll(',', '.'));
-    amount.dispose();
-    if (ok == true && value != null && value > 0) {
-      await AppScope.of(context).users.topUpWallet(uid, value);
-    }
   }
 
   Future<void> _editServices(AppUser me) async {

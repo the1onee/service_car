@@ -105,6 +105,7 @@ class AuthService {
     required String smsCode,
     required String name,
     String address = '',
+    GeoPoint? geo,
     UserRole role = UserRole.customer,
     String idCard = '',
     List<String> serviceIds = const [],
@@ -158,6 +159,7 @@ class AuthService {
           address: address.trim(),
           idCard: idCard.trim(),
           serviceIds: serviceIds,
+          geo: geo,
           verified: !isTech,
           verificationStatus:
               isTech ? VerificationStatus.pending : VerificationStatus.approved,

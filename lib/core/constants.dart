@@ -4,8 +4,8 @@ class AppConstants {
   static const defaultLng = 47.7830;
 
   static const emergencyOfferSeconds = 30;
-  static const quoteWindowSeconds = 150;
   static const emergencyTechsPerRound = 2;
+  static const quoteWindowSeconds = 150;
   static const quoteTechsPerRound = 8;
   static const maxQuotes = 3;
   static const maxDispatchRounds = 3;

@@ -9,6 +9,7 @@ import 'package:barrr/services/dispatch_service.dart';
 import 'package:barrr/services/fcm_service.dart';
 import 'package:barrr/services/job_repository.dart';
 import 'package:barrr/services/location_service.dart';
+import 'package:barrr/services/settings_repository.dart';
 import 'package:barrr/services/user_repository.dart';
 
 class FanniApp extends StatelessWidget {
@@ -19,6 +20,7 @@ class FanniApp extends StatelessWidget {
   final _users = UserRepository();
   final _jobs = JobRepository();
   final _location = LocationService();
+  final _settings = SettingsRepository();
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +33,7 @@ class FanniApp extends StatelessWidget {
       dispatch: dispatch,
       location: _location,
       fcm: fcm,
+      settings: _settings,
       child: MaterialApp(
         title: AppStrings.appName,
         debugShowCheckedModeBanner: false,

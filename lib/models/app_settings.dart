@@ -1,0 +1,62 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:barrr/core/constants.dart';
+
+class AppSettings {
+  const AppSettings({
+    this.activeCityId = 'basra',
+    this.defaultZoom = 12,
+    this.maxMatchKm = AppConstants.maxMatchKm,
+    this.commissionPercent = 10,
+    this.minWalletBalance = AppConstants.minWalletBalance,
+  });
+
+  final String activeCityId;
+  final double defaultZoom;
+  final double maxMatchKm;
+  final double commissionPercent;
+  final double minWalletBalance;
+
+  factory AppSettings.fromMap(Map<String, dynamic>? data) {
+    if (data == null) return const AppSettings();
+    return AppSettings(
+      activeCityId: (data['activeCityId'] as String?)?.trim().isNotEmpty == true
+          ? (data['activeCityId'] as String).trim()
+          : 'basra',
+      defaultZoom: (data['defaultZoom'] as num?)?.toDouble() ?? 12,
+      maxMatchKm: (data['maxMatchKm'] as num?)?.toDouble() ?? AppConstants.maxMatchKm,
+      commissionPercent: (data['commissionPercent'] as num?)?.toDouble() ?? 10,
+      minWalletBalance:
+          (data['minWalletBalance'] as num?)?.toDouble() ?? AppConstants.minWalletBalance,
+    );
+  }
+}
+
+class CityZone {
+  const CityZone({
+    required this.id,
+    required this.nameAr,
+    required this.centerLat,
+    required this.centerLng,
+    required this.radiusKm,
+    this.active = true,
+  });
+
+  final String id;
+  final String nameAr;
+  final double centerLat;
+  final double centerLng;
+  final double radiusKm;
+  final bool active;
+
+  factory CityZone.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final d = doc.data() ?? {};
+    return CityZone(
+      id: doc.id,
+      nameAr: d['nameAr'] as String? ?? doc.id,
+      centerLat: (d['centerLat'] as num?)?.toDouble() ?? AppConstants.defaultLat,
+      centerLng: (d['centerLng'] as num?)?.toDouble() ?? AppConstants.defaultLng,
+      radiusKm: (d['radiusKm'] as num?)?.toDouble() ?? 50,
+      active: d['active'] as bool? ?? true,
+    );
+  }
+}

@@ -128,6 +128,10 @@ class JobRepository {
 
     final previous = await _offers.where('jobId', isEqualTo: jobId).get();
     final used = previous.docs.map((d) => d.data()['technicianId'] as String?).toSet();
+    final settingsSnap = await _db.collection(Cols.appSettings).doc('main').get();
+    final minWallet =
+        (settingsSnap.data()?['minWalletBalance'] as num?)?.toDouble() ??
+            AppConstants.minWalletBalance;
 
     final ranked = techs.docs
         .map((d) {
@@ -155,7 +159,7 @@ class JobRepository {
         })
         .where((t) => t.km <= AppConstants.maxMatchKm)
         .where((t) => t.verified)
-        .where((t) => t.wallet >= AppConstants.minWalletBalance)
+        .where((t) => t.wallet >= minWallet)
         .where((t) => !used.contains(t.id))
         .toList()
       ..sort((a, b) => a.km.compareTo(b.km));
@@ -486,32 +490,58 @@ class JobRepository {
     required double receivedAmount,
     required bool warrantyEnabled,
   }) async {
+    final jobRef = _jobs.doc(jobId);
+    final entryRef = _db.collection(Cols.walletEntries).doc('commission_$jobId');
     await _db.runTransaction((tx) async {
-      final jobRef = _jobs.doc(jobId);
       final jobSnap = await tx.get(jobRef);
       if (!jobSnap.exists) return;
       final job = jobSnap.data()!;
       final techId = job['technicianId'] as String?;
+      if (techId == null) return;
+      final entrySnap = await tx.get(entryRef);
+      final techRef = _db.collection(Cols.users).doc(techId);
+      final techSnap = await tx.get(techRef);
+      final settingsSnap = await tx.get(_db.collection(Cols.appSettings).doc('main'));
+      final min = (settingsSnap.data()?['minWalletBalance'] as num?)?.toDouble() ??
+          AppConstants.minWalletBalance;
       final rateRaw = job['commissionRate'];
       final rate = rateRaw is num
           ? rateRaw.toDouble().clamp(0.0, 1.0)
           : AppConstants.commissionRate;
       final commission = (receivedAmount * rate * 100).round() / 100;
+      final status = job['status'] as String?;
+      if (entrySnap.exists || status == JobStatus.completed.name) {
+        if (status != JobStatus.completed.name) {
+          tx.update(jobRef, {
+            'receivedAmount': receivedAmount,
+            'commissionAmount': commission,
+            'status': JobStatus.completed.name,
+          });
+        }
+        return;
+      }
+      final wallet = (techSnap.data()?['walletBalance'] as num?)?.toDouble() ?? 0;
+      final next = ((wallet - commission) * 100).round() / 100;
       tx.update(jobRef, {
         'receivedAmount': receivedAmount,
         'commissionAmount': commission,
         'status': JobStatus.completed.name,
         'warranty.startsAt': warrantyEnabled ? Timestamp.fromDate(DateTime.now()) : null,
       });
-      if (techId == null) return;
-      final techRef = _db.collection(Cols.users).doc(techId);
-      final techSnap = await tx.get(techRef);
-      final data = techSnap.data() ?? {};
-      final wallet = (data['walletBalance'] as num?)?.toDouble() ?? 0;
-      final next = wallet - commission;
+      tx.set(entryRef, {
+        'userId': techId,
+        'type': 'commission',
+        'amount': commission,
+        'signedAmount': -commission,
+        'balanceAfter': next,
+        'jobId': jobId,
+        'note': 'عمولة إكمال الطلب',
+        'createdBy': techId,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
       tx.update(techRef, {
         'walletBalance': next,
-        if (next < AppConstants.minWalletBalance) 'isOnline': false,
+        if (next < min) 'isOnline': false,
       });
     });
   }
