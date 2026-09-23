@@ -14,6 +14,7 @@ class OsmMap extends StatelessWidget {
     this.circles = const [],
     this.markers = const [],
     this.interactive = true,
+    this.onTap,
   });
 
   final LatLng center;
@@ -23,6 +24,7 @@ class OsmMap extends StatelessWidget {
   final List<CircleMarker> circles;
   final List<Marker> markers;
   final bool interactive;
+  final void Function(LatLng point)? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +36,7 @@ class OsmMap extends StatelessWidget {
         interactionOptions: InteractionOptions(
           flags: interactive ? InteractiveFlag.all : InteractiveFlag.none,
         ),
+        onTap: onTap == null ? null : (_, point) => onTap!(point),
         onPositionChanged: (pos, hasGesture) {
           if (!hasGesture || onPositionChanged == null) return;
           final c = pos.center;

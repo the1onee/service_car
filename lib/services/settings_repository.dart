@@ -6,12 +6,15 @@ class SettingsRepository {
   SettingsRepository({FirebaseFirestore? db}) : _db = db ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _db;
+  Stream<AppSettings>? _settingsStream;
+  Stream<CityZone?>? _cityStream;
 
   DocumentReference<Map<String, dynamic>> get _settingsRef =>
       _db.collection(Cols.appSettings).doc('main');
 
   Stream<AppSettings> watchSettings() {
-    return _settingsRef.snapshots().map((s) => AppSettings.fromMap(s.data()));
+    return _settingsStream ??=
+        _settingsRef.snapshots().map((s) => AppSettings.fromMap(s.data()));
   }
 
   Future<AppSettings> getSettings() async {
@@ -20,7 +23,7 @@ class SettingsRepository {
   }
 
   Stream<CityZone?> watchActiveCity() {
-    return watchSettings().asyncMap((settings) async {
+    return _cityStream ??= watchSettings().asyncMap((settings) async {
       final id = settings.activeCityId;
       if (id.isEmpty) return null;
       final doc = await _db.collection(Cols.cities).doc(id).get();

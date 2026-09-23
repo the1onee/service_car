@@ -12,10 +12,12 @@ class DispatchService {
 
   Future<void> dispatch(String jobId) async {
     try {
-      await _functions.httpsCallable('dispatchJob').call({'jobId': jobId});
-    } catch (_) {
-      await _jobs.dispatch(jobId);
-    }
+      final res = await _functions.httpsCallable('dispatchJob').call({'jobId': jobId});
+      final data = res.data;
+      final ok = data == true || (data is Map && data['ok'] == true);
+      if (ok) return;
+    } catch (_) {}
+    await _jobs.dispatch(jobId);
   }
 
   Future<bool> acceptOffer({

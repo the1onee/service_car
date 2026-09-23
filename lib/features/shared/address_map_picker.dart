@@ -142,6 +142,10 @@ class _AddressMapPageState extends State<_AddressMapPage> {
               center: _pin,
               zoom: _zoom,
               circles: circles,
+              onTap: (point) {
+                setState(() => _pin = point);
+                _map.move(point, _zoom);
+              },
               onPositionChanged: (c) => setState(() => _pin = c),
             ),
           if (_ready)

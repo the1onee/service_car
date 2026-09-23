@@ -12,6 +12,11 @@ class JobRepository {
 
   final FirebaseFirestore? _injected;
   FirebaseFirestore get _db => _injected ?? FirebaseFirestore.instance;
+  final _activeCustomer = <String, Stream<Job?>>{};
+  final _activeTech = <String, Stream<Job?>>{};
+  final _recentCustomer = <String, Stream<List<Job>>>{};
+  final _recentTech = <String, Stream<List<Job>>>{};
+  final _pendingOffers = <String, Stream<List<JobOffer>>>{};
 
   CollectionReference<Map<String, dynamic>> get _jobs => _db.collection(Cols.jobs);
   CollectionReference<Map<String, dynamic>> get _offers => _db.collection(Cols.jobOffers);
@@ -21,39 +26,51 @@ class JobRepository {
   }
 
   Stream<Job?> watchActiveForCustomer(String uid) {
-    return _jobs
-        .where('customerId', isEqualTo: uid)
-        .orderBy('createdAt', descending: true)
-        .limit(8)
-        .snapshots()
-        .map(_firstActive);
+    return _activeCustomer.putIfAbsent(
+      uid,
+      () => _jobs
+          .where('customerId', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .limit(8)
+          .snapshots()
+          .map(_firstActive),
+    );
   }
 
   Stream<Job?> watchActiveForTechnician(String uid) {
-    return _jobs
-        .where('technicianId', isEqualTo: uid)
-        .orderBy('createdAt', descending: true)
-        .limit(8)
-        .snapshots()
-        .map(_firstActive);
+    return _activeTech.putIfAbsent(
+      uid,
+      () => _jobs
+          .where('technicianId', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .limit(8)
+          .snapshots()
+          .map(_firstActive),
+    );
   }
 
   Stream<List<Job>> watchRecentForCustomer(String uid) {
-    return _jobs
-        .where('customerId', isEqualTo: uid)
-        .orderBy('createdAt', descending: true)
-        .limit(20)
-        .snapshots()
-        .map((s) => s.docs.map(Job.fromDoc).toList());
+    return _recentCustomer.putIfAbsent(
+      uid,
+      () => _jobs
+          .where('customerId', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .limit(20)
+          .snapshots()
+          .map((s) => s.docs.map(Job.fromDoc).toList()),
+    );
   }
 
   Stream<List<Job>> watchRecentForTechnician(String uid) {
-    return _jobs
-        .where('technicianId', isEqualTo: uid)
-        .orderBy('createdAt', descending: true)
-        .limit(20)
-        .snapshots()
-        .map((s) => s.docs.map(Job.fromDoc).toList());
+    return _recentTech.putIfAbsent(
+      uid,
+      () => _jobs
+          .where('technicianId', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .limit(20)
+          .snapshots()
+          .map((s) => s.docs.map(Job.fromDoc).toList()),
+    );
   }
 
   Stream<List<JobOffer>> watchJobQuotes(String jobId) {
@@ -89,11 +106,14 @@ class JobRepository {
   }
 
   Stream<List<JobOffer>> watchPendingOffers(String technicianId) {
-    return _offers
-        .where('technicianId', isEqualTo: technicianId)
-        .where('status', isEqualTo: 'pending')
-        .snapshots()
-        .map((s) => s.docs.map(JobOffer.fromDoc).toList());
+    return _pendingOffers.putIfAbsent(
+      technicianId,
+      () => _offers
+          .where('technicianId', isEqualTo: technicianId)
+          .where('status', isEqualTo: 'pending')
+          .snapshots()
+          .map((s) => s.docs.map(JobOffer.fromDoc).toList()),
+    );
   }
 
   Future<String> createJob({
@@ -137,18 +157,31 @@ class JobRepository {
     if (!jobSnap.exists) return;
     final job = Job.fromDoc(jobSnap);
     if (job.technicianId != null) return;
-    if (job.status != JobStatus.dispatching && job.status != JobStatus.offerPending) {
+    if (job.status != JobStatus.dispatching &&
+        job.status != JobStatus.offerPending &&
+        job.status != JobStatus.noTechnician) {
       return;
     }
 
     final techs = await _db
         .collection(Cols.users)
         .where('role', isEqualTo: 'technician')
-        .where('isOnline', isEqualTo: true)
-        .where('serviceIds', arrayContains: job.serviceId)
         .get();
 
     final previous = await _offers.where('jobId', isEqualTo: jobId).get();
+    final now = DateTime.now();
+    final livePending = previous.docs.where((d) {
+      final data = d.data();
+      if (data['status'] != 'pending') return false;
+      final exp = (data['expiresAt'] as Timestamp?)?.toDate();
+      return exp == null || exp.isAfter(now);
+    }).toList();
+    if (livePending.isNotEmpty) {
+      if (job.status != JobStatus.offerPending) {
+        await _jobs.doc(jobId).update({'status': JobStatus.offerPending.name});
+      }
+      return;
+    }
     final used = previous.docs.map((d) => d.data()['technicianId'] as String?).toSet();
     final settingsSnap = await _db.collection(Cols.appSettings).doc('main').get();
     final minWallet =
@@ -160,29 +193,35 @@ class JobRepository {
           final data = d.data();
           final geo = data['geo'] as GeoPoint?;
           final km = geo == null
-              ? 9999.0
+              ? AppConstants.maxMatchKm
               : haversineKm(
                   job.approxLocation.latitude,
                   job.approxLocation.longitude,
                   geo.latitude,
                   geo.longitude,
                 );
-          final verified = data['verified'] as bool? ?? false;
-          final wallet = (data['walletBalance'] as num?)?.toDouble() ?? 0;
+          final serviceIds = List<String>.from(
+            data['serviceIds'] as List? ?? const [],
+          );
           final vehicleTypeIds = List<String>.from(
             data['vehicleTypeIds'] as List? ?? const [],
           );
           return (
             id: d.id,
+            online: data['isOnline'] == true,
             km: km,
             token: data['fcmToken'] as String?,
             name: data['name'] as String? ?? 'فني',
             rating: (data['ratingAvg'] as num?)?.toDouble() ?? 5,
-            verified: verified,
-            wallet: wallet,
+            verified: data['verified'] as bool? ?? false,
+            wallet: (data['walletBalance'] as num?)?.toDouble() ?? 0,
+            serviceIds: serviceIds,
             vehicleTypeIds: vehicleTypeIds,
           );
         })
+        .where((t) => t.online)
+        .where((t) =>
+            t.serviceIds.isEmpty || t.serviceIds.contains(job.serviceId))
         .where((t) => t.km <= AppConstants.maxMatchKm)
         .where((t) => t.verified)
         .where((t) => t.wallet >= minWallet)
@@ -190,6 +229,7 @@ class JobRepository {
         .where((t) {
           final needed = job.vehicleTypeId;
           if (needed == null || needed.isEmpty) return true;
+          if (t.vehicleTypeIds.isEmpty) return true;
           return t.vehicleTypeIds.contains(needed);
         })
         .toList()
@@ -287,7 +327,8 @@ class JobRepository {
       final job = jobSnap.data()!;
       if (job['technicianId'] != null) return false;
       if (job['status'] != JobStatus.offerPending.name &&
-          job['status'] != JobStatus.dispatching.name) {
+          job['status'] != JobStatus.dispatching.name &&
+          job['status'] != JobStatus.noTechnician.name) {
         return false;
       }
 
@@ -333,7 +374,11 @@ class JobRepository {
       if (!jobSnap.exists) return false;
       final job = jobSnap.data()!;
       if (job['technicianId'] != null) return false;
-      if (job['status'] != JobStatus.offerPending.name) return false;
+      if (job['status'] != JobStatus.offerPending.name &&
+          job['status'] != JobStatus.dispatching.name &&
+          job['status'] != JobStatus.noTechnician.name) {
+        return false;
+      }
       tx.update(offerRef, {
         'status': 'submitted',
         'initialPrice': initialPrice,

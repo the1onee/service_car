@@ -169,7 +169,8 @@ async function dispatchJobInternal(jobId) {
   const jobSnap = await jobRef.get();
   if (!jobSnap.exists) return { ok: false, reason: "missing" };
   const job = jobSnap.data();
-  if (job.technicianId || !["dispatching", "offerPending"].includes(job.status)) {
+  if (job.technicianId) return { ok: false, reason: "busy" };
+  if (!["dispatching", "offerPending", "noTechnician"].includes(job.status)) {
     return { ok: false, reason: "busy" };
   }
 
@@ -177,11 +178,21 @@ async function dispatchJobInternal(jobId) {
   const techs = await db
     .collection("users")
     .where("role", "==", "technician")
-    .where("isOnline", "==", true)
-    .where("serviceIds", "array-contains", job.serviceId)
     .get();
 
   const previous = await db.collection("jobOffers").where("jobId", "==", jobId).get();
+  const livePending = previous.docs.filter((d) => {
+    const data = d.data();
+    if (data.status !== "pending") return false;
+    const exp = data.expiresAt?.toDate?.();
+    return !exp || exp > new Date();
+  });
+  if (livePending.length) {
+    if (job.status !== "offerPending") {
+      await jobRef.update({ status: "offerPending" });
+    }
+    return { ok: true, reason: "already" };
+  }
   const used = new Set(previous.docs.map((d) => d.data().technicianId));
   const minWallet = await walletFns.getMinWalletBalance();
 
@@ -193,12 +204,16 @@ async function dispatchJobInternal(jobId) {
       const geo = data.geo;
       const km = geo
         ? haversineKm(origin.latitude, origin.longitude, geo.latitude, geo.longitude)
-        : 9999;
+        : MAX_KM;
       const vehicleTypeIds = Array.isArray(data.vehicleTypeIds)
         ? data.vehicleTypeIds.filter((id) => typeof id === "string")
         : [];
+      const serviceIds = Array.isArray(data.serviceIds)
+        ? data.serviceIds.filter((id) => typeof id === "string")
+        : [];
       return {
         id: d.id,
+        online: data.isOnline === true,
         km,
         token: data.fcmToken,
         name: data.name || "فني",
@@ -206,13 +221,16 @@ async function dispatchJobInternal(jobId) {
         verified: !!data.verified,
         wallet: Number(data.walletBalance || 0),
         vehicleTypeIds,
+        serviceIds,
       };
     })
+    .filter((t) => t.online)
+    .filter((t) => !t.serviceIds.length || t.serviceIds.includes(job.serviceId))
     .filter((t) => t.km <= MAX_KM)
     .filter((t) => t.verified)
     .filter((t) => t.wallet >= minWallet)
     .filter((t) => !used.has(t.id))
-    .filter((t) => !neededVehicle || t.vehicleTypeIds.includes(neededVehicle))
+    .filter((t) => !neededVehicle || !t.vehicleTypeIds.length || t.vehicleTypeIds.includes(neededVehicle))
     .sort((a, b) => a.km - b.km)
     .slice(0, emergency ? EMERGENCY_TECHS : QUOTE_TECHS);
 

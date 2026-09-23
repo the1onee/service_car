@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/geo.dart';
 import 'package:barrr/core/strings.dart';
@@ -42,14 +43,26 @@ class _CustomerHomeState extends State<CustomerHome> {
   double _zoom = 12;
   var _locStarted = false;
   var _tab = 0;
+  var _submitting = false;
   ServiceItem? _selected;
   VehicleType? _vehicleType;
+  late final Stream<CityZone?> _cityStream;
+  late final Stream<Job?> _activeJobStream;
+  late final Stream<List<Job>> _recentJobsStream;
+  late final Stream<List<ServiceItem>> _servicesStream;
+  late final Stream<List<VehicleType>> _vehicleTypesStream;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_locStarted) return;
     _locStarted = true;
+    final scope = AppScope.of(context);
+    _cityStream = scope.settings.watchActiveCity();
+    _activeJobStream = scope.jobs.watchActiveForCustomer(widget.profile.id);
+    _recentJobsStream = scope.jobs.watchRecentForCustomer(widget.profile.id);
+    _servicesStream = scope.users.watchServices();
+    _vehicleTypesStream = scope.users.watchVehicleTypes();
     _initLocation();
   }
 
@@ -94,7 +107,16 @@ class _CustomerHomeState extends State<CustomerHome> {
     );
   }
 
+  String get _addressLabel {
+    final coords =
+        '${_pin.latitude.toStringAsFixed(5)}, ${_pin.longitude.toStringAsFixed(5)}';
+    final zoneName = _zone?.nameAr ?? '';
+    if (zoneName.isEmpty) return coords;
+    return '$zoneName ($coords)';
+  }
+
   Future<void> _confirmAndRequest() async {
+    if (_submitting) return;
     final service = _selected;
     final vehicle = _vehicleType;
     if (service == null) return;
@@ -104,7 +126,6 @@ class _CustomerHomeState extends State<CustomerHome> {
       );
       return;
     }
-    // مزامنة الدبوس مع مركز الخريطة الفعلي قبل الإرسال.
     try {
       _pin = _map.camera.center;
     } catch (_) {}
@@ -114,30 +135,34 @@ class _CustomerHomeState extends State<CustomerHome> {
       );
       return;
     }
-    final scope = AppScope.of(context);
-    final geo = GeoPoint(_pin.latitude, _pin.longitude);
-    final zoneName = _zone?.nameAr ?? '';
-    final addressLabel = zoneName.isEmpty
-        ? '${_pin.latitude.toStringAsFixed(5)}, ${_pin.longitude.toStringAsFixed(5)}'
-        : '$zoneName (${_pin.latitude.toStringAsFixed(5)}, ${_pin.longitude.toStringAsFixed(5)})';
-    await scope.users.setAddressAndGeo(
-      widget.profile.id,
-      address: widget.profile.address.trim().isEmpty
-          ? addressLabel
-          : widget.profile.address,
-      geo: geo,
-    );
-    final jobId = await scope.jobs.createJob(
-      customerId: widget.profile.id,
-      serviceId: service.id,
-      serviceTitle: service.titleAr,
-      vehicleTypeId: vehicle.id,
-      vehicleTypeTitle: vehicle.nameAr,
-      exact: geo,
-      isEmergency: service.isEmergency,
-      commissionRate: service.commissionRate,
-    );
-    await scope.dispatch.dispatch(jobId);
+    setState(() => _submitting = true);
+    try {
+      final scope = AppScope.of(context);
+      final geo = GeoPoint(_pin.latitude, _pin.longitude);
+      await scope.users.setAddressAndGeo(
+        widget.profile.id,
+        address: _addressLabel,
+        geo: geo,
+      );
+      final jobId = await scope.jobs.createJob(
+        customerId: widget.profile.id,
+        serviceId: service.id,
+        serviceTitle: service.titleAr,
+        vehicleTypeId: vehicle.id,
+        vehicleTypeTitle: vehicle.nameAr,
+        exact: geo,
+        isEmergency: service.isEmergency,
+        commissionRate: service.commissionRate,
+      );
+      await scope.dispatch.dispatch(jobId);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذر إرسال الطلب: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   void _watchTimeout(Job? job, BuildContext context) {
@@ -172,6 +197,11 @@ class _CustomerHomeState extends State<CustomerHome> {
     _map.move(picked.latLng, _zoom);
   }
 
+  void _selectMapPoint(LatLng point) {
+    setState(() => _pin = point);
+    _map.move(point, _zoom);
+  }
+
   Future<void> _recenter() async {
     final scope = AppScope.of(context);
     final result = await scope.location.currentWithStatus(fallback: _pin);
@@ -200,14 +230,13 @@ class _CustomerHomeState extends State<CustomerHome> {
 
   @override
   Widget build(BuildContext context) {
-    final scope = AppScope.of(context);
     return StreamBuilder<CityZone?>(
-      stream: scope.settings.watchActiveCity(),
+      stream: _cityStream,
       builder: (context, zoneSnap) {
         final zone = zoneSnap.data ?? _zone;
         if (zoneSnap.hasData) _zone = zone;
         return StreamBuilder<Job?>(
-          stream: scope.jobs.watchActiveForCustomer(widget.profile.id),
+          stream: _activeJobStream,
           builder: (context, snap) {
             final job = snap.data;
             _watchTimeout(job, context);
@@ -229,13 +258,11 @@ class _CustomerHomeState extends State<CustomerHome> {
                 children: [
                   _mapBody(job, zone),
                   OrdersScreen(
-                    stream: scope.jobs
-                        .watchRecentForCustomer(widget.profile.id),
+                    stream: _recentJobsStream,
                     profile: widget.profile,
                   ),
                   CustomerLedgerPage(
-                    stream: scope.jobs
-                        .watchRecentForCustomer(widget.profile.id),
+                    stream: _recentJobsStream,
                     profile: widget.profile,
                     city: zone?.nameAr,
                   ),
@@ -265,7 +292,7 @@ class _CustomerHomeState extends State<CustomerHome> {
           radiusKm: zone.radiusKm,
         ),
     ];
-    return Stack(
+    final map = Stack(
       children: [
         if (!_ready)
           const Center(child: CircularProgressIndicator())
@@ -276,6 +303,7 @@ class _CustomerHomeState extends State<CustomerHome> {
             zoom: _zoom,
             circles: circles,
             markers: markers,
+            onTap: job == null ? _selectMapPoint : null,
             onPositionChanged: job == null
                 ? (c) => setState(() => _pin = c)
                 : null,
@@ -321,31 +349,38 @@ class _CustomerHomeState extends State<CustomerHome> {
             left: 16,
             child: _MapButton(icon: Icons.my_location, onTap: _recenter),
           ),
-        Align(
-          alignment: Alignment.bottomCenter,
-          child: job == null
-              ? _RequestComposer(
-                  zone: zone,
-                  inZone: _pinInZone(),
-                  selected: _selected,
-                  vehicleType: _vehicleType,
-                  onSelect: (s) {
-                    setState(() => _selected = s);
-                  },
-                  onSelectVehicle: (t) {
-                    setState(() => _vehicleType = t);
-                  },
-                  onPickLocation: _openMapPicker,
-                  onSubmit: _confirmAndRequest)
-              : CustomerJobPanel(job: job, me: widget.profile),
-        ),
+      ],
+    );
+    return Column(
+      children: [
+        Expanded(child: map),
+        job == null
+            ? _RequestComposer(
+                zone: zone,
+                inZone: _pinInZone(),
+                addressLabel: _addressLabel,
+                selected: _selected,
+                vehicleType: _vehicleType,
+                services: _servicesStream,
+                vehicleTypes: _vehicleTypesStream,
+                busy: _submitting,
+                onSelect: (s) {
+                  setState(() => _selected = s);
+                },
+                onSelectVehicle: (t) {
+                  setState(() => _vehicleType = t);
+                },
+                onPickLocation: _openMapPicker,
+                onSubmit: _confirmAndRequest,
+              )
+            : CustomerJobPanel(job: job, me: widget.profile),
       ],
     );
   }
 
   Widget _account(String? city) {
     final me = widget.profile;
-    final jobs = AppScope.of(context).jobs.watchRecentForCustomer(me.id);
+    final jobs = _recentJobsStream;
     return Column(
       children: [
         FieldTopBar(city: city, caption: 'حسابي'),
@@ -502,8 +537,12 @@ class _RequestComposer extends StatelessWidget {
   const _RequestComposer({
     required this.zone,
     required this.inZone,
+    required this.addressLabel,
     required this.selected,
     required this.vehicleType,
+    required this.services,
+    required this.vehicleTypes,
+    required this.busy,
     required this.onSelect,
     required this.onSelectVehicle,
     required this.onPickLocation,
@@ -512,8 +551,12 @@ class _RequestComposer extends StatelessWidget {
 
   final CityZone? zone;
   final bool inZone;
+  final String addressLabel;
   final ServiceItem? selected;
   final VehicleType? vehicleType;
+  final Stream<List<ServiceItem>> services;
+  final Stream<List<VehicleType>> vehicleTypes;
+  final bool busy;
   final ValueChanged<ServiceItem> onSelect;
   final ValueChanged<VehicleType> onSelectVehicle;
   final VoidCallback onPickLocation;
@@ -591,38 +634,61 @@ class _RequestComposer extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             FieldCard(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-              child: ListTile(
-                leading: const Icon(Icons.place_outlined, color: AppColors.inkSoft),
-                title: const Text('موقع العطل',
-                    style: TextStyle(fontSize: 12, color: AppColors.inkSoft)),
-                subtitle: Text(
-                  inZone
-                      ? (zone?.nameAr ?? 'موقعك على الخريطة')
-                      : AppStrings.outsideCoverage,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: inZone ? AppColors.ink : AppColors.danger,
-                    fontSize: 13,
+              padding: EdgeInsets.zero,
+              child: InkWell(
+                onTap: onPickLocation,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.place_outlined, color: AppColors.inkSoft),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'العنوان',
+                              style: TextStyle(
+                                  fontSize: 12, color: AppColors.inkSoft),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              inZone ? addressLabel : AppStrings.outsideCoverage,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: inZone ? AppColors.ink : AppColors.danger,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        AppStrings.pickLocationOnMap,
+                        style: TextStyle(
+                          color: AppColors.amberDeep,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                trailing: TextButton(
-                  onPressed: onPickLocation,
-                  child: const Text(AppStrings.pickLocationOnMap),
                 ),
               ),
             ),
             const SizedBox(height: 14),
             const SectionLabel('حدد نوع الخدمة'),
             StreamBuilder<List<ServiceItem>>(
-              stream: AppScope.of(context).users.watchServices(),
+              stream: services,
               builder: (context, snap) {
-                final items = snap.data ?? const <ServiceItem>[];
-                if (items.isEmpty) {
-                  return const Text('لا توجد خدمات متاحة حالياً.');
-                }
+                final loaded = snap.data;
+                final items = (loaded == null || loaded.isEmpty)
+                    ? seedServices
+                    : loaded;
                 return GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -691,7 +757,7 @@ class _RequestComposer extends StatelessWidget {
             const SizedBox(height: 14),
             const SectionLabel(AppStrings.pickVehicleType),
             StreamBuilder<List<VehicleType>>(
-              stream: AppScope.of(context).users.watchVehicleTypes(),
+              stream: vehicleTypes,
               builder: (context, snap) {
                 final items = snap.data ?? seedVehicleTypes;
                 return Wrap(
@@ -715,15 +781,22 @@ class _RequestComposer extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
-              onPressed:
-                  selected == null || vehicleType == null ? null : onSubmit,
+              onPressed: busy || selected == null || vehicleType == null
+                  ? null
+                  : onSubmit,
               style: FilledButton.styleFrom(
                 backgroundColor: emergency ? AppColors.amber : AppColors.slate,
                 foregroundColor: emergency ? AppColors.ink : Colors.white,
                 disabledBackgroundColor: AppColors.outline,
               ),
               icon: Icon(emergency ? Icons.bolt : Icons.arrow_back),
-              label: Text(emergency ? 'طلب فني طوارئ فوري' : 'اطلب الفني'),
+              label: Text(
+                busy
+                    ? 'جارٍ إرسال الطلب...'
+                    : emergency
+                        ? 'طلب فني طوارئ فوري'
+                        : 'اطلب الفني',
+              ),
             ),
           ],
         ),

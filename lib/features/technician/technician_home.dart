@@ -43,6 +43,10 @@ class _TechnicianHomeState extends State<TechnicianHome> {
   CityZone? _zone;
   var _booted = false;
   var _tab = 0;
+  var _dutyBusy = false;
+  bool? _duty;
+  String? _dutyHint;
+  DateTime? _lastGeoWrite;
 
   @override
   void didChangeDependencies() {
@@ -69,6 +73,11 @@ class _TechnicianHomeState extends State<TechnicianHome> {
     final scope = AppScope.of(context);
     _posSub = scope.location.track().listen((p) {
       _me = LatLng(p.latitude, p.longitude);
+      final now = DateTime.now();
+      final due = _lastGeoWrite == null ||
+          now.difference(_lastGeoWrite!) > const Duration(seconds: 8);
+      if (!due) return;
+      _lastGeoWrite = now;
       scope.users.setGeo(widget.profile.id, GeoPoint(p.latitude, p.longitude));
       if (mounted) setState(() {});
     });
@@ -77,24 +86,54 @@ class _TechnicianHomeState extends State<TechnicianHome> {
   }
 
   Future<void> _toggleOnline(bool value) async {
+    if (_dutyBusy) return;
+    setState(() {
+      _dutyBusy = true;
+      _duty = value;
+      _dutyHint = null;
+    });
     final scope = AppScope.of(context);
-    final result = await scope.users.setOnline(widget.profile.id, value);
-    if (!value) {
-      _posSub?.cancel();
-      return;
+    try {
+      final result = await scope.users.setOnline(widget.profile.id, value);
+      if (!mounted) return;
+      if (!value) {
+        await _posSub?.cancel();
+        _posSub = null;
+        return;
+      }
+      if (!result.ok) {
+        final message = switch (result.block) {
+          OnlineBlock.rejected => 'تم رفض طلب الانضمام. راجع الإدارة.',
+          OnlineBlock.lowBalance =>
+            'رصيدك ${result.balance.toStringAsFixed(0)} د.ع والحد الأدنى لاستقبال الطلبات ${result.minBalance.toStringAsFixed(0)} د.ع',
+          OnlineBlock.pending || OnlineBlock.none => AppStrings.pendingVerify,
+        };
+        setState(() {
+          _duty = false;
+          _dutyHint = message;
+        });
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
+        return;
+      }
+      await scope.users.setGeo(
+        widget.profile.id,
+        GeoPoint(_me.latitude, _me.longitude),
+      );
+      _lastGeoWrite = DateTime.now();
+      _startTracking();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _duty = !value;
+        _dutyHint = 'تعذر تغيير حالة الاتصال';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذر تغيير حالة الاتصال: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _dutyBusy = false);
     }
-    if (!result.ok && mounted) {
-      final message = switch (result.block) {
-        OnlineBlock.rejected => 'تم رفض طلب الانضمام. راجع الإدارة.',
-        OnlineBlock.lowBalance =>
-          'رصيدك ${result.balance.toStringAsFixed(0)} د.ع والحد الأدنى ${result.minBalance.toStringAsFixed(0)} د.ع',
-        OnlineBlock.pending || OnlineBlock.none => AppStrings.pendingVerify,
-      };
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
-      return;
-    }
-    _startTracking();
   }
 
   @override
@@ -110,6 +149,10 @@ class _TechnicianHomeState extends State<TechnicianHome> {
       stream: scope.users.watch(widget.profile.id),
       builder: (context, profileSnap) {
         final me = profileSnap.data ?? widget.profile;
+        final online = _duty ?? me.isOnline;
+        if (_duty != null && _duty == me.isOnline && !_dutyBusy) {
+          _duty = null;
+        }
         return StreamBuilder<Job?>(
           stream: scope.jobs.watchActiveForTechnician(me.id),
           builder: (context, jobSnap) {
@@ -145,13 +188,15 @@ class _TechnicianHomeState extends State<TechnicianHome> {
                       body: IndexedStack(
                         index: _tab,
                         children: [
-                          _mapBody(me, job),
+                          _mapBody(me, job, online),
                           OrdersScreen(
                             stream: scope.jobs.watchRecentForTechnician(me.id),
                             profile: me,
                           ),
                           _WalletPage(
                             me: me,
+                            online: online,
+                            dutyHint: _dutyHint,
                             city: _zone?.nameAr,
                             onToggle: _toggleOnline,
                             onAccount: () => setState(() => _tab = 3),
@@ -178,7 +223,7 @@ class _TechnicianHomeState extends State<TechnicianHome> {
     );
   }
 
-  Widget _mapBody(AppUser me, Job? job) {
+  Widget _mapBody(AppUser me, Job? job, bool online) {
     final markers = <Marker>[
       pinMarker(_me, color: AppColors.emerald),
       if (job != null)
@@ -205,10 +250,9 @@ class _TechnicianHomeState extends State<TechnicianHome> {
           child: FieldTopBar(
             city: _zone?.nameAr,
             trailing: StatusPill(
-              label: me.isOnline ? 'متصل' : 'غير متصل',
-              color: me.isOnline ? AppColors.emeraldDeep : AppColors.inkSoft,
-              background:
-                  me.isOnline ? AppColors.emeraldTint : AppColors.recessed,
+              label: online ? 'متصل' : 'غير متصل',
+              color: online ? AppColors.emeraldDeep : AppColors.inkSoft,
+              background: online ? AppColors.emeraldTint : AppColors.recessed,
             ),
           ),
         ),
@@ -231,21 +275,26 @@ class _TechnicianHomeState extends State<TechnicianHome> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            me.isOnline
-                                ? AppStrings.online
-                                : AppStrings.offline,
+                            online ? AppStrings.online : AppStrings.offline,
                             style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'الرصيد ${formatIqd(me.walletBalance)}',
-                            style: const TextStyle(
-                                color: AppColors.inkSoft, fontSize: 12),
+                            _dutyHint ?? 'الرصيد ${formatIqd(me.walletBalance)}',
+                            style: TextStyle(
+                              color: _dutyHint == null
+                                  ? AppColors.inkSoft
+                                  : AppColors.danger,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    Switch(value: me.isOnline, onChanged: _toggleOnline),
+                    Switch(
+                      value: online,
+                      onChanged: _dutyBusy ? null : _toggleOnline,
+                    ),
                   ],
                 ),
               ),
@@ -261,12 +310,16 @@ enum _LedgerFilter { movements, payouts }
 class _WalletPage extends StatefulWidget {
   const _WalletPage({
     required this.me,
+    required this.online,
     required this.onToggle,
     required this.onAccount,
+    this.dutyHint,
     this.city,
   });
 
   final AppUser me;
+  final bool online;
+  final String? dutyHint;
   final String? city;
   final ValueChanged<bool> onToggle;
   final VoidCallback onAccount;
@@ -329,7 +382,8 @@ class _WalletPageState extends State<_WalletPage> {
                           _BalanceCard(
                             balance: me.walletBalance,
                             minBalance: min,
-                            online: me.isOnline,
+                            online: widget.online,
+                            dutyHint: widget.dutyHint,
                             city: widget.city,
                             onToggle: widget.onToggle,
                           ),
@@ -411,12 +465,14 @@ class _BalanceCard extends StatelessWidget {
     required this.minBalance,
     required this.online,
     required this.onToggle,
+    this.dutyHint,
     this.city,
   });
 
   final double balance;
   final double minBalance;
   final bool online;
+  final String? dutyHint;
   final String? city;
   final ValueChanged<bool> onToggle;
 
@@ -565,6 +621,13 @@ class _BalanceCard extends StatelessWidget {
               ],
             ),
           ),
+          if (dutyHint != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              dutyHint!,
+              style: const TextStyle(color: Color(0xFFFFB4AB), fontSize: 12),
+            ),
+          ],
         ],
       ),
     );

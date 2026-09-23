@@ -34,12 +34,20 @@ class UserRepository {
 
   final FirebaseFirestore? _injected;
   FirebaseFirestore get _db => _injected ?? FirebaseFirestore.instance;
+  final _userStreams = <String, Stream<AppUser?>>{};
+  Stream<List<ServiceItem>>? _servicesStream;
+  Stream<List<VehicleType>>? _vehicleTypesStream;
+  final _walletStreams = <String, Stream<List<WalletEntry>>>{};
+  final _topUpStreams = <String, Stream<List<WalletTopUp>>>{};
 
   DocumentReference<Map<String, dynamic>> _userRef(String uid) =>
       _db.collection(Cols.users).doc(uid);
 
   Stream<AppUser?> watch(String uid) {
-    return _userRef(uid).snapshots().map((d) => d.exists ? AppUser.fromDoc(d) : null);
+    return _userStreams.putIfAbsent(
+      uid,
+      () => _userRef(uid).snapshots().map((d) => d.exists ? AppUser.fromDoc(d) : null),
+    );
   }
 
   Future<AppUser?> get(String uid) async {
@@ -84,7 +92,14 @@ class UserRepository {
         minBalance: min,
       );
     }
-    await _userRef(uid).set({'isOnline': true}, SetOptions(merge: true));
+    final patch = <String, dynamic>{'isOnline': true};
+    if (user.serviceIds.isEmpty) {
+      patch['serviceIds'] = seedServices.map((s) => s.id).toList();
+    }
+    if (user.vehicleTypeIds.isEmpty) {
+      patch['vehicleTypeIds'] = seedVehicleTypes.map((t) => t.id).toList();
+    }
+    await _userRef(uid).set(patch, SetOptions(merge: true));
     return const OnlineResult.ok();
   }
 
@@ -108,17 +123,17 @@ class UserRepository {
   }
 
   Stream<List<WalletEntry>> watchWalletEntries(String uid) {
-    return _db
+    return _walletStreams.putIfAbsent(uid, () => _db
         .collection(Cols.walletEntries)
         .where('userId', isEqualTo: uid)
         .orderBy('createdAt', descending: true)
         .limit(40)
         .snapshots()
-        .map((s) => s.docs.map(WalletEntry.fromDoc).toList());
+        .map((s) => s.docs.map(WalletEntry.fromDoc).toList()));
   }
 
   Stream<List<WalletTopUp>> watchWalletTopUps(String uid) {
-    return _db
+    return _topUpStreams.putIfAbsent(uid, () => _db
         .collection(Cols.walletTopUps)
         .where('technicianId', isEqualTo: uid)
         .limit(30)
@@ -131,7 +146,7 @@ class UserRepository {
         return bt.compareTo(at);
       });
       return list.take(20).toList();
-    });
+    }));
   }
 
   Future<String> createWalletTopUp({
@@ -223,7 +238,7 @@ class UserRepository {
   }
 
   Stream<List<ServiceItem>> watchServices() {
-    return _db.collection(Cols.services).snapshots().map((s) {
+    return _servicesStream ??= _db.collection(Cols.services).snapshots().map((s) {
       if (s.docs.isEmpty) return seedServices;
       final list = s.docs
           .map((d) => ServiceItem.fromMap(d.id, d.data()))
@@ -239,7 +254,7 @@ class UserRepository {
   }
 
   Stream<List<VehicleType>> watchVehicleTypes() {
-    return _db.collection(Cols.vehicleTypes).snapshots().map((s) {
+    return _vehicleTypesStream ??= _db.collection(Cols.vehicleTypes).snapshots().map((s) {
       if (s.docs.isEmpty) return seedVehicleTypes;
       final list = s.docs
           .map((d) => VehicleType.fromMap(d.id, d.data()))
