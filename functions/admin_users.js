@@ -89,6 +89,9 @@ exports.createUserAccount = onCall(async (request) => {
   const serviceIds = Array.isArray(data.serviceIds)
     ? data.serviceIds.filter((id) => typeof id === "string")
     : [];
+  const vehicleTypeIds = Array.isArray(data.vehicleTypeIds)
+    ? data.vehicleTypeIds.filter((id) => typeof id === "string")
+    : [];
   // الفني يبقى بانتظار التوثيق إلا إذا اعتمده الأدمن عند الإنشاء.
   const approved = data.approved === true || role !== "technician";
   const walletBalance = typeof data.walletBalance === "number" ? data.walletBalance : 0;
@@ -121,6 +124,7 @@ exports.createUserAccount = onCall(async (request) => {
       isOnline: false,
       geo: null,
       serviceIds,
+      vehicleTypeIds,
       verified: approved,
       verificationStatus: approved ? "approved" : "pending",
       walletBalance,

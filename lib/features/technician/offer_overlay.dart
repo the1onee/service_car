@@ -93,6 +93,11 @@ class _OfferOverlayState extends State<OfferOverlay> {
                 const Text('طلب جديد', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 8),
                 Text(widget.offer.serviceTitle ?? 'خدمة'),
+                if (widget.offer.vehicleTypeTitle != null &&
+                    widget.offer.vehicleTypeTitle!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text('نوع السيارة: ${widget.offer.vehicleTypeTitle}'),
+                ],
                 const SizedBox(height: 8),
                 const Text('الموقع تقريبي ورقم الهاتف مخفي حتى يقبل العميل'),
                 const SizedBox(height: 12),

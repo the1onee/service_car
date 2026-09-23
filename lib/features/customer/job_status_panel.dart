@@ -48,6 +48,14 @@ class CustomerJobPanel extends StatelessWidget {
                 job.serviceTitle ?? job.serviceId,
                 style: const TextStyle(color: AppColors.inkSoft),
               ),
+              if (job.vehicleTypeTitle != null &&
+                  job.vehicleTypeTitle!.trim().isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  'نوع السيارة: ${job.vehicleTypeTitle}',
+                  style: const TextStyle(color: AppColors.inkSoft, fontSize: 13),
+                ),
+              ],
               if (_showSteps(job.status)) ...[
                 const SizedBox(height: 14),
                 _Steps(status: job.status),

@@ -4,7 +4,9 @@ import 'package:barrr/data/collections.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/service_item.dart';
+import 'package:barrr/models/vehicle_type.dart';
 import 'package:barrr/models/wallet_entry.dart';
+import 'package:barrr/models/wallet_top_up.dart';
 
 enum OnlineBlock { none, pending, rejected, lowBalance }
 
@@ -101,6 +103,10 @@ class UserRepository {
     return _userRef(uid).set({'serviceIds': ids}, SetOptions(merge: true));
   }
 
+  Future<void> setVehicleTypeIds(String uid, List<String> ids) {
+    return _userRef(uid).set({'vehicleTypeIds': ids}, SetOptions(merge: true));
+  }
+
   Stream<List<WalletEntry>> watchWalletEntries(String uid) {
     return _db
         .collection(Cols.walletEntries)
@@ -109,6 +115,50 @@ class UserRepository {
         .limit(40)
         .snapshots()
         .map((s) => s.docs.map(WalletEntry.fromDoc).toList());
+  }
+
+  Stream<List<WalletTopUp>> watchWalletTopUps(String uid) {
+    return _db
+        .collection(Cols.walletTopUps)
+        .where('technicianId', isEqualTo: uid)
+        .limit(30)
+        .snapshots()
+        .map((s) {
+      final list = s.docs.map(WalletTopUp.fromDoc).toList();
+      list.sort((a, b) {
+        final at = a.createdAt?.millisecondsSinceEpoch ?? 0;
+        final bt = b.createdAt?.millisecondsSinceEpoch ?? 0;
+        return bt.compareTo(at);
+      });
+      return list.take(20).toList();
+    });
+  }
+
+  Future<String> createWalletTopUp({
+    required String technicianId,
+    required double amount,
+    required String receiptUrl,
+    String transferNote = '',
+  }) async {
+    if (amount <= 0) {
+      throw ArgumentError('المبلغ يجب أن يكون أكبر من صفر.');
+    }
+    if (receiptUrl.trim().isEmpty) {
+      throw ArgumentError('فاتورة التحويل مطلوبة.');
+    }
+    final ref = await _db.collection(Cols.walletTopUps).add({
+      'technicianId': technicianId,
+      'amount': amount,
+      'receiptUrl': receiptUrl.trim(),
+      'transferNote': transferNote.trim(),
+      'status': 'pending',
+      'rejectReason': '',
+      'walletEntryId': '',
+      'reviewedBy': '',
+      'createdAt': FieldValue.serverTimestamp(),
+      'reviewedAt': null,
+    });
+    return ref.id;
   }
 
   String walletHint(AppUser user, {required double minBalance}) {
@@ -159,6 +209,19 @@ class UserRepository {
     await batch.commit();
   }
 
+  Future<void> syncSeedVehicleTypes() async {
+    final existing = await _db.collection(Cols.vehicleTypes).get();
+    final existingIds = existing.docs.map((d) => d.id).toSet();
+    final missing =
+        seedVehicleTypes.where((t) => !existingIds.contains(t.id)).toList();
+    if (missing.isEmpty) return;
+    final batch = _db.batch();
+    for (final t in missing) {
+      batch.set(_db.collection(Cols.vehicleTypes).doc(t.id), t.toMap());
+    }
+    await batch.commit();
+  }
+
   Stream<List<ServiceItem>> watchServices() {
     return _db.collection(Cols.services).snapshots().map((s) {
       if (s.docs.isEmpty) return seedServices;
@@ -172,6 +235,22 @@ class UserRepository {
         return a.titleAr.compareTo(b.titleAr);
       });
       return list;
+    });
+  }
+
+  Stream<List<VehicleType>> watchVehicleTypes() {
+    return _db.collection(Cols.vehicleTypes).snapshots().map((s) {
+      if (s.docs.isEmpty) return seedVehicleTypes;
+      final list = s.docs
+          .map((d) => VehicleType.fromMap(d.id, d.data()))
+          .where((e) => e.active)
+          .toList();
+      list.sort((a, b) {
+        final byOrder = a.sortOrder.compareTo(b.sortOrder);
+        if (byOrder != 0) return byOrder;
+        return a.nameAr.compareTo(b.nameAr);
+      });
+      return list.isEmpty ? seedVehicleTypes : list;
     });
   }
 }

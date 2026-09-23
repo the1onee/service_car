@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// لوحة «Industrial Field Utility»: سليت صناعي، كهرماني للطوارئ، زمردي للحالات الموثقة.
 class AppColors {
@@ -10,7 +9,7 @@ class AppColors {
   static const slate = Color(0xFF0F172A);
   static const slateMid = Color(0xFF1E293B);
 
-  /// الاسم القديم للأزرار الأساسية — أصبح السليت الصناعي.
+  /// الاسم السابق للأزرار الأساسية — أصبح السليت الصناعي.
   static const petrol = slate;
   static const petrolDark = Color(0xFF020617);
   static const petrolTint = Color(0xFFF1F5F9);
@@ -39,6 +38,24 @@ class AppColors {
 }
 
 class AppTheme {
+  /// خط عربي مضمّن محلياً — يتجنب فشل تحميل Google Fonts على الويب (مربعات بدل الحروف).
+  static const fontFamily = 'NotoSansArabic';
+
+  static TextStyle ar({
+    double? fontSize,
+    FontWeight? fontWeight,
+    Color? color,
+    double? height,
+  }) {
+    return TextStyle(
+      fontFamily: fontFamily,
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: color,
+      height: height,
+    );
+  }
+
   static const brandGradient = LinearGradient(
     begin: Alignment.topRight,
     end: Alignment.bottomLeft,
@@ -102,26 +119,54 @@ class AppTheme {
       scrim: AppColors.slate,
     );
 
-    final base = GoogleFonts.ibmPlexSansArabicTextTheme();
-    final text = base
-        .copyWith(
-          displaySmall: base.displaySmall
-              ?.copyWith(fontWeight: FontWeight.w700, height: 1.25),
-          headlineMedium: base.headlineMedium
-              ?.copyWith(fontWeight: FontWeight.w700, height: 1.3),
-          headlineSmall: base.headlineSmall
-              ?.copyWith(fontWeight: FontWeight.w700, height: 1.35),
-          titleLarge: base.titleLarge
-              ?.copyWith(fontWeight: FontWeight.w700, fontSize: 20),
-          titleMedium: base.titleMedium
-              ?.copyWith(fontWeight: FontWeight.w600, fontSize: 16),
-          bodyLarge: base.bodyLarge?.copyWith(height: 1.6, fontSize: 16),
-          bodyMedium: base.bodyMedium
-              ?.copyWith(height: 1.55, fontSize: 14, color: AppColors.inkSoft),
-          labelLarge: base.labelLarge
-              ?.copyWith(fontWeight: FontWeight.w600, fontSize: 15),
-        )
-        .apply(displayColor: AppColors.ink, bodyColor: AppColors.ink);
+    final base = ThemeData(brightness: Brightness.light).textTheme.apply(
+          fontFamily: fontFamily,
+          displayColor: AppColors.ink,
+          bodyColor: AppColors.ink,
+        );
+    final text = base.copyWith(
+      displaySmall: base.displaySmall?.copyWith(
+        fontFamily: fontFamily,
+        fontWeight: FontWeight.w700,
+        height: 1.25,
+      ),
+      headlineMedium: base.headlineMedium?.copyWith(
+        fontFamily: fontFamily,
+        fontWeight: FontWeight.w700,
+        height: 1.3,
+      ),
+      headlineSmall: base.headlineSmall?.copyWith(
+        fontFamily: fontFamily,
+        fontWeight: FontWeight.w700,
+        height: 1.35,
+      ),
+      titleLarge: base.titleLarge?.copyWith(
+        fontFamily: fontFamily,
+        fontWeight: FontWeight.w700,
+        fontSize: 20,
+      ),
+      titleMedium: base.titleMedium?.copyWith(
+        fontFamily: fontFamily,
+        fontWeight: FontWeight.w600,
+        fontSize: 16,
+      ),
+      bodyLarge: base.bodyLarge?.copyWith(
+        fontFamily: fontFamily,
+        height: 1.6,
+        fontSize: 16,
+      ),
+      bodyMedium: base.bodyMedium?.copyWith(
+        fontFamily: fontFamily,
+        height: 1.55,
+        fontSize: 14,
+        color: AppColors.inkSoft,
+      ),
+      labelLarge: base.labelLarge?.copyWith(
+        fontFamily: fontFamily,
+        fontWeight: FontWeight.w600,
+        fontSize: 15,
+      ),
+    );
 
     OutlineInputBorder border(Color color, [double width = 1]) =>
         OutlineInputBorder(
@@ -129,11 +174,11 @@ class AppTheme {
           borderSide: BorderSide(color: color, width: width),
         );
 
-    final label = GoogleFonts.ibmPlexSansArabic(
-        fontWeight: FontWeight.w600, fontSize: 15);
+    final label = ar(fontWeight: FontWeight.w600, fontSize: 15);
 
     return ThemeData(
       useMaterial3: true,
+      fontFamily: fontFamily,
       colorScheme: scheme,
       textTheme: text,
       scaffoldBackgroundColor: AppColors.canvas,
@@ -146,7 +191,7 @@ class AppTheme {
         scrolledUnderElevation: 0,
         centerTitle: false,
         systemOverlayStyle: SystemUiOverlayStyle.dark,
-        titleTextStyle: GoogleFonts.ibmPlexSansArabic(
+        titleTextStyle: ar(
           fontWeight: FontWeight.w700,
           fontSize: 18,
           color: AppColors.ink,
@@ -156,7 +201,7 @@ class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.slate,
           foregroundColor: Colors.white,
-          minimumSize: const Size.fromHeight(48),
+          minimumSize: const Size(64, 48),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           textStyle: label,
@@ -164,7 +209,7 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(48),
+          minimumSize: const Size(64, 48),
           foregroundColor: AppColors.slate,
           side: const BorderSide(color: AppColors.slate, width: 1.5),
           shape:
@@ -175,8 +220,7 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.slate,
-          textStyle: GoogleFonts.ibmPlexSansArabic(
-              fontWeight: FontWeight.w600, fontSize: 14),
+          textStyle: ar(fontWeight: FontWeight.w600, fontSize: 14),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -186,17 +230,14 @@ class AppTheme {
             const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         prefixIconColor: AppColors.inkSoft,
         suffixIconColor: AppColors.inkSoft,
-        hintStyle: GoogleFonts.ibmPlexSansArabic(
-            color: const Color(0xFF94A3B8), fontSize: 14),
-        labelStyle: GoogleFonts.ibmPlexSansArabic(
-            color: AppColors.inkSoft, fontSize: 14),
-        floatingLabelStyle: GoogleFonts.ibmPlexSansArabic(
+        hintStyle: ar(color: const Color(0xFF94A3B8), fontSize: 14),
+        labelStyle: ar(color: AppColors.inkSoft, fontSize: 14),
+        floatingLabelStyle: ar(
           color: AppColors.amberDeep,
           fontWeight: FontWeight.w600,
           fontSize: 14,
         ),
-        errorStyle: GoogleFonts.ibmPlexSansArabic(
-            color: AppColors.danger, fontSize: 12),
+        errorStyle: ar(color: AppColors.danger, fontSize: 12),
         border: border(AppColors.outlineStrong),
         enabledBorder: border(AppColors.outlineStrong),
         focusedBorder: border(AppColors.amber, 1.6),
@@ -217,8 +258,7 @@ class AppTheme {
         backgroundColor: AppColors.surface,
         selectedColor: AppColors.amberTint,
         side: const BorderSide(color: AppColors.outline),
-        labelStyle: GoogleFonts.ibmPlexSansArabic(
-            fontWeight: FontWeight.w600, fontSize: 13),
+        labelStyle: ar(fontWeight: FontWeight.w600, fontSize: 13),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),
       dividerTheme: const DividerThemeData(
@@ -229,8 +269,7 @@ class AppTheme {
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: AppColors.slate,
-        contentTextStyle:
-            GoogleFonts.ibmPlexSansArabic(color: Colors.white, fontSize: 14),
+        contentTextStyle: ar(color: Colors.white, fontSize: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
@@ -246,7 +285,7 @@ class AppTheme {
       ),
       listTileTheme: ListTileThemeData(
         iconColor: AppColors.inkSoft,
-        titleTextStyle: GoogleFonts.ibmPlexSansArabic(
+        titleTextStyle: ar(
           color: AppColors.ink,
           fontWeight: FontWeight.w600,
           fontSize: 15,

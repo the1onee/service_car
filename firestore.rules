@@ -146,6 +146,9 @@ service cloud.firestore {
     match /carYears/{id} {
       allow read: if signedIn();
     }
+    match /vehicleTypes/{id} {
+      allow read: if signedIn();
+    }
     match /cities/{id} {
       allow read: if signedIn();
     }
@@ -198,6 +201,18 @@ service cloud.firestore {
     }
     match /payouts/{id} {
       allow read: if isOwner(resource.data.technicianId);
+    }
+
+    // طلبات شحن المحفظة: الفني ينشئ طلباً معلّقاً مع فاتورة، والأدمن يوافق/يرفض.
+    match /walletTopUps/{id} {
+      allow read: if isOwner(resource.data.technicianId);
+      allow create: if isOwner(request.resource.data.technicianId)
+        && isTechnicianRole()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.receiptUrl is string
+        && request.resource.data.receiptUrl.size() > 8;
     }
 
     // الدعم والنزاعات: المستخدم يفتح التذكرة ويقرأ تذاكره.

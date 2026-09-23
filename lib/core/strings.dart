@@ -21,6 +21,7 @@ class AppStrings {
       'حساب الفني يُرسل لطلب انضمام، ويُفعَّل بعد موافقة الإدارة.';
   static const idCard = 'رقم البطاقة';
   static const skills = 'المهارات / الخدمات';
+  static const vehicleTypes = 'أنواع السيارات';
   static const optional = 'اختياري';
   static const forgotPassword = 'نسيت كلمة المرور؟';
   static const resetPassword = 'استعادة كلمة المرور';
@@ -47,6 +48,15 @@ class AppStrings {
   static const pickAddressOnMap = 'تحديد العنوان على الخريطة';
   static const addressFromMap = 'تم تحديد الموقع على الخريطة';
   static const pickService = 'اختر الخدمة';
+  static const pickVehicleType = 'حدد نوع السيارة';
+  static const selectVehicleTypeRequired = 'اختر نوع السيارة قبل إرسال الطلب.';
+  static const pickLocationOnMap = 'تحديد الموقع على الخريطة';
+  static const locationLockedDuringJob = 'الموقع مقفل أثناء الطلب الحالي';
+  static const locationPermissionDenied =
+      'تعذّر الوصول للموقع. يمكنك تحديده يدوياً على الخريطة.';
+  static const locationPermissionDeniedForever =
+      'صلاحية الموقع مرفوضة. افتح الإعدادات لتفعيلها، أو حدد الموقع يدوياً.';
+  static const openSettings = 'فتح الإعدادات';
   static const searching = 'جاري البحث عن فني مناسب...';
   static const collectingQuotes = 'ننتظر عروضاً من فنيين قريبين...';
   static const compareQuotes = 'قارن العروض واختر الفني';

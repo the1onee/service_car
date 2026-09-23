@@ -19,6 +19,7 @@ class AppUser {
     this.isOnline = false,
     this.geo,
     this.serviceIds = const [],
+    this.vehicleTypeIds = const [],
     this.verified = false,
     this.verificationStatus = VerificationStatus.pending,
     this.walletBalance = 0,
@@ -37,6 +38,8 @@ class AppUser {
   final bool isOnline;
   final GeoPoint? geo;
   final List<String> serviceIds;
+  /// أنواع السيارات التي يستطيع الفني العمل عليها (صالون، باص…).
+  final List<String> vehicleTypeIds;
   final bool verified;
   final VerificationStatus verificationStatus;
   final double walletBalance;
@@ -62,6 +65,7 @@ class AppUser {
         'isOnline': isOnline,
         'geo': geo,
         'serviceIds': serviceIds,
+        'vehicleTypeIds': vehicleTypeIds,
         'verified': verified,
         'verificationStatus': verificationStatus.name,
         'walletBalance': walletBalance,
@@ -87,6 +91,8 @@ class AppUser {
       isOnline: d['isOnline'] as bool? ?? false,
       geo: d['geo'] as GeoPoint?,
       serviceIds: List<String>.from(d['serviceIds'] as List? ?? const []),
+      vehicleTypeIds:
+          List<String>.from(d['vehicleTypeIds'] as List? ?? const []),
       verified: verifiedFlag,
       verificationStatus: _statusOf(d['verificationStatus'], verifiedFlag),
       walletBalance: (d['walletBalance'] as num?)?.toDouble() ?? 0,
@@ -110,6 +116,7 @@ class AppUser {
     GeoPoint? geo,
     String? fcmToken,
     List<String>? serviceIds,
+    List<String>? vehicleTypeIds,
     bool? verified,
     VerificationStatus? verificationStatus,
     double? walletBalance,
@@ -127,6 +134,7 @@ class AppUser {
       isOnline: isOnline ?? this.isOnline,
       geo: geo ?? this.geo,
       serviceIds: serviceIds ?? this.serviceIds,
+      vehicleTypeIds: vehicleTypeIds ?? this.vehicleTypeIds,
       verified: verified ?? this.verified,
       verificationStatus: verificationStatus ?? this.verificationStatus,
       walletBalance: walletBalance ?? this.walletBalance,

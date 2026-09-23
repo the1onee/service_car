@@ -46,6 +46,8 @@ class Job {
     this.technicianId,
     this.technicianName,
     this.serviceTitle,
+    this.vehicleTypeId,
+    this.vehicleTypeTitle,
     this.exactLocation,
     this.initialPrice,
     this.finalPrice,
@@ -66,6 +68,8 @@ class Job {
   final String? technicianName;
   final String serviceId;
   final String? serviceTitle;
+  final String? vehicleTypeId;
+  final String? vehicleTypeTitle;
   final JobStatus status;
   final MatchingMode matchingMode;
   final GeoPoint approxLocation;
@@ -109,6 +113,8 @@ class Job {
         'technicianName': null,
         'serviceId': serviceId,
         'serviceTitle': serviceTitle,
+        'vehicleTypeId': vehicleTypeId,
+        'vehicleTypeTitle': vehicleTypeTitle,
         'status': status.name,
         'matchingMode': matchingMode.name,
         'approxLocation': approxLocation,
@@ -134,6 +140,8 @@ class Job {
       technicianName: d['technicianName'] as String?,
       serviceId: d['serviceId'] as String? ?? '',
       serviceTitle: d['serviceTitle'] as String?,
+      vehicleTypeId: d['vehicleTypeId'] as String?,
+      vehicleTypeTitle: d['vehicleTypeTitle'] as String?,
       status: jobStatusFrom(d['status'] as String?),
       matchingMode: matchingModeFrom(d['matchingMode'] as String?, d['serviceId'] as String?),
       approxLocation: d['approxLocation'] as GeoPoint? ?? const GeoPoint(0, 0),

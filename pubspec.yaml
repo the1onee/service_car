@@ -17,9 +17,10 @@ dependencies:
   firebase_messaging: ^15.1.6
   cloud_functions: ^5.2.0
   geolocator: ^13.0.2
-  google_fonts: ^6.2.1
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
+  firebase_storage: ^12.4.10
+  image_picker: ^1.2.3
 
 dev_dependencies:
   flutter_test:
@@ -28,3 +29,14 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: NotoSansArabic
+      fonts:
+        - asset: assets/fonts/NotoSansArabic-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/NotoSansArabic-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/NotoSansArabic-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/NotoSansArabic-Bold.ttf
+          weight: 700

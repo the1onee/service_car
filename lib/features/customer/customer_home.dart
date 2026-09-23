@@ -15,11 +15,14 @@ import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/jobs/orders_screen.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/warranty/warranties_screen.dart';
+import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/features/shared/osm_map.dart';
 import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/models/service_item.dart';
+import 'package:barrr/models/vehicle_type.dart';
+import 'package:barrr/services/location_service.dart';
 
 class CustomerHome extends StatefulWidget {
   const CustomerHome({super.key, required this.profile});
@@ -40,6 +43,7 @@ class _CustomerHomeState extends State<CustomerHome> {
   var _locStarted = false;
   var _tab = 0;
   ServiceItem? _selected;
+  VehicleType? _vehicleType;
 
   @override
   void didChangeDependencies() {
@@ -92,7 +96,18 @@ class _CustomerHomeState extends State<CustomerHome> {
 
   Future<void> _confirmAndRequest() async {
     final service = _selected;
+    final vehicle = _vehicleType;
     if (service == null) return;
+    if (vehicle == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.selectVehicleTypeRequired)),
+      );
+      return;
+    }
+    // مزامنة الدبوس مع مركز الخريطة الفعلي قبل الإرسال.
+    try {
+      _pin = _map.camera.center;
+    } catch (_) {}
     if (!_pinInZone()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text(AppStrings.outsideCoverage)),
@@ -116,6 +131,8 @@ class _CustomerHomeState extends State<CustomerHome> {
       customerId: widget.profile.id,
       serviceId: service.id,
       serviceTitle: service.titleAr,
+      vehicleTypeId: vehicle.id,
+      vehicleTypeTitle: vehicle.nameAr,
       exact: geo,
       isEmergency: service.isEmergency,
       commissionRate: service.commissionRate,
@@ -141,12 +158,44 @@ class _CustomerHomeState extends State<CustomerHome> {
     });
   }
 
+  Future<void> _openMapPicker() async {
+    final picked = await pickAddressOnMap(
+      context,
+      initial: _pin,
+      title: AppStrings.pickLocationOnMap,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _pin = picked.latLng;
+      if (picked.zone != null) _zone = picked.zone;
+    });
+    _map.move(picked.latLng, _zoom);
+  }
+
   Future<void> _recenter() async {
     final scope = AppScope.of(context);
-    final loc = await scope.location.currentOrDefault(fallback: _pin);
+    final result = await scope.location.currentWithStatus(fallback: _pin);
     if (!mounted) return;
-    setState(() => _pin = loc);
-    _map.move(loc, _zoom);
+    if (result.outcome != LocationOutcome.ok) {
+      final forever = result.outcome == LocationOutcome.deniedForever;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            forever
+                ? AppStrings.locationPermissionDeniedForever
+                : AppStrings.locationPermissionDenied,
+          ),
+          action: forever
+              ? SnackBarAction(
+                  label: AppStrings.openSettings,
+                  onPressed: () => scope.location.openAppSettings(),
+                )
+              : null,
+        ),
+      );
+    }
+    setState(() => _pin = result.latLng);
+    _map.move(result.latLng, _zoom);
   }
 
   @override
@@ -227,7 +276,9 @@ class _CustomerHomeState extends State<CustomerHome> {
             zoom: _zoom,
             circles: circles,
             markers: markers,
-            onPositionChanged: job == null ? (c) => _pin = c : null,
+            onPositionChanged: job == null
+                ? (c) => setState(() => _pin = c)
+                : null,
           ),
         if (_ready && job == null)
           const IgnorePointer(
@@ -245,6 +296,25 @@ class _CustomerHomeState extends State<CustomerHome> {
           right: 0,
           child: FieldTopBar(city: zone?.nameAr),
         ),
+        if (_ready && job != null)
+          Positioned(
+            top: 108,
+            left: 16,
+            right: 16,
+            child: Material(
+              color: AppColors.surface,
+              elevation: 2,
+              borderRadius: BorderRadius.circular(12),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Text(
+                  AppStrings.locationLockedDuringJob,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ),
         if (_ready && job == null)
           Positioned(
             top: 108,
@@ -258,9 +328,14 @@ class _CustomerHomeState extends State<CustomerHome> {
                   zone: zone,
                   inZone: _pinInZone(),
                   selected: _selected,
+                  vehicleType: _vehicleType,
                   onSelect: (s) {
                     setState(() => _selected = s);
                   },
+                  onSelectVehicle: (t) {
+                    setState(() => _vehicleType = t);
+                  },
+                  onPickLocation: _openMapPicker,
                   onSubmit: _confirmAndRequest)
               : CustomerJobPanel(job: job, me: widget.profile),
         ),
@@ -428,14 +503,20 @@ class _RequestComposer extends StatelessWidget {
     required this.zone,
     required this.inZone,
     required this.selected,
+    required this.vehicleType,
     required this.onSelect,
+    required this.onSelectVehicle,
+    required this.onPickLocation,
     required this.onSubmit,
   });
 
   final CityZone? zone;
   final bool inZone;
   final ServiceItem? selected;
+  final VehicleType? vehicleType;
   final ValueChanged<ServiceItem> onSelect;
+  final ValueChanged<VehicleType> onSelectVehicle;
+  final VoidCallback onPickLocation;
   final VoidCallback onSubmit;
 
   @override
@@ -485,7 +566,7 @@ class _RequestComposer extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           zone == null
-                              ? 'حرّك الخريطة لتحديد موقع العطل'
+                              ? 'حرّك الخريطة أو حدد الموقع من الزر'
                               : 'تغطية ${zone!.nameAr}',
                           style: const TextStyle(
                               color: AppColors.inkSoft, fontSize: 12),
@@ -510,34 +591,27 @@ class _RequestComposer extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             FieldCard(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
-                children: [
-                  const Icon(Icons.place_outlined, color: AppColors.inkSoft),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('موقع العطل',
-                            style: TextStyle(
-                                fontSize: 12, color: AppColors.inkSoft)),
-                        Text(
-                          inZone
-                              ? (zone?.nameAr ?? 'موقعك على الخريطة')
-                              : AppStrings.outsideCoverage,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: inZone ? AppColors.ink : AppColors.danger,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: ListTile(
+                leading: const Icon(Icons.place_outlined, color: AppColors.inkSoft),
+                title: const Text('موقع العطل',
+                    style: TextStyle(fontSize: 12, color: AppColors.inkSoft)),
+                subtitle: Text(
+                  inZone
+                      ? (zone?.nameAr ?? 'موقعك على الخريطة')
+                      : AppStrings.outsideCoverage,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: inZone ? AppColors.ink : AppColors.danger,
+                    fontSize: 13,
                   ),
-                ],
+                ),
+                trailing: TextButton(
+                  onPressed: onPickLocation,
+                  child: const Text(AppStrings.pickLocationOnMap),
+                ),
               ),
             ),
             const SizedBox(height: 14),
@@ -614,6 +688,26 @@ class _RequestComposer extends StatelessWidget {
                 );
               },
             ),
+            const SizedBox(height: 14),
+            const SectionLabel(AppStrings.pickVehicleType),
+            StreamBuilder<List<VehicleType>>(
+              stream: AppScope.of(context).users.watchVehicleTypes(),
+              builder: (context, snap) {
+                final items = snap.data ?? seedVehicleTypes;
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final t in items)
+                      FilterChip(
+                        label: Text(t.nameAr),
+                        selected: vehicleType?.id == t.id,
+                        onSelected: (_) => onSelectVehicle(t),
+                      ),
+                  ],
+                );
+              },
+            ),
             const SizedBox(height: 8),
             const Text(
               'السعر يحدده الفني بعد الفحص، والدفع نقداً عند انتهاء العمل.',
@@ -621,7 +715,8 @@ class _RequestComposer extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
-              onPressed: selected == null ? null : onSubmit,
+              onPressed:
+                  selected == null || vehicleType == null ? null : onSubmit,
               style: FilledButton.styleFrom(
                 backgroundColor: emergency ? AppColors.amber : AppColors.slate,
                 foregroundColor: emergency ? AppColors.ink : Colors.white,

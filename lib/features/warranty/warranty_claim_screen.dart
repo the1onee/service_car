@@ -62,6 +62,8 @@ class _WarrantyClaimScreenState extends State<WarrantyClaimScreen> {
         customerId: widget.profile.id,
         serviceId: widget.job.serviceId,
         serviceTitle: claimTitle,
+        vehicleTypeId: widget.job.vehicleTypeId,
+        vehicleTypeTitle: widget.job.vehicleTypeTitle,
         exact: GeoPoint(geo.latitude, geo.longitude),
         isEmergency: true,
         commissionRate: 0,

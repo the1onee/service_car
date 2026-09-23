@@ -12,6 +12,7 @@ import 'package:barrr/core/theme.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/models/app_user.dart';
+import 'package:barrr/models/vehicle_type.dart';
 import 'package:barrr/services/auth_service.dart';
 
 enum _Stage { login, register, otp }
@@ -41,6 +42,7 @@ class _AuthScreenState extends State<AuthScreen> {
   _Stage _stage = _Stage.login;
   UserRole _registerRole = UserRole.customer;
   final Set<String> _skills = {};
+  final Set<String> _vehicleTypes = {};
   OtpPurpose _purpose = OtpPurpose.register;
   bool _hidePassword = true;
   bool _hideConfirm = true;
@@ -143,6 +145,7 @@ class _AuthScreenState extends State<AuthScreen> {
           role: _registerRole,
           idCard: _idCard.text,
           serviceIds: _skills.toList(),
+          vehicleTypeIds: _vehicleTypes.toList(),
         );
         return;
       }
@@ -539,6 +542,36 @@ class _AuthScreenState extends State<AuthScreen> {
                             _skills.add(s.id);
                           } else {
                             _skills.remove(s.id);
+                          }
+                        }),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    '${AppStrings.vehicleTypes} (${AppStrings.optional})',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.inkSoft,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final t in seedVehicleTypes)
+                      FilterChip(
+                        label: Text(t.nameAr),
+                        selected: _vehicleTypes.contains(t.id),
+                        onSelected: (on) => setState(() {
+                          if (on) {
+                            _vehicleTypes.add(t.id);
+                          } else {
+                            _vehicleTypes.remove(t.id);
                           }
                         }),
                       ),

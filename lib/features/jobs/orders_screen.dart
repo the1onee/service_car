@@ -188,6 +188,14 @@ class _FeaturedJob extends StatelessWidget {
             job.serviceTitle ?? 'طلب خدمة',
             style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
           ),
+          if (job.vehicleTypeTitle != null &&
+              job.vehicleTypeTitle!.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'نوع السيارة: ${job.vehicleTypeTitle}',
+              style: const TextStyle(color: AppColors.inkSoft, fontSize: 13),
+            ),
+          ],
           const SizedBox(height: 4),
           Text(
             formatWhen(job.createdAt),
@@ -243,6 +251,13 @@ class _OrderTile extends StatelessWidget {
                     job.serviceTitle ?? 'طلب خدمة',
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
+                  if (job.vehicleTypeTitle != null &&
+                      job.vehicleTypeTitle!.trim().isNotEmpty)
+                    Text(
+                      job.vehicleTypeTitle!,
+                      style: const TextStyle(
+                          color: AppColors.inkSoft, fontSize: 12),
+                    ),
                   const SizedBox(height: 4),
                   Text(
                     '${jobCode(job)} · ${formatWhen(job.createdAt)}',

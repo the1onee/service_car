@@ -101,6 +101,8 @@ class JobRepository {
     required String serviceId,
     required String serviceTitle,
     required GeoPoint exact,
+    String? vehicleTypeId,
+    String? vehicleTypeTitle,
     bool? isEmergency,
     double? commissionRate,
   }) async {
@@ -112,6 +114,8 @@ class JobRepository {
       customerId: customerId,
       serviceId: serviceId,
       serviceTitle: serviceTitle,
+      vehicleTypeId: vehicleTypeId,
+      vehicleTypeTitle: vehicleTypeTitle,
       status: JobStatus.dispatching,
       matchingMode: emergency ? MatchingMode.emergency : MatchingMode.quotes,
       commissionRate: rate,
@@ -165,6 +169,9 @@ class JobRepository {
                 );
           final verified = data['verified'] as bool? ?? false;
           final wallet = (data['walletBalance'] as num?)?.toDouble() ?? 0;
+          final vehicleTypeIds = List<String>.from(
+            data['vehicleTypeIds'] as List? ?? const [],
+          );
           return (
             id: d.id,
             km: km,
@@ -173,12 +180,18 @@ class JobRepository {
             rating: (data['ratingAvg'] as num?)?.toDouble() ?? 5,
             verified: verified,
             wallet: wallet,
+            vehicleTypeIds: vehicleTypeIds,
           );
         })
         .where((t) => t.km <= AppConstants.maxMatchKm)
         .where((t) => t.verified)
         .where((t) => t.wallet >= minWallet)
         .where((t) => !used.contains(t.id))
+        .where((t) {
+          final needed = job.vehicleTypeId;
+          if (needed == null || needed.isEmpty) return true;
+          return t.vehicleTypeIds.contains(needed);
+        })
         .toList()
       ..sort((a, b) => a.km.compareTo(b.km));
 
@@ -204,6 +217,7 @@ class JobRepository {
         'status': 'pending',
         'expiresAt': Timestamp.fromDate(expires),
         'serviceTitle': job.serviceTitle,
+        'vehicleTypeTitle': job.vehicleTypeTitle,
         'approxLocation': job.approxLocation,
         'round': job.dispatchRound,
         'technicianName': t.name,

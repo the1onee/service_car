@@ -34,13 +34,43 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 }
 
 async function notify(tokens, title, body, data) {
-  const list = tokens.filter(Boolean);
-  if (!list.length) return;
-  await getMessaging().sendEachForMulticast({
-    tokens: list,
-    notification: { title, body },
-    data: Object.fromEntries(Object.entries(data || {}).map(([k, v]) => [k, String(v)])),
-  });
+  const list = [...new Set(tokens.filter(Boolean))];
+  if (!list.length) return { successCount: 0, failureCount: 0 };
+  let successCount = 0;
+  let failureCount = 0;
+  const messaging = getMessaging();
+  const payloadData = Object.fromEntries(
+    Object.entries(data || {}).map(([k, v]) => [k, String(v)])
+  );
+  for (let i = 0; i < list.length; i += 500) {
+    const chunk = list.slice(i, i + 500);
+    const res = await messaging.sendEachForMulticast({
+      tokens: chunk,
+      notification: { title, body },
+      data: payloadData,
+    });
+    successCount += res.successCount;
+    failureCount += res.failureCount;
+  }
+  return { successCount, failureCount };
+}
+
+function audienceRoles(audience) {
+  if (audience === "customers") return ["customer"];
+  if (audience === "technicians") return ["technician"];
+  return ["customer", "technician"];
+}
+
+async function collectFcmTokensForRoles(roles) {
+  const tokens = [];
+  for (const role of roles) {
+    const snap = await db.collection("users").where("role", "==", role).get();
+    snap.docs.forEach((d) => {
+      const token = d.data().fcmToken;
+      if (typeof token === "string" && token.trim()) tokens.push(token.trim());
+    });
+  }
+  return tokens;
 }
 
 async function expirePending(jobId) {
@@ -156,6 +186,7 @@ async function dispatchJobInternal(jobId) {
   const minWallet = await walletFns.getMinWalletBalance();
 
   const origin = job.approxLocation;
+  const neededVehicle = typeof job.vehicleTypeId === "string" ? job.vehicleTypeId : "";
   const ranked = techs.docs
     .map((d) => {
       const data = d.data();
@@ -163,6 +194,9 @@ async function dispatchJobInternal(jobId) {
       const km = geo
         ? haversineKm(origin.latitude, origin.longitude, geo.latitude, geo.longitude)
         : 9999;
+      const vehicleTypeIds = Array.isArray(data.vehicleTypeIds)
+        ? data.vehicleTypeIds.filter((id) => typeof id === "string")
+        : [];
       return {
         id: d.id,
         km,
@@ -171,12 +205,14 @@ async function dispatchJobInternal(jobId) {
         rating: data.ratingAvg || 5,
         verified: !!data.verified,
         wallet: Number(data.walletBalance || 0),
+        vehicleTypeIds,
       };
     })
     .filter((t) => t.km <= MAX_KM)
     .filter((t) => t.verified)
     .filter((t) => t.wallet >= minWallet)
     .filter((t) => !used.has(t.id))
+    .filter((t) => !neededVehicle || t.vehicleTypeIds.includes(neededVehicle))
     .sort((a, b) => a.km - b.km)
     .slice(0, emergency ? EMERGENCY_TECHS : QUOTE_TECHS);
 
@@ -195,6 +231,7 @@ async function dispatchJobInternal(jobId) {
       status: "pending",
       expiresAt: expires,
       serviceTitle: job.serviceTitle || job.serviceId,
+      vehicleTypeTitle: job.vehicleTypeTitle || null,
       approxLocation: job.approxLocation,
       round: job.dispatchRound || 1,
       technicianName: t.name,
@@ -426,6 +463,64 @@ exports.onJobStatus = onDocumentUpdated("jobs/{jobId}", async (event) => {
   const token = msg.to === "tech" ? tToken : cToken;
   await notify([token], msg.title, msg.body, { jobId, type: after.status });
 });
+
+/** بث إشعار أدمن: يُفعَّل عند إنشاء مستند notifications بدون userId ومع audience. */
+exports.onAdminNotificationCreated = onDocumentCreated(
+  "notifications/{id}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data() || {};
+    if (data.userId) return;
+    if (typeof data.audience !== "string" || !data.audience.trim()) return;
+    if (data.status && data.status !== "pending") return;
+
+    const title = typeof data.title === "string" ? data.title.trim() : "";
+    const body = typeof data.body === "string" ? data.body.trim() : "";
+    if (!title || !body) {
+      await snap.ref.update({
+        status: "failed",
+        sentAt: Timestamp.now(),
+        successCount: 0,
+        failureCount: 0,
+        error: "title_or_body_missing",
+      });
+      return;
+    }
+
+    try {
+      const tokens = await collectFcmTokensForRoles(audienceRoles(data.audience));
+      if (!tokens.length) {
+        await snap.ref.update({
+          status: "empty",
+          sentAt: Timestamp.now(),
+          successCount: 0,
+          failureCount: 0,
+        });
+        return;
+      }
+      const result = await notify(tokens, title, body, {
+        type: "admin",
+        notificationId: event.params.id,
+        audience: data.audience,
+      });
+      await snap.ref.update({
+        status: result.failureCount > 0 && result.successCount === 0 ? "failed" : "sent",
+        sentAt: Timestamp.now(),
+        successCount: result.successCount,
+        failureCount: result.failureCount,
+      });
+    } catch (err) {
+      await snap.ref.update({
+        status: "failed",
+        sentAt: Timestamp.now(),
+        successCount: 0,
+        failureCount: 0,
+        error: String((err && err.message) || err),
+      });
+    }
+  }
+);
 
 // عمليات لوحة التحكم التي تحتاج Admin SDK. تُستدعى بعد initializeApp أعلاه.
 const adminUsers = require("./admin_users");

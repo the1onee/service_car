@@ -10,6 +10,7 @@ class JobOffer {
     required this.status,
     required this.expiresAt,
     this.serviceTitle,
+    this.vehicleTypeTitle,
     this.approxLocation,
     this.initialPrice,
     this.technicianName,
@@ -24,6 +25,7 @@ class JobOffer {
   final OfferStatus status;
   final DateTime expiresAt;
   final String? serviceTitle;
+  final String? vehicleTypeTitle;
   final GeoPoint? approxLocation;
   final double? initialPrice;
   final String? technicianName;
@@ -49,6 +51,7 @@ class JobOffer {
       ),
       expiresAt: (d['expiresAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       serviceTitle: d['serviceTitle'] as String?,
+      vehicleTypeTitle: d['vehicleTypeTitle'] as String?,
       approxLocation: d['approxLocation'] as GeoPoint?,
       initialPrice: (d['initialPrice'] as num?)?.toDouble(),
       technicianName: d['technicianName'] as String?,

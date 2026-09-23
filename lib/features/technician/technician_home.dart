@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/constants.dart';
@@ -19,8 +21,11 @@ import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/models/job_offer.dart';
 import 'package:barrr/models/service_item.dart';
+import 'package:barrr/models/vehicle_type.dart';
 import 'package:barrr/models/wallet_entry.dart';
+import 'package:barrr/models/wallet_top_up.dart';
 import 'package:barrr/services/user_repository.dart';
+import 'package:barrr/services/wallet_top_up_upload.dart';
 
 class TechnicianHome extends StatefulWidget {
   const TechnicianHome({super.key, required this.profile});
@@ -329,7 +334,7 @@ class _WalletPageState extends State<_WalletPage> {
                             onToggle: widget.onToggle,
                           ),
                           const SizedBox(height: 12),
-                          const _RechargeNotice(),
+                          _WalletRechargePanel(technicianId: me.id),
                           const SizedBox(height: 12),
                           _MetricRow(jobs: jobs),
                           const SizedBox(height: 12),
@@ -434,15 +439,15 @@ class _BalanceCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
                       children: [
-                        Icon(Icons.account_balance_wallet_outlined,
+                        const Icon(Icons.account_balance_wallet_outlined,
                             color: Color(0xFF7C839B), size: 18),
-                        SizedBox(width: 6),
-                        Flexible(
+                        const SizedBox(width: 6),
+                        Expanded(
                           child: Text(
                             'رصيد حساب العمليات الميدانية',
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Color(0xFF7C839B),
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -606,52 +611,335 @@ class _DutySwitch extends StatelessWidget {
   }
 }
 
-class _RechargeNotice extends StatelessWidget {
-  const _RechargeNotice();
+class _WalletRechargePanel extends StatefulWidget {
+  const _WalletRechargePanel({required this.technicianId});
+
+  final String technicianId;
+
+  @override
+  State<_WalletRechargePanel> createState() => _WalletRechargePanelState();
+}
+
+class _WalletRechargePanelState extends State<_WalletRechargePanel> {
+  final _amountCtrl = TextEditingController();
+  final _noteCtrl = TextEditingController();
+  final _uploader = WalletTopUpUpload();
+  XFile? _receipt;
+  var _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    _noteCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _copyCard(String number) async {
+    await Clipboard.setData(ClipboardData(text: number));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('تم نسخ رقم البطاقة')),
+    );
+  }
+
+  Future<void> _pickReceipt() async {
+    setState(() => _error = null);
+    try {
+      final file = await _uploader.pickReceipt();
+      if (file == null) return;
+      setState(() => _receipt = file);
+    } catch (e) {
+      setState(() => _error = 'تعذّر اختيار الصورة.');
+    }
+  }
+
+  Future<void> _submit(AppSettings settings) async {
+    final amount = double.tryParse(_amountCtrl.text.trim().replaceAll(',', ''));
+    if (amount == null || amount <= 0) {
+      setState(() => _error = 'أدخل مبلغ التحويل بشكل صحيح.');
+      return;
+    }
+    if (_receipt == null) {
+      setState(() => _error = 'أضف صورة فاتورة التحويل أولاً.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final users = AppScope.of(context).users;
+    try {
+      final url = await _uploader.toDataUrl(_receipt!);
+      await users.createWalletTopUp(
+            technicianId: widget.technicianId,
+            amount: amount,
+            receiptUrl: url,
+            transferNote: _noteCtrl.text,
+          );
+      if (!mounted) return;
+      _amountCtrl.clear();
+      _noteCtrl.clear();
+      setState(() => _receipt = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم إرسال الطلب — بانتظار موافقة الإدارة لإضافة المبلغ'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString();
+      setState(() {
+        _error = msg.contains('cancelled')
+            ? null
+            : 'تعذّر الإرسال. تأكد من الاتصال وصلاحية التخزين.';
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFDDB8).withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: const Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _IconBox(
-            icon: Icons.info_outline,
-            background: Color(0xFFFEA619),
-            foreground: Color(0xFF684000),
-          ),
-          SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'تنبيه شحن الرصيد الميداني',
-                  style: TextStyle(
-                    color: Color(0xFF684000),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
+    final scope = AppScope.of(context);
+    return StreamBuilder<AppSettings>(
+      stream: scope.settings.watchSettings(),
+      builder: (context, settingsSnap) {
+        final settings = settingsSnap.data ?? const AppSettings();
+        final card = settings.topUpCardNumber.trim().isEmpty
+            ? AppSettings.defaultTopUpCardNumber
+            : settings.topUpCardNumber.trim();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F1FF),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFB7D0F5)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    settings.topUpCardLabel.trim().isEmpty
+                        ? AppSettings.defaultTopUpCardLabel
+                        : settings.topUpCardLabel,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      color: Color(0xFF0B3A75),
+                    ),
                   ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'شحن الرصيد يتم حصراً عن طريق الإدارة أو وكلاء الشحن المعتمدين في البصرة. لا يوجد شحن إلكتروني مباشر داخل التطبيق.',
-                  style: TextStyle(
-                    color: Color(0xFF653E00),
-                    fontSize: 12,
-                    height: 1.5,
+                  const SizedBox(height: 8),
+                  Text(
+                    settings.topUpInstructions.trim().isEmpty
+                        ? AppSettings.defaultTopUpInstructions
+                        : settings.topUpInstructions,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      height: 1.55,
+                      color: Color(0xFF163A66),
+                    ),
                   ),
-                ),
-              ],
+                  if (settings.topUpAccountName.trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'الاسم على البطاقة: ${settings.topUpAccountName}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF163A66),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'رقم البطاقة للتحويل',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF5A6B82),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                card,
+                                textDirection: TextDirection.ltr,
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.2,
+                                  color: Color(0xFF0B3A75),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton.icon(
+                          onPressed: () => _copyCard(card),
+                          icon: const Icon(Icons.copy, size: 18),
+                          label: const Text('نسخ'),
+                          style: TextButton.styleFrom(
+                            minimumSize: const Size(0, 40),
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _amountCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'المبلغ الذي حوّلته (د.ع)',
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _noteCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'ملاحظة (اختياري)',
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _busy ? null : _pickReceipt,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                      ),
+                      icon: const Icon(Icons.receipt_long),
+                      label: Text(
+                        _receipt == null
+                            ? 'إضافة فاتورة التحويل'
+                            : 'تم اختيار الفاتورة — تغيير',
+                      ),
+                    ),
+                  ),
+                  if (_receipt != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        _receipt!.name,
+                        style: const TextStyle(fontSize: 11, color: Color(0xFF5A6B82)),
+                      ),
+                    ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _error!,
+                      style: const TextStyle(color: Color(0xFFB3261E), fontSize: 12),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _busy ? null : () => _submit(settings),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                      ),
+                      child: Text(
+                        _busy ? 'جارٍ الإرسال…' : 'إرسال للموافقة وإضافة الرصيد',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+            const SizedBox(height: 12),
+            StreamBuilder<List<WalletTopUp>>(
+              stream: scope.users.watchWalletTopUps(widget.technicianId),
+              builder: (context, snap) {
+                if (snap.hasError) {
+                  return Text(
+                    'تعذّر تحميل طلبات الشحن.',
+                    style: TextStyle(color: AppColors.inkSoft, fontSize: 12),
+                  );
+                }
+                final rows = snap.data ?? const <WalletTopUp>[];
+                if (rows.isEmpty) return const SizedBox.shrink();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'طلبات الشحن',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                    ),
+                    const SizedBox(height: 8),
+                    for (final row in rows) ...[
+                      FieldCard(
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    formatIqd(row.amount),
+                                    style: const TextStyle(fontWeight: FontWeight.w700),
+                                  ),
+                                  Text(
+                                    row.statusLabelAr,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: row.status == WalletTopUpStatus.approved
+                                          ? const Color(0xFF0F6B3A)
+                                          : row.status == WalletTopUpStatus.rejected
+                                              ? const Color(0xFFB3261E)
+                                              : const Color(0xFF8A5A00),
+                                    ),
+                                  ),
+                                  if (row.rejectReason.isNotEmpty)
+                                    Text(
+                                      row.rejectReason,
+                                      style: const TextStyle(fontSize: 11),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              formatWhen(row.createdAt),
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF5A6B82)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ],
+                );
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -1061,7 +1349,7 @@ class _LowBalanceNote extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'إذا انخفض الرصيد عن ${formatIqd(minBalance)} سيتم تحويل حالتك تلقائياً إلى غير متصل حتى يتم إعادة الشحن عبر الإدارة.',
+                  'إذا انخفض الرصيد عن ${formatIqd(minBalance)} سيتم تحويل حالتك تلقائياً إلى غير متصل حتى تعيد الشحن عبر كي كارد/سوبر كي وترفع الفاتورة للموافقة.',
                   style: const TextStyle(
                     color: Color(0xFF45464D),
                     fontSize: 12,
@@ -1210,6 +1498,9 @@ class _AccountPage extends StatelessWidget {
               const SizedBox(height: 16),
               const SectionLabel('الخدمات المفعّلة'),
               _Services(me: me),
+              const SizedBox(height: 16),
+              const SectionLabel('أنواع السيارات'),
+              _VehicleTypes(me: me),
               if (me.address.trim().isNotEmpty) ...[
                 const SizedBox(height: 16),
                 FieldCard(
@@ -1274,6 +1565,47 @@ class _Services extends StatelessWidget {
                     AppScope.of(context)
                         .users
                         .setServiceIds(me.id, next.toList());
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _VehicleTypes extends StatelessWidget {
+  const _VehicleTypes({required this.me});
+
+  final AppUser me;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<VehicleType>>(
+      stream: AppScope.of(context).users.watchVehicleTypes(),
+      builder: (context, snap) {
+        final items = (snap.data == null || snap.data!.isEmpty)
+            ? seedVehicleTypes
+            : snap.data!;
+        return FieldCard(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            children: [
+              for (final t in items)
+                SwitchListTile(
+                  title: Text(t.nameAr),
+                  value: me.vehicleTypeIds.contains(t.id),
+                  onChanged: (on) {
+                    final next = {...me.vehicleTypeIds};
+                    if (on) {
+                      next.add(t.id);
+                    } else {
+                      next.remove(t.id);
+                    }
+                    AppScope.of(context)
+                        .users
+                        .setVehicleTypeIds(me.id, next.toList());
                   },
                 ),
             ],

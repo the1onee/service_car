@@ -91,6 +91,9 @@ class _AddressMapPageState extends State<_AddressMapPage> {
   }
 
   void _confirm() {
+    try {
+      _pin = _map.camera.center;
+    } catch (_) {}
     if (!_inZone()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text(AppStrings.outsideCoverage)),
@@ -139,7 +142,7 @@ class _AddressMapPageState extends State<_AddressMapPage> {
               center: _pin,
               zoom: _zoom,
               circles: circles,
-              onPositionChanged: (c) => _pin = c,
+              onPositionChanged: (c) => setState(() => _pin = c),
             ),
           if (_ready)
             const IgnorePointer(

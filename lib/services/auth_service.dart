@@ -109,6 +109,7 @@ class AuthService {
     UserRole role = UserRole.customer,
     String idCard = '',
     List<String> serviceIds = const [],
+    List<String> vehicleTypeIds = const [],
   }) async {
     final e164 = pendingPhone;
     final user = _auth.currentUser;
@@ -159,6 +160,7 @@ class AuthService {
           address: address.trim(),
           idCard: idCard.trim(),
           serviceIds: serviceIds,
+          vehicleTypeIds: vehicleTypeIds,
           geo: geo,
           verified: !isTech,
           verificationStatus:

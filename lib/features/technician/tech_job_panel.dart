@@ -72,6 +72,9 @@ class _TechJobPanelState extends State<TechJobPanel> {
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
               Text(job.serviceTitle ?? ''),
+              if (job.vehicleTypeTitle != null &&
+                  job.vehicleTypeTitle!.trim().isNotEmpty)
+                Text('نوع السيارة: ${job.vehicleTypeTitle}'),
               if (job.status == JobStatus.quoted)
                 const Text(
                     'بانتظار قبول العميل للسعر المبدئي. الموقع الحقيقي مخفي.'),

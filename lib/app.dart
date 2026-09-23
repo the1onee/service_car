@@ -21,11 +21,12 @@ class FanniApp extends StatelessWidget {
   final _jobs = JobRepository();
   final _location = LocationService();
   final _settings = SettingsRepository();
+  final _messengerKey = GlobalKey<ScaffoldMessengerState>();
 
   @override
   Widget build(BuildContext context) {
     final dispatch = DispatchService(_jobs);
-    final fcm = FcmService(_users);
+    final fcm = FcmService(_users, messengerKey: _messengerKey);
     return AppScope(
       auth: _auth,
       users: _users,
@@ -37,6 +38,7 @@ class FanniApp extends StatelessWidget {
       child: MaterialApp(
         title: AppStrings.appName,
         debugShowCheckedModeBanner: false,
+        scaffoldMessengerKey: _messengerKey,
         theme: AppTheme.light(),
         locale: const Locale('ar'),
         supportedLocales: const [Locale('ar'), Locale('en')],
