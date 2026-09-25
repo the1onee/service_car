@@ -8,6 +8,7 @@ import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/warranty/warranty_form.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
+import 'package:barrr/services/job_repository.dart';
 
 class CustomerJobPanel extends StatelessWidget {
   const CustomerJobPanel({super.key, required this.job, required this.me});
@@ -109,6 +110,58 @@ class CustomerJobPanel extends StatelessWidget {
 
   List<Widget> _body(BuildContext context) {
     final jobs = AppScope.of(context).jobs;
+    final items = List<Widget>.of(_statusBody(context, jobs));
+    if (job.customerCanCancel) {
+      items.add(const SizedBox(height: 8));
+      items.add(
+        OutlinedButton(
+          onPressed: () => _confirmCancel(context),
+          child: const Text(AppStrings.cancelJob),
+        ),
+      );
+    }
+    return items;
+  }
+
+  List<Widget> _walletSwitch(BuildContext context) {
+    final bill = job.billAmount;
+    final balance = me.walletBalance;
+    if (balance <= 0) return const [];
+    final reserve = bill <= 0 ? 0.0 : (balance < bill ? balance : bill);
+    return [
+      const SizedBox(height: 12),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        value: job.useWallet,
+        title: Text('استخدم الرصيد (${formatIqd(balance)})'),
+        subtitle: Text(
+          job.useWallet
+              ? 'يُخصم ${formatIqd(job.walletReserve)} من المطلوب نقداً'
+              : 'الباقي من الدفع يبقى في المحفظة للطلب التالي',
+        ),
+        onChanged: (use) {
+          AppScope.of(context).jobs.setUseWallet(
+                jobId: job.id,
+                use: use,
+                reserve: use ? reserve : 0,
+              );
+        },
+      ),
+    ];
+  }
+
+  Future<void> _confirmCancel(BuildContext context) async {
+    final reason = await _askReason(context, 'إلغاء الطلب', 'سبب الإلغاء (اختياري)');
+    if (reason == null || !context.mounted) return;
+    try {
+      await AppScope.of(context).jobs.customerCancelJob(job.id, reason: reason);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  List<Widget> _statusBody(BuildContext context, JobRepository jobs) {
     switch (job.status) {
       case JobStatus.dispatching:
       case JobStatus.offerPending:
@@ -146,11 +199,6 @@ class CustomerJobPanel extends StatelessWidget {
           FilledButton(
             onPressed: () => jobs.customerAcceptQuote(job.id),
             child: const Text('قبول السعر وتوجيه الفني'),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton(
-            onPressed: () => jobs.customerRejectQuote(job.id),
-            child: const Text(AppStrings.reject),
           ),
         ];
       case JobStatus.enRoute:
@@ -206,6 +254,7 @@ class CustomerJobPanel extends StatelessWidget {
             onPressed: () => jobs.customerAcceptFinal(job.id),
             child: const Text('موافقة على السعر وبدء الصيانة'),
           ),
+          ..._walletSwitch(context),
         ];
       case JobStatus.inProgress:
         return [
@@ -216,6 +265,7 @@ class CustomerJobPanel extends StatelessWidget {
                 label: warrantyLabel(job.warranty),
                 icon: Icons.verified_user_outlined),
           ],
+          ..._walletSwitch(context),
         ];
       case JobStatus.completed:
         return [
@@ -380,4 +430,30 @@ class _Steps extends StatelessWidget {
       ],
     );
   }
+}
+
+Future<String?> _askReason(BuildContext context, String title, String label) {
+  final controller = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(labelText: label),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('تراجع'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('تأكيد'),
+          ),
+        ],
+      );
+    },
+  ).whenComplete(controller.dispose);
 }

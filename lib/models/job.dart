@@ -60,6 +60,12 @@ class Job {
     this.expiresAt,
     this.exactLat,
     this.exactLng,
+    this.cancelledBy = '',
+    this.cancelReason = '',
+    this.useWallet = false,
+    this.walletReserve = 0,
+    this.walletApplied,
+    this.changeAmount,
   });
 
   final String id;
@@ -87,8 +93,52 @@ class Job {
   final int dispatchRound;
   final DateTime? expiresAt;
   final DateTime createdAt;
+  final String cancelledBy;
+  final String cancelReason;
+  final bool useWallet;
+  final double walletReserve;
+  final double? walletApplied;
+  final double? changeAmount;
 
   bool get isEmergency => matchingMode == MatchingMode.emergency;
+
+  bool get customerCanCancel {
+    const open = {
+      JobStatus.dispatching,
+      JobStatus.offerPending,
+      JobStatus.comparing,
+      JobStatus.quoted,
+      JobStatus.noTechnician,
+      JobStatus.enRoute,
+      JobStatus.arrived,
+      JobStatus.finalQuote,
+    };
+    return open.contains(status);
+  }
+
+  bool get technicianCanWithdraw {
+    const open = {
+      JobStatus.quoted,
+      JobStatus.enRoute,
+      JobStatus.arrived,
+      JobStatus.finalQuote,
+    };
+    return open.contains(status);
+  }
+
+  double get billAmount {
+    final finalPrice = this.finalPrice;
+    if (finalPrice != null && finalPrice > 0) return finalPrice;
+    final initial = initialPrice;
+    if (initial != null && initial > 0) return initial;
+    return 0;
+  }
+
+  double get cashDue {
+    final reserve = useWallet ? walletReserve : 0;
+    final due = billAmount - reserve;
+    return due < 0 ? 0 : due;
+  }
 
   bool get locationRevealed {
     const revealed = {
@@ -156,6 +206,12 @@ class Job {
       dispatchRound: (d['dispatchRound'] as num?)?.toInt() ?? 1,
       expiresAt: (d['expiresAt'] as Timestamp?)?.toDate(),
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      cancelledBy: d['cancelledBy'] as String? ?? '',
+      cancelReason: d['cancelReason'] as String? ?? '',
+      useWallet: d['useWallet'] == true,
+      walletReserve: (d['walletReserve'] as num?)?.toDouble() ?? 0,
+      walletApplied: (d['walletApplied'] as num?)?.toDouble(),
+      changeAmount: (d['changeAmount'] as num?)?.toDouble(),
     );
   }
 }

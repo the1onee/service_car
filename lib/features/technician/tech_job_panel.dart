@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/jobs/rating_sheet.dart';
+import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/warranty/warranty_form.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
@@ -35,16 +38,25 @@ class _TechJobPanelState extends State<TechJobPanel> {
   @override
   void didUpdateWidget(TechJobPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.job.id != widget.job.id) _seedReceived(widget.job);
+    if (oldWidget.job.id != widget.job.id) {
+      _received.text = '';
+      _seedReceived(widget.job);
+      return;
+    }
+    final oldDue = _dueOf(oldWidget.job);
+    final nextDue = _dueOf(widget.job);
+    if (_received.text.trim() == oldDue.toStringAsFixed(0) && oldDue != nextDue) {
+      _received.text = nextDue > 0 ? nextDue.toStringAsFixed(0) : '';
+    }
   }
 
   void _seedReceived(Job job) {
     if (_received.text.trim().isNotEmpty) return;
-    final price = job.finalPrice ?? job.initialPrice;
-    if (price != null && price > 0) {
-      _received.text = price.toStringAsFixed(0);
-    }
+    final due = _dueOf(job);
+    if (due > 0) _received.text = due.toStringAsFixed(0);
   }
+
+  double _dueOf(Job job) => job.cashDue > 0 ? job.cashDue : job.billAmount;
 
   @override
   void dispose() {
@@ -78,10 +90,20 @@ class _TechJobPanelState extends State<TechJobPanel> {
               if (job.status == JobStatus.quoted)
                 const Text(
                     'بانتظار قبول العميل للسعر المبدئي. الموقع الحقيقي مخفي.'),
-              if (job.locationRevealed)
+              if (job.locationRevealed) ...[
                 Text(
                   'موقع العميل: ${job.displayLocation.latitude.toStringAsFixed(5)}, ${job.displayLocation.longitude.toStringAsFixed(5)}',
                 ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => openCustomerInMaps(
+                    job.displayLocation.latitude,
+                    job.displayLocation.longitude,
+                  ),
+                  icon: const Icon(Icons.map_outlined),
+                  label: const Text('فتح في خرائط Google'),
+                ),
+              ],
               const SizedBox(height: 12),
               ..._actions(context, job),
             ],
@@ -111,6 +133,42 @@ class _TechJobPanelState extends State<TechJobPanel> {
   }
 
   List<Widget> _actions(BuildContext context, Job job) {
+    final items = List<Widget>.of(_statusActions(context, job));
+    if (job.technicianCanWithdraw) {
+      items.add(const SizedBox(height: 8));
+      items.add(
+        OutlinedButton(
+          onPressed: _busy ? null : () => _withdraw(context, job),
+          child: const Text(AppStrings.withdrawSearch),
+        ),
+      );
+    }
+    return items;
+  }
+
+  Future<void> _withdraw(BuildContext context, Job job) async {
+    final reason = await _askReason(
+      context,
+      'الانسحاب من الطلب',
+      'سبب الانسحاب (اختياري)',
+    );
+    if (reason == null || !context.mounted) return;
+    setState(() => _busy = true);
+    try {
+      final scope = AppScope.of(context);
+      await scope.jobs.technicianWithdraw(job.id, reason: reason);
+      await scope.dispatch.dispatch(job.id);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذّر الانسحاب: ${_readableError(e)}')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  List<Widget> _statusActions(BuildContext context, Job job) {
     final jobs = AppScope.of(context).jobs;
     switch (job.status) {
       case JobStatus.enRoute:
@@ -125,7 +183,11 @@ class _TechJobPanelState extends State<TechJobPanel> {
           TextField(
             controller: _finalPrice,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: AppStrings.finalPrice),
+            decoration: const InputDecoration(
+              labelText: AppStrings.finalPrice,
+              hintText: '5000',
+              helperText: 'الحد الأدنى 3000 وينتهي بـ 000',
+            ),
           ),
           const SizedBox(height: 8),
           WarrantyForm(
@@ -139,8 +201,19 @@ class _TechJobPanelState extends State<TechJobPanel> {
           const SizedBox(height: 12),
           FilledButton(
             onPressed: () {
-              final p = double.tryParse(_finalPrice.text);
-              if (p == null) return;
+              final parsed = _parseMoney(_finalPrice.text);
+              final amountError = AppConstants.serviceAmountError(parsed);
+              if (amountError != null || parsed == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      amountError ?? 'أدخل مبلغاً ينتهي بـ 000، والحد الأدنى 3000',
+                    ),
+                  ),
+                );
+                return;
+              }
+              final p = parsed;
               jobs.submitFinalQuote(
                 jobId: job.id,
                 finalPrice: p,
@@ -156,8 +229,15 @@ class _TechJobPanelState extends State<TechJobPanel> {
           ),
         ];
       case JobStatus.inProgress:
+        final due = job.cashDue > 0 ? job.cashDue : job.billAmount;
         return [
           const Text(AppStrings.cashNote),
+          const SizedBox(height: 8),
+          if (job.billAmount > 0)
+            Text('الفاتورة ${formatIqd(job.billAmount)}'),
+          if (job.useWallet && job.walletReserve > 0)
+            Text('يُخصم ${formatIqd(job.walletReserve)} من محفظة العميل'),
+          if (due > 0) Text('المطلوب نقداً ${formatIqd(due)}'),
           const SizedBox(height: 8),
           TextField(
             controller: _received,
@@ -165,7 +245,8 @@ class _TechJobPanelState extends State<TechJobPanel> {
             textDirection: TextDirection.ltr,
             decoration: const InputDecoration(
               labelText: AppStrings.receivedAmount,
-              hintText: 'مثال: 25000',
+              hintText: '25000',
+              helperText: 'الحد الأدنى 3000 وينتهي بـ 000',
             ),
           ),
           const SizedBox(height: 12),
@@ -173,12 +254,18 @@ class _TechJobPanelState extends State<TechJobPanel> {
             onPressed: _busy
                 ? null
                 : () async {
-                    final p = _parseMoney(_received.text);
-                    if (p == null || p <= 0) {
+                    final parsed = _parseMoney(_received.text);
+                    final due = job.cashDue > 0 ? job.cashDue : job.billAmount;
+                    final p = parsed ?? (due <= 0 ? 0.0 : null);
+                    final amountError =
+                        (p == 0 && due <= 0) ? null : AppConstants.serviceAmountError(p);
+                    if (amountError != null || p == null) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text(
-                                'أدخل المبلغ المستلم بالأرقام، مثل 25000')),
+                        SnackBar(
+                          content: Text(
+                            amountError ?? 'أدخل مبلغاً ينتهي بـ 000، والحد الأدنى 3000',
+                          ),
+                        ),
                       );
                       return;
                     }
@@ -255,4 +342,39 @@ double? _parseMoney(String raw) {
       .replaceAll('٫', '.');
   if (s.isEmpty) return null;
   return double.tryParse(s);
+}
+
+Future<String?> _askReason(BuildContext context, String title, String label) {
+  final controller = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(labelText: label),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('تراجع'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('تأكيد'),
+          ),
+        ],
+      );
+    },
+  ).whenComplete(controller.dispose);
+}
+
+Future<void> openCustomerInMaps(double lat, double lng) async {
+  final uri = Uri.parse(
+    'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving',
+  );
+  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (opened) return;
+  await launchUrl(uri, mode: LaunchMode.platformDefault);
 }

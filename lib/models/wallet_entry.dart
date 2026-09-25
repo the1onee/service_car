@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum WalletEntryType { credit, commission, adjustment }
+enum WalletEntryType { credit, commission, adjustment, change, spend }
 
 class WalletEntry {
   const WalletEntry({
@@ -33,6 +33,10 @@ class WalletEntry {
         return 'عمولة';
       case WalletEntryType.adjustment:
         return 'تصحيح';
+      case WalletEntryType.change:
+        return 'باقي دفعة';
+      case WalletEntryType.spend:
+        return 'خصم من الرصيد';
     }
   }
 

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/geo.dart';
 import 'package:barrr/data/collections.dart';
@@ -93,14 +94,10 @@ class JobRepository {
       JobStatus.arrived,
       JobStatus.finalQuote,
       JobStatus.inProgress,
-      JobStatus.completed,
     };
     for (final d in snap.docs) {
       final job = Job.fromDoc(d);
-      if (active.contains(job.status)) {
-        if (job.status == JobStatus.completed && job.ratings.bothDone) continue;
-        return job;
-      }
+      if (active.contains(job.status)) return job;
     }
     return null;
   }
@@ -279,6 +276,8 @@ class JobRepository {
     required String technicianName,
     required double initialPrice,
   }) async {
+    final amountError = AppConstants.serviceAmountError(initialPrice);
+    if (amountError != null) throw StateError(amountError);
     final offerSnap = await _offers.doc(offerId).get();
     if (!offerSnap.exists) return false;
     final jobId = offerSnap.data()?['jobId'] as String?;
@@ -534,11 +533,53 @@ class JobRepository {
     });
   }
 
-  Future<void> customerRejectQuote(String jobId) async {
+  Future<void> customerRejectQuote(String jobId) {
+    return customerCancelJob(jobId);
+  }
+
+  Future<void> customerCancelJob(String jobId, {String reason = ''}) async {
+    final snap = await _jobs.doc(jobId).get();
+    if (!snap.exists) return;
+    final job = Job.fromDoc(snap);
+    if (!job.customerCanCancel) {
+      throw StateError('لا يمكن إلغاء الطلب بعد بدء العمل');
+    }
     await expireOpenOffers(jobId);
     await _jobs.doc(jobId).update({
       'status': JobStatus.cancelled.name,
       'technicianId': null,
+      'technicianName': null,
+      'cancelledBy': 'customer',
+      'cancelReason': reason.trim(),
+    });
+  }
+
+  Future<void> technicianWithdraw(String jobId, {String reason = ''}) async {
+    final snap = await _jobs.doc(jobId).get();
+    if (!snap.exists) return;
+    final job = Job.fromDoc(snap);
+    if (!job.technicianCanWithdraw) {
+      throw StateError('لا يمكن الانسحاب بعد بدء العمل');
+    }
+    await expireOpenOffers(jobId);
+    await _jobs.doc(jobId).update({
+      'status': JobStatus.dispatching.name,
+      'technicianId': null,
+      'technicianName': null,
+      'cancelledBy': 'technician',
+      'cancelReason': reason.trim(),
+      'exactLocation': null,
+    });
+  }
+
+  Future<void> setUseWallet({
+    required String jobId,
+    required bool use,
+    required double reserve,
+  }) {
+    return _jobs.doc(jobId).update({
+      'useWallet': use,
+      'walletReserve': use ? reserve : 0,
     });
   }
 
@@ -551,6 +592,8 @@ class JobRepository {
     required double finalPrice,
     required Warranty warranty,
   }) {
+    final amountError = AppConstants.serviceAmountError(finalPrice);
+    if (amountError != null) throw StateError(amountError);
     return _jobs.doc(jobId).update({
       'finalPrice': finalPrice,
       'warranty': warranty.toMap(),
@@ -562,19 +605,59 @@ class JobRepository {
     return _jobs.doc(jobId).update({'status': JobStatus.inProgress.name});
   }
 
+  var _completeOnServer = false;
+
   Future<void> completeJob({
+    required String jobId,
+    required double receivedAmount,
+    required bool warrantyEnabled,
+  }) async {
+    if (_completeOnServer) {
+      try {
+        await FirebaseFunctions.instance.httpsCallable('completeJob').call({
+          'jobId': jobId,
+          'receivedAmount': receivedAmount,
+          'warrantyEnabled': warrantyEnabled,
+        });
+        return;
+      } on FirebaseFunctionsException catch (e) {
+        const fallback = {
+          'not-found',
+          'unavailable',
+          'unimplemented',
+          'deadline-exceeded',
+          'internal',
+        };
+        if (!fallback.contains(e.code)) rethrow;
+        _completeOnServer = false;
+      }
+    }
+    await _completeJobLocal(
+      jobId: jobId,
+      receivedAmount: receivedAmount,
+      warrantyEnabled: warrantyEnabled,
+    );
+  }
+
+  Future<void> _completeJobLocal({
     required String jobId,
     required double receivedAmount,
     required bool warrantyEnabled,
   }) async {
     final jobRef = _jobs.doc(jobId);
     final entryRef = _db.collection(Cols.walletEntries).doc('commission_$jobId');
+    var customerId = '';
+    var useWallet = false;
+    var bill = 0.0;
     await _db.runTransaction((tx) async {
       final jobSnap = await tx.get(jobRef);
       if (!jobSnap.exists) return;
       final job = jobSnap.data()!;
       final techId = job['technicianId'] as String?;
       if (techId == null) return;
+      customerId = job['customerId'] as String? ?? '';
+      useWallet = job['useWallet'] == true;
+      bill = _billOf(job, receivedAmount);
       final entrySnap = await tx.get(entryRef);
       final techRef = _db.collection(Cols.users).doc(techId);
       final techSnap = await tx.get(techRef);
@@ -585,12 +668,12 @@ class JobRepository {
       final rate = rateRaw is num
           ? rateRaw.toDouble().clamp(0.0, 1.0)
           : AppConstants.commissionRate;
-      final commission = (receivedAmount * rate * 100).round() / 100;
+      final commission = (bill * rate * 100).round() / 100;
       final status = job['status'] as String?;
       if (entrySnap.exists || status == JobStatus.completed.name) {
         if (status != JobStatus.completed.name) {
           tx.update(jobRef, {
-            'receivedAmount': receivedAmount,
+            'receivedAmount': _money(receivedAmount),
             'commissionAmount': commission,
             'status': JobStatus.completed.name,
           });
@@ -598,10 +681,10 @@ class JobRepository {
         return;
       }
       final wallet = (techSnap.data()?['walletBalance'] as num?)?.toDouble() ?? 0;
-      final signedAmount = -commission;
-      final next = wallet + signedAmount;
+      final next = _money(wallet - commission);
+      final now = FieldValue.serverTimestamp();
       tx.update(jobRef, {
-        'receivedAmount': receivedAmount,
+        'receivedAmount': _money(receivedAmount),
         'commissionAmount': commission,
         'status': JobStatus.completed.name,
         if (warrantyEnabled) 'warranty.startsAt': Timestamp.fromDate(DateTime.now()),
@@ -610,16 +693,88 @@ class JobRepository {
         'userId': techId,
         'type': 'commission',
         'amount': commission,
-        'signedAmount': signedAmount,
+        'signedAmount': -commission,
         'balanceAfter': next,
         'jobId': jobId,
         'note': 'عمولة إكمال الطلب',
         'createdBy': techId,
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': now,
       });
       tx.update(techRef, {
         'walletBalance': next,
         if (next < min) 'isOnline': false,
+      });
+    });
+    if (customerId.isEmpty || (!useWallet && receivedAmount <= bill)) return;
+    try {
+      await _settleCustomerChange(
+        jobId: jobId,
+        customerId: customerId,
+        bill: bill,
+        receivedAmount: receivedAmount,
+        useWallet: useWallet,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _settleCustomerChange({
+    required String jobId,
+    required String customerId,
+    required double bill,
+    required double receivedAmount,
+    required bool useWallet,
+  }) async {
+    final jobRef = _jobs.doc(jobId);
+    final spendRef = _db.collection(Cols.walletEntries).doc('spend_$jobId');
+    final changeRef = _db.collection(Cols.walletEntries).doc('change_$jobId');
+    final customerRef = _db.collection(Cols.users).doc(customerId);
+    await _db.runTransaction((tx) async {
+      final customerSnap = await tx.get(customerRef);
+      final spendSnap = await tx.get(spendRef);
+      final changeSnap = await tx.get(changeRef);
+      if (!customerSnap.exists) return;
+      final custBal = (customerSnap.data()?['walletBalance'] as num?)?.toDouble() ?? 0;
+      final applied = useWallet
+          ? _money(custBal < bill ? (custBal < 0 ? 0 : custBal) : bill)
+          : 0.0;
+      final cashDue = _money(bill - applied < 0 ? 0 : bill - applied);
+      final change = _money(receivedAmount - cashDue < 0 ? 0 : receivedAmount - cashDue);
+      if (applied <= 0 && change <= 0) return;
+      final custNext = _money(custBal - applied + change);
+      final now = FieldValue.serverTimestamp();
+      if (applied > 0 && !spendSnap.exists) {
+        tx.set(spendRef, {
+          'userId': customerId,
+          'type': 'spend',
+          'amount': applied,
+          'signedAmount': -applied,
+          'balanceAfter': _money(custBal - applied),
+          'jobId': jobId,
+          'note': 'خصم رصيد على الطلب',
+          'createdBy': customerId,
+          'createdAt': now,
+        });
+      }
+      if (change > 0 && !changeSnap.exists) {
+        tx.set(changeRef, {
+          'userId': customerId,
+          'type': 'change',
+          'amount': change,
+          'signedAmount': change,
+          'balanceAfter': custNext,
+          'jobId': jobId,
+          'note': 'باقي دفعة الطلب',
+          'createdBy': customerId,
+          'createdAt': now,
+        });
+      }
+      tx.update(customerRef, {
+        'walletBalance': custNext,
+        'walletJobId': jobId,
+      });
+      tx.update(jobRef, {
+        'walletApplied': applied,
+        'changeAmount': change,
       });
     });
   }
@@ -643,5 +798,15 @@ class JobRepository {
     if (job.ratings.bothDone) {
       await _jobs.doc(jobId).update({'status': JobStatus.rated.name});
     }
+  }
+
+  double _money(num value) => (value * 100).round() / 100;
+
+  double _billOf(Map<String, dynamic> job, double received) {
+    final finalPrice = (job['finalPrice'] as num?)?.toDouble();
+    if (finalPrice != null && finalPrice > 0) return _money(finalPrice);
+    final initial = (job['initialPrice'] as num?)?.toDouble();
+    if (initial != null && initial > 0) return _money(initial);
+    return _money(received);
   }
 }

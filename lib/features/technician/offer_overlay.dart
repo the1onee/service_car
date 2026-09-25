@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/models/job_offer.dart';
 
@@ -50,11 +51,13 @@ class _OfferOverlayState extends State<OfferOverlay> {
   }
 
   Future<void> _accept() async {
-    final value = double.tryParse(_price.text.replaceAll(',', '.'));
-    if (value == null || value <= 0) {
-      setState(() => _error = 'أدخل سعراً مبدئياً صحيحاً');
+    final parsed = double.tryParse(_price.text.replaceAll(',', '').trim());
+    final amountError = AppConstants.serviceAmountError(parsed);
+    if (amountError != null || parsed == null) {
+      setState(() => _error = amountError ?? 'أدخل مبلغاً ينتهي بـ 000، والحد الأدنى 3000');
       return;
     }
+    final value = parsed;
     setState(() {
       _busy = true;
       _error = null;
@@ -109,7 +112,11 @@ class _OfferOverlayState extends State<OfferOverlay> {
                 TextField(
                   controller: _price,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: AppStrings.initialPrice),
+                  decoration: const InputDecoration(
+                    labelText: AppStrings.initialPrice,
+                    hintText: '5000',
+                    helperText: 'الحد الأدنى 3000 وينتهي بـ 000',
+                  ),
                 ),
                 if (_error != null)
                   Padding(

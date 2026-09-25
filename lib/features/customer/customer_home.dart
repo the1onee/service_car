@@ -307,6 +307,7 @@ class _CustomerHomeState extends State<CustomerHome> {
             onPositionChanged: job == null
                 ? (c) => setState(() => _pin = c)
                 : null,
+            onLocated: (point) => setState(() => _pin = point),
           ),
         if (_ready && job == null)
           const IgnorePointer(

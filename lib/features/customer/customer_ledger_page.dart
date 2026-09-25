@@ -54,6 +54,40 @@ class CustomerLedgerPage extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
+                          'رصيد المحفظة',
+                          style: TextStyle(
+                            color: Color(0xFF7C839B),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          formatIqd(profile.walletBalance),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 28,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'الباقي من أي دفعة يبقى هنا وتستطيع استخدامه في طلب آخر',
+                          style: TextStyle(color: Color(0xFFBEC6E0), fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF131B2E),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
                           'ما دفعته نقداً للفنيين',
                           style: TextStyle(
                             color: Color(0xFF7C839B),

@@ -180,7 +180,7 @@ class _Body extends StatelessWidget {
             _WarrantyCard(job: job, customer: customer, profile: profile),
           ],
           if (customer &&
-              job.status == JobStatus.completed &&
+              (job.status == JobStatus.completed || job.status == JobStatus.rated) &&
               job.ratings.customerToTech == null) ...[
             const SizedBox(height: 16),
             FilledButton(

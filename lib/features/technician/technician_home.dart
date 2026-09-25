@@ -242,7 +242,13 @@ class _TechnicianHomeState extends State<TechnicianHome> {
     ];
     return Stack(
       children: [
-        OsmMap(center: _me, zoom: 14, markers: markers, circles: circles),
+        OsmMap(
+          center: _me,
+          zoom: 14,
+          markers: markers,
+          circles: circles,
+          onLocated: (point) => setState(() => _me = point),
+        ),
         Positioned(
           top: 0,
           left: 0,

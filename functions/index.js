@@ -364,6 +364,10 @@ exports.acceptOffer = onCall(async (request) => {
   const { offerId, initialPrice } = request.data || {};
   const uid = request.auth.uid;
   if (!offerId || !initialPrice) throw new HttpsError("invalid-argument", "data");
+  const price = Math.round(Number(initialPrice));
+  if (!Number.isFinite(price) || price < 3000 || price % 1000 !== 0) {
+    throw new HttpsError("invalid-argument", "أقل مبلغ 3000 ويجب أن ينتهي بـ 000");
+  }
 
   const user = await db.collection("users").doc(uid).get();
   const userData = user.data() || {};

@@ -68,6 +68,8 @@ class AppStrings {
       'الدفع نقداً للفني مباشرة. التطبيق يخصم عمولة الخدمة من محفظة الفني.';
   static const accept = 'قبول';
   static const reject = 'رفض';
+  static const cancelJob = 'إلغاء الطلب';
+  static const withdrawSearch = 'إلغاء والبحث عن فني';
   static const online = 'متاح لاستقبال الطلبات';
   static const offline = 'غير متاح';
   static const pendingVerify = 'حسابك بانتظار توثيق الإدارة';
