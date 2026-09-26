@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/features/admin/admin_home.dart';
 import 'package:barrr/features/customer/customer_home.dart';
+import 'package:barrr/features/oil_workshop/oil_workshop_home.dart';
 import 'package:barrr/features/technician/technician_home.dart';
+import 'package:barrr/features/workshop/workshop_home.dart';
 import 'package:barrr/models/app_user.dart';
 
 class RoleHome extends StatefulWidget {
@@ -32,6 +34,12 @@ class _RoleHomeState extends State<RoleHome> {
   Widget build(BuildContext context) {
     if (widget.profile.isAdmin) {
       return AdminHome(profile: widget.profile);
+    }
+    if (widget.profile.isOilWorkshop) {
+      return OilWorkshopHome(profile: widget.profile);
+    }
+    if (widget.profile.isWorkshop) {
+      return WorkshopHome(profile: widget.profile);
     }
     if (widget.profile.isTechnician) {
       return TechnicianHome(profile: widget.profile);

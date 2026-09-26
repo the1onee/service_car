@@ -52,7 +52,7 @@ class FieldShell extends StatelessWidget {
                             items[i].icon,
                             size: 22,
                             color: tab == i
-                                ? const Color(0xFF855300)
+                                ? AppColors.amberDeep
                                 : AppColors.inkSoft,
                           ),
                           const SizedBox(height: 4),
@@ -63,7 +63,7 @@ class FieldShell extends StatelessWidget {
                               fontWeight:
                                   tab == i ? FontWeight.w700 : FontWeight.w500,
                               color: tab == i
-                                  ? const Color(0xFF855300)
+                                  ? AppColors.amberDeep
                                   : AppColors.inkSoft,
                             ),
                           ),

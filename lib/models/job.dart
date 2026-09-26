@@ -66,6 +66,14 @@ class Job {
     this.walletReserve = 0,
     this.walletApplied,
     this.changeAmount,
+    this.partName = '',
+    this.partNote = '',
+    this.partImageUrl = '',
+    this.carMake = '',
+    this.carModel = '',
+    this.carYear = '',
+    this.customerPhone = '',
+    this.providerKind = '',
   });
 
   final String id;
@@ -99,6 +107,22 @@ class Job {
   final double walletReserve;
   final double? walletApplied;
   final double? changeAmount;
+  /// طلب قطع غيار.
+  final String partName;
+  final String partNote;
+  final String partImageUrl;
+  final String carMake;
+  final String carModel;
+  final String carYear;
+  final String customerPhone;
+  /// workshop | oilWorkshop | technician — لمن يُوزَّع الطلب.
+  final String providerKind;
+
+  bool get isPartsOrder =>
+      serviceId == 'parts' || providerKind == 'workshop';
+
+  bool get isOilOrder =>
+      serviceId == 'oil' || providerKind == 'oilWorkshop';
 
   bool get isEmergency => matchingMode == MatchingMode.emergency;
 
@@ -178,6 +202,16 @@ class Job {
         'ratings': ratings.toMap(),
         'dispatchRound': dispatchRound,
         'expiresAt': expiresAt,
+        'useWallet': useWallet,
+        'walletReserve': walletReserve,
+        'partName': partName,
+        'partNote': partNote,
+        'partImageUrl': partImageUrl,
+        'carMake': carMake,
+        'carModel': carModel,
+        'carYear': carYear,
+        'customerPhone': customerPhone,
+        'providerKind': providerKind,
         'createdAt': FieldValue.serverTimestamp(),
       };
 
@@ -212,6 +246,14 @@ class Job {
       walletReserve: (d['walletReserve'] as num?)?.toDouble() ?? 0,
       walletApplied: (d['walletApplied'] as num?)?.toDouble(),
       changeAmount: (d['changeAmount'] as num?)?.toDouble(),
+      partName: d['partName'] as String? ?? '',
+      partNote: d['partNote'] as String? ?? '',
+      partImageUrl: d['partImageUrl'] as String? ?? '',
+      carMake: d['carMake'] as String? ?? '',
+      carModel: d['carModel'] as String? ?? '',
+      carYear: d['carYear'] as String? ?? '',
+      customerPhone: d['customerPhone'] as String? ?? '',
+      providerKind: d['providerKind'] as String? ?? '',
     );
   }
 }

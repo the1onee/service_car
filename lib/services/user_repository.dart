@@ -73,7 +73,8 @@ class UserRepository {
       return const OnlineResult.ok();
     }
     final user = await get(uid);
-    if (user == null || !user.isTechnician) {
+    if (user == null ||
+        (!user.isTechnician && !user.isWorkshop && !user.isOilWorkshop)) {
       return const OnlineResult.blocked(OnlineBlock.pending);
     }
     if (user.verificationStatus == VerificationStatus.rejected && !user.verified) {
@@ -82,22 +83,40 @@ class UserRepository {
     if (!user.isApproved) {
       return const OnlineResult.blocked(OnlineBlock.pending);
     }
-    final settings = await _db.collection(Cols.appSettings).doc('main').get();
-    final min = (settings.data()?['minWalletBalance'] as num?)?.toDouble() ??
-        AppConstants.minWalletBalance;
-    if (user.walletBalance < min) {
-      return OnlineResult.blocked(
-        OnlineBlock.lowBalance,
-        balance: user.walletBalance,
-        minBalance: min,
-      );
+    if (user.isTechnician || user.isOilWorkshop) {
+      final settings = await _db.collection(Cols.appSettings).doc('main').get();
+      final min = (settings.data()?['minWalletBalance'] as num?)?.toDouble() ??
+          AppConstants.minWalletBalance;
+      if (user.walletBalance < min) {
+        return OnlineResult.blocked(
+          OnlineBlock.lowBalance,
+          balance: user.walletBalance,
+          minBalance: min,
+        );
+      }
     }
     final patch = <String, dynamic>{'isOnline': true};
-    if (user.serviceIds.isEmpty) {
-      patch['serviceIds'] = seedServices.map((s) => s.id).toList();
-    }
-    if (user.vehicleTypeIds.isEmpty) {
-      patch['vehicleTypeIds'] = seedVehicleTypes.map((t) => t.id).toList();
+    if (user.isWorkshop) {
+      if (user.serviceIds.isEmpty) {
+        patch['serviceIds'] = const ['parts'];
+      }
+    } else if (user.isOilWorkshop) {
+      if (user.serviceIds.isEmpty) {
+        patch['serviceIds'] = const ['oil'];
+      }
+      if (user.vehicleTypeIds.isEmpty) {
+        patch['vehicleTypeIds'] = seedVehicleTypes.map((t) => t.id).toList();
+      }
+    } else {
+      if (user.serviceIds.isEmpty) {
+        patch['serviceIds'] = seedServices
+            .where((s) => s.id != 'oil' && s.id != 'parts')
+            .map((s) => s.id)
+            .toList();
+      }
+      if (user.vehicleTypeIds.isEmpty) {
+        patch['vehicleTypeIds'] = seedVehicleTypes.map((t) => t.id).toList();
+      }
     }
     await _userRef(uid).set(patch, SetOptions(merge: true));
     return const OnlineResult.ok();
@@ -211,16 +230,44 @@ class UserRepository {
 
   Future<void> seedServicesIfNeeded() => syncMvpServices();
 
-  /// يزرع خدمات الإطلاق الناقصة فقط — لا يعطّل ولا يستبدل خدمات أضافها الأدمن.
+  /// يزرع خدمات الإطلاق الناقصة، ويملأ حقول التعريف الفارغة للخدمات المعروفة دون استبدال إعدادات الأدمن.
   Future<void> syncMvpServices() async {
     final existing = await _db.collection(Cols.services).get();
-    final existingIds = existing.docs.map((d) => d.id).toSet();
-    final missing = seedServices.where((s) => !existingIds.contains(s.id)).toList();
-    if (missing.isEmpty) return;
+    final byId = {for (final d in existing.docs) d.id: d};
     final batch = _db.batch();
-    for (final s in missing) {
-      batch.set(_db.collection(Cols.services).doc(s.id), s.toMap());
+    var writes = 0;
+
+    for (final s in seedServices) {
+      final doc = byId[s.id];
+      if (doc == null) {
+        batch.set(_db.collection(Cols.services).doc(s.id), s.toMap());
+        writes++;
+        continue;
+      }
+      if (s.descriptionAr.isEmpty && s.highlightsAr.isEmpty) continue;
+      final data = doc.data();
+      final currentDesc = (data['descriptionAr'] as String?)?.trim() ?? '';
+      final currentHighlights = data['highlightsAr'];
+      final hasHighlights =
+          currentHighlights is List && currentHighlights.isNotEmpty;
+      final patch = <String, dynamic>{};
+      if (currentDesc.isEmpty && s.descriptionAr.isNotEmpty) {
+        patch['descriptionAr'] = s.descriptionAr;
+      }
+      if (!hasHighlights && s.highlightsAr.isNotEmpty) {
+        patch['highlightsAr'] = s.highlightsAr;
+      }
+      if (data['providerKind'] == null &&
+          s.providerKind != ServiceProviderKind.mobile) {
+        patch['providerKind'] = s.providerKind.firestoreValue;
+      } else if (data['providerKind'] == null) {
+        patch['providerKind'] = s.providerKind.firestoreValue;
+      }
+      if (patch.isEmpty) continue;
+      batch.set(_db.collection(Cols.services).doc(s.id), patch, SetOptions(merge: true));
+      writes++;
     }
+    if (writes == 0) return;
     await batch.commit();
   }
 
@@ -238,12 +285,16 @@ class UserRepository {
   }
 
   Stream<List<ServiceItem>> watchServices() {
-    return _servicesStream ??= _db.collection(Cols.services).snapshots().map((s) {
-      if (s.docs.isEmpty) return seedServices;
-      final list = s.docs
-          .map((d) => ServiceItem.fromMap(d.id, d.data()))
-          .where((e) => e.active)
-          .toList();
+    return _servicesStream ??= _db
+        .collection(Cols.services)
+        .where('active', isEqualTo: true)
+        .orderBy('sortOrder')
+        .limit(100)
+        .snapshots()
+        .map((s) {
+      if (s.docs.isEmpty) return seedServices.where((e) => e.active).toList();
+      final list =
+          s.docs.map((d) => ServiceItem.fromMap(d.id, d.data())).toList();
       list.sort((a, b) {
         final byOrder = a.sortOrder.compareTo(b.sortOrder);
         if (byOrder != 0) return byOrder;
@@ -254,12 +305,18 @@ class UserRepository {
   }
 
   Stream<List<VehicleType>> watchVehicleTypes() {
-    return _vehicleTypesStream ??= _db.collection(Cols.vehicleTypes).snapshots().map((s) {
-      if (s.docs.isEmpty) return seedVehicleTypes;
-      final list = s.docs
-          .map((d) => VehicleType.fromMap(d.id, d.data()))
-          .where((e) => e.active)
-          .toList();
+    return _vehicleTypesStream ??= _db
+        .collection(Cols.vehicleTypes)
+        .where('active', isEqualTo: true)
+        .orderBy('sortOrder')
+        .limit(100)
+        .snapshots()
+        .map((s) {
+      if (s.docs.isEmpty) {
+        return seedVehicleTypes.where((e) => e.active).toList();
+      }
+      final list =
+          s.docs.map((d) => VehicleType.fromMap(d.id, d.data())).toList();
       list.sort((a, b) {
         final byOrder = a.sortOrder.compareTo(b.sortOrder);
         if (byOrder != 0) return byOrder;

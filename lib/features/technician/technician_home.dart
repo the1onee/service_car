@@ -12,6 +12,7 @@ import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/jobs/orders_screen.dart';
+import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/shared/osm_map.dart';
 import 'package:barrr/features/technician/offer_overlay.dart';
@@ -24,6 +25,7 @@ import 'package:barrr/models/service_item.dart';
 import 'package:barrr/models/vehicle_type.dart';
 import 'package:barrr/models/wallet_entry.dart';
 import 'package:barrr/models/wallet_top_up.dart';
+import 'package:barrr/services/fcm_service.dart';
 import 'package:barrr/services/user_repository.dart';
 import 'package:barrr/services/wallet_top_up_upload.dart';
 
@@ -38,8 +40,11 @@ class TechnicianHome extends StatefulWidget {
 
 class _TechnicianHomeState extends State<TechnicianHome> {
   StreamSubscription? _posSub;
-  LatLng _me = const LatLng(AppConstants.defaultLat, AppConstants.defaultLng);
+  StreamSubscription<List<JobOffer>>? _offersSub;
+  StreamSubscription<Job?>? _activeJobSub;
+  late final ValueNotifier<LatLng> _meNotifier;
   JobOffer? _incoming;
+  Job? _activeJob;
   CityZone? _zone;
   var _booted = false;
   var _tab = 0;
@@ -47,12 +52,54 @@ class _TechnicianHomeState extends State<TechnicianHome> {
   bool? _duty;
   String? _dutyHint;
   DateTime? _lastGeoWrite;
+  VoidCallback? _fcmFocusListener;
+  FcmService? _fcm;
+  late final Stream<AppUser?> _userStream;
+  late final Stream<Job?> _activeJobStream;
+  late final Stream<List<JobOffer>> _offersStream;
+  late final Stream<List<Job>> _recentJobsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _meNotifier = ValueNotifier(
+      const LatLng(AppConstants.defaultLat, AppConstants.defaultLng),
+    );
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_booted) return;
     _booted = true;
+    final scope = AppScope.of(context);
+    final uid = widget.profile.id;
+    _userStream = scope.users.watch(uid);
+    _activeJobStream = scope.jobs.watchActiveForTechnician(uid);
+    _offersStream = scope.jobs.watchPendingOffers(uid);
+    _recentJobsStream = scope.jobs.watchRecentForTechnician(uid);
+    _activeJobSub = _activeJobStream.listen((job) {
+      if (!mounted) return;
+      setState(() => _activeJob = job);
+    });
+    _offersSub = _offersStream.listen((offers) {
+      if (!mounted) return;
+      final live = offers.where((o) => o.remainingSeconds() > 0).toList();
+      if (_incoming == null && live.isNotEmpty && _activeJob == null) {
+        setState(() {
+          _incoming = live.first;
+          _tab = 0;
+        });
+      }
+    });
+    _fcm = scope.fcm;
+    _fcmFocusListener = () {
+      final id = scope.fcm.focusJobId.value;
+      if (id == null || id.isEmpty || !mounted) return;
+      setState(() => _tab = 0);
+      scope.fcm.focusJobId.value = null;
+    };
+    scope.fcm.focusJobId.addListener(_fcmFocusListener!);
     _boot();
   }
 
@@ -62,7 +109,8 @@ class _TechnicianHomeState extends State<TechnicianHome> {
     final fallback = zone != null
         ? LatLng(zone.centerLat, zone.centerLng)
         : const LatLng(AppConstants.defaultLat, AppConstants.defaultLng);
-    _me = await scope.location.currentOrDefault(fallback: fallback);
+    final me = await scope.location.currentOrDefault(fallback: fallback);
+    _meNotifier.value = me;
     _zone = zone;
     if (widget.profile.isOnline) _startTracking();
     if (mounted) setState(() {});
@@ -72,17 +120,17 @@ class _TechnicianHomeState extends State<TechnicianHome> {
     _posSub?.cancel();
     final scope = AppScope.of(context);
     _posSub = scope.location.track().listen((p) {
-      _me = LatLng(p.latitude, p.longitude);
+      final next = LatLng(p.latitude, p.longitude);
+      _meNotifier.value = next;
       final now = DateTime.now();
       final due = _lastGeoWrite == null ||
           now.difference(_lastGeoWrite!) > const Duration(seconds: 8);
       if (!due) return;
       _lastGeoWrite = now;
       scope.users.setGeo(widget.profile.id, GeoPoint(p.latitude, p.longitude));
-      if (mounted) setState(() {});
     });
-    scope.users
-        .setGeo(widget.profile.id, GeoPoint(_me.latitude, _me.longitude));
+    final me = _meNotifier.value;
+    scope.users.setGeo(widget.profile.id, GeoPoint(me.latitude, me.longitude));
   }
 
   Future<void> _toggleOnline(bool value) async {
@@ -116,9 +164,10 @@ class _TechnicianHomeState extends State<TechnicianHome> {
             .showSnackBar(SnackBar(content: Text(message)));
         return;
       }
+      final me = _meNotifier.value;
       await scope.users.setGeo(
         widget.profile.id,
-        GeoPoint(_me.latitude, _me.longitude),
+        GeoPoint(me.latitude, me.longitude),
       );
       _lastGeoWrite = DateTime.now();
       _startTracking();
@@ -138,79 +187,288 @@ class _TechnicianHomeState extends State<TechnicianHome> {
 
   @override
   void dispose() {
+    if (_fcmFocusListener != null) {
+      _fcm?.focusJobId.removeListener(_fcmFocusListener!);
+    }
     _posSub?.cancel();
+    _offersSub?.cancel();
+    _activeJobSub?.cancel();
+    _meNotifier.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final scope = AppScope.of(context);
+    return FieldShell(
+      tab: _tab,
+      onTab: (i) => setState(() => _tab = i),
+      items: const [
+        FieldNavItem(icon: Icons.home_rounded, label: 'الرئيسية'),
+        FieldNavItem(icon: Icons.receipt_long_outlined, label: 'الطلبات'),
+        FieldNavItem(
+            icon: Icons.account_balance_wallet_outlined, label: 'المحفظة'),
+        FieldNavItem(icon: Icons.person_outline_rounded, label: 'حسابي'),
+      ],
+      body: _buildTabBody(),
+    );
+  }
+
+  Widget _buildTabBody() {
+    return switch (_tab) {
+      1 => _ordersTab(),
+      2 => _walletTab(),
+      3 => _accountTab(),
+      _ => _TechnicianMapTab(
+          profileId: widget.profile.id,
+          fallbackProfile: widget.profile,
+          zone: _zone,
+          meListenable: _meNotifier,
+          userStream: _userStream,
+          activeJobStream: _activeJobStream,
+          offersStream: _offersStream,
+          dutyOverride: _duty,
+          dutyBusy: _dutyBusy,
+          dutyHint: _dutyHint,
+          incoming: _incoming,
+          onToggle: _toggleOnline,
+          onIncoming: (offer) {
+            if (_incoming?.id == offer?.id) return;
+            setState(() => _incoming = offer);
+          },
+          onClearIncoming: () => setState(() => _incoming = null),
+          onLocated: (point) => _meNotifier.value = point,
+        ),
+    };
+  }
+
+  Widget _ordersTab() {
     return StreamBuilder<AppUser?>(
-      stream: scope.users.watch(widget.profile.id),
-      builder: (context, profileSnap) {
-        final me = profileSnap.data ?? widget.profile;
+      stream: _userStream,
+      builder: (context, snap) {
+        final me = snap.data ?? widget.profile;
+        return OrdersScreen(
+          stream: _recentJobsStream,
+          profile: me,
+        );
+      },
+    );
+  }
+
+  Widget _walletTab() {
+    return StreamBuilder<AppUser?>(
+      stream: _userStream,
+      builder: (context, snap) {
+        final me = snap.data ?? widget.profile;
         final online = _duty ?? me.isOnline;
         if (_duty != null && _duty == me.isOnline && !_dutyBusy) {
-          _duty = null;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _duty = null);
+          });
         }
+        return _WalletPage(
+          me: me,
+          online: online,
+          dutyHint: _dutyHint,
+          city: _zone?.nameAr,
+          onToggle: _toggleOnline,
+          onAccount: () => setState(() => _tab = 3),
+        );
+      },
+    );
+  }
+
+  Widget _accountTab() {
+    return StreamBuilder<AppUser?>(
+      stream: _userStream,
+      builder: (context, snap) {
+        return _AccountPage(me: snap.data ?? widget.profile);
+      },
+    );
+  }
+}
+
+class _TechnicianMapTab extends StatelessWidget {
+  const _TechnicianMapTab({
+    required this.profileId,
+    required this.fallbackProfile,
+    required this.zone,
+    required this.meListenable,
+    required this.userStream,
+    required this.activeJobStream,
+    required this.offersStream,
+    required this.dutyOverride,
+    required this.dutyBusy,
+    required this.dutyHint,
+    required this.incoming,
+    required this.onToggle,
+    required this.onIncoming,
+    required this.onClearIncoming,
+    required this.onLocated,
+  });
+
+  final String profileId;
+  final AppUser fallbackProfile;
+  final CityZone? zone;
+  final ValueNotifier<LatLng> meListenable;
+  final Stream<AppUser?> userStream;
+  final Stream<Job?> activeJobStream;
+  final Stream<List<JobOffer>> offersStream;
+  final bool? dutyOverride;
+  final bool dutyBusy;
+  final String? dutyHint;
+  final JobOffer? incoming;
+  final Future<void> Function(bool value) onToggle;
+  final ValueChanged<JobOffer?> onIncoming;
+  final VoidCallback onClearIncoming;
+  final ValueChanged<LatLng> onLocated;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<AppUser?>(
+      stream: userStream,
+      builder: (context, profileSnap) {
+        final me = profileSnap.data ?? fallbackProfile;
+        final online = dutyOverride ?? me.isOnline;
         return StreamBuilder<Job?>(
-          stream: scope.jobs.watchActiveForTechnician(me.id),
+          stream: activeJobStream,
           builder: (context, jobSnap) {
             final job = jobSnap.data;
             return StreamBuilder<List<JobOffer>>(
-              stream: scope.jobs.watchPendingOffers(me.id),
+              stream: offersStream,
               builder: (context, offerSnap) {
                 final offers = offerSnap.data ?? const <JobOffer>[];
                 final live =
                     offers.where((o) => o.remainingSeconds() > 0).toList();
-                if (_incoming == null && live.isNotEmpty && job == null) {
+                final nextIncoming =
+                    (incoming == null && live.isNotEmpty && job == null)
+                        ? live.first
+                        : incoming;
+                if (incoming == null &&
+                    live.isNotEmpty &&
+                    job == null &&
+                    nextIncoming != null) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) setState(() => _incoming = live.first);
+                    onIncoming(nextIncoming);
                   });
                 }
                 return Stack(
                   children: [
-                    FieldShell(
-                      tab: _tab,
-                      onTab: (i) => setState(() => _tab = i),
-                      items: const [
-                        FieldNavItem(
-                            icon: Icons.home_rounded, label: 'الرئيسية'),
-                        FieldNavItem(
-                            icon: Icons.receipt_long_outlined,
-                            label: 'الطلبات'),
-                        FieldNavItem(
-                            icon: Icons.account_balance_wallet_outlined,
-                            label: 'المحفظة'),
-                        FieldNavItem(
-                            icon: Icons.person_outline_rounded, label: 'حسابي'),
-                      ],
-                      body: IndexedStack(
-                        index: _tab,
-                        children: [
-                          _mapBody(me, job, online),
-                          OrdersScreen(
-                            stream: scope.jobs.watchRecentForTechnician(me.id),
-                            profile: me,
-                          ),
-                          _WalletPage(
-                            me: me,
-                            online: online,
-                            dutyHint: _dutyHint,
-                            city: _zone?.nameAr,
-                            onToggle: _toggleOnline,
-                            onAccount: () => setState(() => _tab = 3),
-                          ),
-                          _AccountPage(me: me),
-                        ],
-                      ),
+                    ValueListenableBuilder<LatLng>(
+                      valueListenable: meListenable,
+                      builder: (context, mePoint, _) {
+                        final markers = <Marker>[
+                          pinMarker(mePoint, color: AppColors.emerald),
+                          if (job != null)
+                            pinMarker(
+                              LatLng(
+                                job.displayLocation.latitude,
+                                job.displayLocation.longitude,
+                              ),
+                              color: AppColors.amber,
+                            ),
+                        ];
+                        final circles = <CircleMarker>[
+                          if (zone != null)
+                            coverageCircle(
+                              centerLat: zone!.centerLat,
+                              centerLng: zone!.centerLng,
+                              radiusKm: zone!.radiusKm,
+                            ),
+                        ];
+                        return Stack(
+                          children: [
+                            OsmMap(
+                              center: mePoint,
+                              zoom: 14,
+                              markers: markers,
+                              circles: circles,
+                              onLocated: onLocated,
+                            ),
+                            Positioned(
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              child: FieldTopBar(
+                                city: zone?.nameAr,
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    StatusPill(
+                                      label: online ? 'متصل' : 'غير متصل',
+                                      color: online
+                                          ? AppColors.emeraldDeep
+                                          : AppColors.inkSoft,
+                                      background: online
+                                          ? AppColors.emeraldTint
+                                          : AppColors.recessed,
+                                    ),
+                                    NotificationsBellButton(uid: me.id),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (job != null)
+                              Align(
+                                alignment: Alignment.bottomCenter,
+                                child: TechJobPanel(job: job, me: me),
+                              )
+                            else
+                              Align(
+                                alignment: Alignment.bottomCenter,
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                                  child: FieldCard(
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                online
+                                                    ? AppStrings.online
+                                                    : AppStrings.offline,
+                                                style: const TextStyle(
+                                                    fontWeight:
+                                                        FontWeight.w700),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                dutyHint ??
+                                                    'الرصيد ${formatIqd(me.walletBalance)}',
+                                                style: TextStyle(
+                                                  color: dutyHint == null
+                                                      ? AppColors.inkSoft
+                                                      : AppColors.danger,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Switch(
+                                          value: online,
+                                          onChanged:
+                                              dutyBusy ? null : onToggle,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
                     ),
-                    if (_incoming != null && job == null)
+                    if (incoming != null && job == null)
                       Positioned.fill(
                         child: OfferOverlay(
-                          offer: _incoming!,
+                          offer: incoming!,
                           technicianName: me.name,
-                          onDone: () => setState(() => _incoming = null),
+                          onDone: onClearIncoming,
                         ),
                       ),
                   ],
@@ -220,93 +478,6 @@ class _TechnicianHomeState extends State<TechnicianHome> {
           },
         );
       },
-    );
-  }
-
-  Widget _mapBody(AppUser me, Job? job, bool online) {
-    final markers = <Marker>[
-      pinMarker(_me, color: AppColors.emerald),
-      if (job != null)
-        pinMarker(
-          LatLng(job.displayLocation.latitude, job.displayLocation.longitude),
-          color: AppColors.amber,
-        ),
-    ];
-    final circles = <CircleMarker>[
-      if (_zone != null)
-        coverageCircle(
-          centerLat: _zone!.centerLat,
-          centerLng: _zone!.centerLng,
-          radiusKm: _zone!.radiusKm,
-        ),
-    ];
-    return Stack(
-      children: [
-        OsmMap(
-          center: _me,
-          zoom: 14,
-          markers: markers,
-          circles: circles,
-          onLocated: (point) => setState(() => _me = point),
-        ),
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: FieldTopBar(
-            city: _zone?.nameAr,
-            trailing: StatusPill(
-              label: online ? 'متصل' : 'غير متصل',
-              color: online ? AppColors.emeraldDeep : AppColors.inkSoft,
-              background: online ? AppColors.emeraldTint : AppColors.recessed,
-            ),
-          ),
-        ),
-        if (job != null)
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: TechJobPanel(job: job, me: me),
-          )
-        else
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: FieldCard(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            online ? AppStrings.online : AppStrings.offline,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            _dutyHint ?? 'الرصيد ${formatIqd(me.walletBalance)}',
-                            style: TextStyle(
-                              color: _dutyHint == null
-                                  ? AppColors.inkSoft
-                                  : AppColors.danger,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: online,
-                      onChanged: _dutyBusy ? null : _toggleOnline,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-      ],
     );
   }
 }
@@ -345,19 +516,25 @@ class _WalletPageState extends State<_WalletPage> {
       children: [
         FieldTopBar(
           city: widget.city,
-          caption: 'Wallet',
-          trailing: Material(
-            color: const Color(0xFF131B2E),
-            shape: const CircleBorder(),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: widget.onAccount,
-              child: const SizedBox(
-                width: 32,
-                height: 32,
-                child: Icon(Icons.person, color: Colors.white, size: 18),
+          caption: 'المحفظة',
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              NotificationsBellButton(uid: me.id),
+              Material(
+                color: AppColors.slate,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: widget.onAccount,
+                  child: const SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: Icon(Icons.person, color: Colors.white, size: 18),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ),
         Expanded(
@@ -1538,7 +1715,7 @@ class _AccountPage extends StatelessWidget {
     };
     return Column(
       children: [
-        const FieldTopBar(),
+        FieldTopBar(trailing: NotificationsBellButton(uid: me.id)),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),

@@ -108,6 +108,7 @@ class JobRepository {
       () => _offers
           .where('technicianId', isEqualTo: technicianId)
           .where('status', isEqualTo: 'pending')
+          .limit(20)
           .snapshots()
           .map((s) => s.docs.map(JobOffer.fromDoc).toList()),
     );
@@ -122,10 +123,27 @@ class JobRepository {
     String? vehicleTypeTitle,
     bool? isEmergency,
     double? commissionRate,
+    String partName = '',
+    String partNote = '',
+    String partImageUrl = '',
+    String carMake = '',
+    String carModel = '',
+    String carYear = '',
+    String customerPhone = '',
+    String providerKind = '',
   }) async {
     final ref = _jobs.doc();
-    final emergency = isEmergency ?? isEmergencyService(serviceId);
+    final toWorkshops =
+        providerKind == 'workshop' || serviceId == 'parts';
+    final toOilWorkshops =
+        providerKind == 'oilWorkshop' || serviceId == 'oil';
+    final emergency = (toWorkshops || toOilWorkshops)
+        ? false
+        : (isEmergency ?? isEmergencyService(serviceId));
     final rate = (commissionRate ?? AppConstants.commissionRate).clamp(0.0, 1.0);
+    final resolvedKind = toWorkshops
+        ? 'workshop'
+        : (toOilWorkshops ? 'oilWorkshop' : providerKind);
     final job = Job(
       id: ref.id,
       customerId: customerId,
@@ -138,6 +156,14 @@ class JobRepository {
       commissionRate: rate,
       approxLocation: approximate(exact),
       createdAt: DateTime.now(),
+      partName: partName,
+      partNote: partNote,
+      partImageUrl: partImageUrl,
+      carMake: carMake,
+      carModel: carModel,
+      carYear: carYear,
+      customerPhone: customerPhone,
+      providerKind: resolvedKind,
     );
     final batch = _db.batch();
     batch.set(ref, job.toCreateMap());
@@ -160,9 +186,12 @@ class JobRepository {
       return;
     }
 
+    final providerRole = job.isPartsOrder
+        ? 'workshop'
+        : (job.isOilOrder ? 'oilWorkshop' : 'technician');
     final techs = await _db
         .collection(Cols.users)
-        .where('role', isEqualTo: 'technician')
+        .where('role', isEqualTo: providerRole)
         .get();
 
     final previous = await _offers.where('jobId', isEqualTo: jobId).get();
@@ -203,17 +232,25 @@ class JobRepository {
           final vehicleTypeIds = List<String>.from(
             data['vehicleTypeIds'] as List? ?? const [],
           );
+          final role = data['role'] as String? ?? '';
+          final defaultName = switch (role) {
+            'workshop' => 'ورشة',
+            'oilWorkshop' => 'ورشة زيوت',
+            _ => 'فني',
+          };
           return (
             id: d.id,
             online: data['isOnline'] == true,
             km: km,
             token: data['fcmToken'] as String?,
-            name: data['name'] as String? ?? 'فني',
+            name: data['name'] as String? ?? defaultName,
             rating: (data['ratingAvg'] as num?)?.toDouble() ?? 5,
             verified: data['verified'] as bool? ?? false,
             wallet: (data['walletBalance'] as num?)?.toDouble() ?? 0,
             serviceIds: serviceIds,
             vehicleTypeIds: vehicleTypeIds,
+            isWorkshop: role == 'workshop',
+            oilWorkshopTier: data['oilWorkshopTier'] as String? ?? '',
           );
         })
         .where((t) => t.online)
@@ -221,9 +258,10 @@ class JobRepository {
             t.serviceIds.isEmpty || t.serviceIds.contains(job.serviceId))
         .where((t) => t.km <= AppConstants.maxMatchKm)
         .where((t) => t.verified)
-        .where((t) => t.wallet >= minWallet)
+        .where((t) => t.isWorkshop || t.wallet >= minWallet)
         .where((t) => !used.contains(t.id))
         .where((t) {
+          if (t.isWorkshop) return true;
           final needed = job.vehicleTypeId;
           if (needed == null || needed.isEmpty) return true;
           if (t.vehicleTypeIds.isEmpty) return true;
@@ -261,6 +299,12 @@ class JobRepository {
         'ratingAvg': t.rating,
         'distanceKm': t.km,
         'verified': t.verified,
+        'partName': job.partName,
+        'carMake': job.carMake,
+        'carModel': job.carModel,
+        'providerKind': job.providerKind,
+        if (t.oilWorkshopTier.isNotEmpty)
+          'oilWorkshopTier': t.oilWorkshopTier,
       });
     }
     batch.update(_jobs.doc(jobId), {
@@ -275,6 +319,11 @@ class JobRepository {
     required String technicianId,
     required String technicianName,
     required double initialPrice,
+    String partCondition = '',
+    int warrantyDays = 0,
+    String warrantyNote = '',
+    String deliveryType = '',
+    String vendorNote = '',
   }) async {
     final amountError = AppConstants.serviceAmountError(initialPrice);
     if (amountError != null) throw StateError(amountError);
@@ -298,6 +347,11 @@ class JobRepository {
       technicianId: technicianId,
       technicianName: technicianName,
       initialPrice: initialPrice,
+      partCondition: partCondition,
+      warrantyDays: warrantyDays,
+      warrantyNote: warrantyNote,
+      deliveryType: deliveryType,
+      vendorNote: vendorNote,
     );
   }
 
@@ -355,6 +409,11 @@ class JobRepository {
     required String technicianId,
     required String technicianName,
     required double initialPrice,
+    String partCondition = '',
+    int warrantyDays = 0,
+    String warrantyNote = '',
+    String deliveryType = '',
+    String vendorNote = '',
   }) async {
     final offerRef = _offers.doc(offerId);
     final ok = await _db.runTransaction((tx) async {
@@ -382,6 +441,11 @@ class JobRepository {
         'status': 'submitted',
         'initialPrice': initialPrice,
         'technicianName': technicianName,
+        if (partCondition.isNotEmpty) 'partCondition': partCondition,
+        if (warrantyDays > 0) 'warrantyDays': warrantyDays,
+        if (warrantyNote.isNotEmpty) 'warrantyNote': warrantyNote,
+        if (deliveryType.isNotEmpty) 'deliveryType': deliveryType,
+        if (vendorNote.isNotEmpty) 'vendorNote': vendorNote,
       });
       return true;
     });
@@ -439,11 +503,23 @@ class JobRepository {
   }
 
   Future<void> _assignOffer(String jobId, JobOffer offer) async {
+    final warrantyDays = offer.warrantyDays;
+    final warrantyNote = offer.warrantyNote;
     await _jobs.doc(jobId).update({
       'technicianId': offer.technicianId,
       'technicianName': offer.technicianName ?? 'فني',
       'initialPrice': offer.initialPrice,
       'status': JobStatus.quoted.name,
+      if (offer.partCondition.isNotEmpty) 'partCondition': offer.partCondition,
+      if (offer.deliveryType.isNotEmpty) 'deliveryType': offer.deliveryType,
+      if (offer.vendorNote.isNotEmpty) 'vendorNote': offer.vendorNote,
+      if (warrantyDays > 0)
+        'warranty': Warranty(
+          enabled: true,
+          type: WarrantyType.part,
+          days: warrantyDays,
+          note: warrantyNote.isEmpty ? 'ضمان $warrantyDays يوم' : warrantyNote,
+        ).toMap(),
     });
     await _offers.doc(offer.id).update({'status': 'accepted'});
     final others = await _offers.where('jobId', isEqualTo: jobId).get();
@@ -585,6 +661,11 @@ class JobRepository {
 
   Future<void> markArrived(String jobId) {
     return _jobs.doc(jobId).update({'status': JobStatus.arrived.name});
+  }
+
+  /// ورشة قطع الغيار: تأكيد تجهيز/إرسال القطعة للعميل.
+  Future<void> markPartsShipped(String jobId) {
+    return _jobs.doc(jobId).update({'status': JobStatus.inProgress.name});
   }
 
   Future<void> submitFinalQuote({

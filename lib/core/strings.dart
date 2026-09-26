@@ -19,9 +19,19 @@ class AppStrings {
       'حساب العميل جاهز فوراً بعد التأكيد.';
   static const technicianAccountNote =
       'حساب الفني يُرسل لطلب انضمام، ويُفعَّل بعد موافقة الإدارة.';
+  static const workshopAccountNote =
+      'حساب الورشة يُرسل للمراجعة، ويُفعَّل بعد موافقة الإدارة لاستقبال طلبات القطع.';
+  static const oilWorkshopAccountNote =
+      'حساب ورشة الزيوت يُرسل للمراجعة، ويُفعَّل بعد موافقة الإدارة لاستقبال طلبات تبديل الزيت في البيت.';
   static const idCard = 'رقم البطاقة';
   static const skills = 'المهارات / الخدمات';
   static const vehicleTypes = 'أنواع السيارات';
+  static const workshopName = 'اسم الورشة';
+  static const workshopSpecialty = 'اختصاص الورشة';
+  static const workshopOps = 'العمليات المهمة';
+  static const oilWorkshopTier = 'تصنيف الورشة';
+  static const oilWorkshopAgency = 'وكالة أصلية';
+  static const oilWorkshopTrusted = 'موثوقة';
   static const optional = 'اختياري';
   static const forgotPassword = 'نسيت كلمة المرور؟';
   static const resetPassword = 'استعادة كلمة المرور';
@@ -39,6 +49,8 @@ class AppStrings {
   // الأدوار
   static const customer = 'عميل';
   static const technician = 'فني';
+  static const workshop = 'ورشة قطع';
+  static const oilWorkshop = 'ورشة زيوت';
 
   // الرحلة
   static const pickLocation = 'حدد موقعك على الخريطة';

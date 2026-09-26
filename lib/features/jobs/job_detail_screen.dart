@@ -31,7 +31,7 @@ class JobDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
-    final stream = profile.isTechnician
+    final stream = profile.isTechnician || profile.isOilWorkshop
         ? scope.jobs.watchRecentForTechnician(profile.id)
         : scope.jobs.watchRecentForCustomer(profile.id);
     return StreamBuilder<List<Job>>(
@@ -61,7 +61,7 @@ class _Body extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = jobStatusColors(job.status);
     final price = job.receivedAmount ?? job.finalPrice ?? job.initialPrice;
-    final customer = !profile.isTechnician;
+    final customer = !profile.isTechnician && !profile.isOilWorkshop;
     return Scaffold(
       backgroundColor: AppColors.canvas,
       appBar: AppBar(title: Text(jobCode(job))),

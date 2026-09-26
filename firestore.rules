@@ -25,6 +25,15 @@ service cloud.firestore {
     function isTechnicianRole() {
       return hasRole('technician');
     }
+    function isWorkshopRole() {
+      return hasRole('workshop');
+    }
+    function isOilWorkshopRole() {
+      return hasRole('oilWorkshop');
+    }
+    function isProviderRole() {
+      return isTechnicianRole() || isWorkshopRole() || isOilWorkshopRole();
+    }
     // مالك المستند: يُمرَّر له حقل المعرّف من المستند.
     function isOwner(uid) {
       return signedIn() && uid == request.auth.uid;
@@ -55,10 +64,12 @@ service cloud.firestore {
 
       allow read: if isAdmin()
         || isUser(uid)
-        || (signedIn() && resource.data.role == 'technician');
+        || (signedIn() && resource.data.role == 'technician')
+        || (signedIn() && resource.data.role == 'workshop')
+        || (signedIn() && resource.data.role == 'oilWorkshop');
 
       // الفني يقرأ رصيد العميل عند التسوية فقط (قراءة مستند، لا قائمة).
-      allow get: if isTechnicianRole() && resource.data.role == 'customer';
+      allow get: if isProviderRole() && resource.data.role == 'customer';
 
       // الأدمن ينشئ أي حساب؛ التطبيق ينشئ حسابه فقط وفق القيود.
       allow create: if isAdmin()
@@ -72,6 +83,12 @@ service cloud.firestore {
             || (request.resource.data.role == 'technician'
               && request.resource.data.verified == false
               && request.resource.data.verificationStatus == 'pending')
+            || (request.resource.data.role == 'workshop'
+              && request.resource.data.verified == false
+              && request.resource.data.verificationStatus == 'pending')
+            || (request.resource.data.role == 'oilWorkshop'
+              && request.resource.data.verified == false
+              && request.resource.data.verificationStatus == 'pending')
           ));
 
       allow update: if isAdmin()
@@ -79,11 +96,11 @@ service cloud.firestore {
         || (isUser(uid) && commissionDebit())
         || customerWalletSettle();
 
-      // الفني يحدّث رصيد العميل فقط بمبلغ التسوية المسجّل على الطلب الذي يكمله.
+      // الفني/ورشة الزيوت يحدّث رصيد العميل فقط بمبلغ التسوية المسجّل على الطلب الذي يكمله.
       function customerWalletSettle() {
         let jobId = request.resource.data.walletJobId;
         let job = getAfter(/databases/$(database)/documents/jobs/$(jobId)).data;
-        return isTechnicianRole()
+        return (isTechnicianRole() || isOilWorkshopRole())
           && resource.data.role == 'customer'
           && jobId is string
           && request.resource.data.diff(resource.data)

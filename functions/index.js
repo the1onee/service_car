@@ -48,6 +48,20 @@ async function notify(tokens, title, body, data) {
       tokens: chunk,
       notification: { title, body },
       data: payloadData,
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "high_importance_channel",
+          sound: "default",
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+          },
+        },
+      },
     });
     successCount += res.successCount;
     failureCount += res.failureCount;
@@ -57,8 +71,10 @@ async function notify(tokens, title, body, data) {
 
 function audienceRoles(audience) {
   if (audience === "customers") return ["customer"];
-  if (audience === "technicians") return ["technician"];
-  return ["customer", "technician"];
+  if (audience === "technicians") {
+    return ["technician", "workshop", "oilWorkshop"];
+  }
+  return ["customer", "technician", "workshop", "oilWorkshop"];
 }
 
 async function collectFcmTokensForRoles(roles) {
@@ -175,9 +191,18 @@ async function dispatchJobInternal(jobId) {
   }
 
   const emergency = isEmergencyJob(job);
+  const isParts =
+    job.serviceId === "parts" || job.providerKind === "workshop";
+  const isOil =
+    job.serviceId === "oil" || job.providerKind === "oilWorkshop";
+  const providerRole = isParts
+    ? "workshop"
+    : isOil
+      ? "oilWorkshop"
+      : "technician";
   const techs = await db
     .collection("users")
-    .where("role", "==", "technician")
+    .where("role", "==", providerRole)
     .get();
 
   const previous = await db.collection("jobOffers").where("jobId", "==", jobId).get();
@@ -211,26 +236,41 @@ async function dispatchJobInternal(jobId) {
       const serviceIds = Array.isArray(data.serviceIds)
         ? data.serviceIds.filter((id) => typeof id === "string")
         : [];
+      const defaultName =
+        providerRole === "workshop"
+          ? "ورشة"
+          : providerRole === "oilWorkshop"
+            ? "ورشة زيوت"
+            : "فني";
       return {
         id: d.id,
         online: data.isOnline === true,
         km,
         token: data.fcmToken,
-        name: data.name || "فني",
+        name: data.name || defaultName,
         rating: data.ratingAvg || 5,
         verified: !!data.verified,
         wallet: Number(data.walletBalance || 0),
         vehicleTypeIds,
         serviceIds,
+        isWorkshop: providerRole === "workshop",
+        oilWorkshopTier:
+          typeof data.oilWorkshopTier === "string" ? data.oilWorkshopTier : "",
       };
     })
     .filter((t) => t.online)
     .filter((t) => !t.serviceIds.length || t.serviceIds.includes(job.serviceId))
     .filter((t) => t.km <= MAX_KM)
     .filter((t) => t.verified)
-    .filter((t) => t.wallet >= minWallet)
+    .filter((t) => t.isWorkshop || t.wallet >= minWallet)
     .filter((t) => !used.has(t.id))
-    .filter((t) => !neededVehicle || !t.vehicleTypeIds.length || t.vehicleTypeIds.includes(neededVehicle))
+    .filter(
+      (t) =>
+        t.isWorkshop ||
+        !neededVehicle ||
+        !t.vehicleTypeIds.length ||
+        t.vehicleTypeIds.includes(neededVehicle),
+    )
     .sort((a, b) => a.km - b.km)
     .slice(0, emergency ? EMERGENCY_TECHS : QUOTE_TECHS);
 
@@ -243,7 +283,7 @@ async function dispatchJobInternal(jobId) {
   const expires = Timestamp.fromDate(new Date(Date.now() + seconds * 1000));
   const batch = db.batch();
   for (const t of ranked) {
-    batch.set(db.collection("jobOffers").doc(), {
+    const offer = {
       jobId,
       technicianId: t.id,
       status: "pending",
@@ -256,15 +296,25 @@ async function dispatchJobInternal(jobId) {
       ratingAvg: t.rating,
       distanceKm: t.km,
       verified: t.verified,
-    });
+      providerKind: job.providerKind || providerRole,
+    };
+    if (t.oilWorkshopTier) offer.oilWorkshopTier = t.oilWorkshopTier;
+    batch.set(db.collection("jobOffers").doc(), offer);
   }
-  batch.update(jobRef, { status: "offerPending", expiresAt: expires, matchingMode: emergency ? "emergency" : "quotes" });
+  batch.update(jobRef, {
+    status: "offerPending",
+    expiresAt: expires,
+    matchingMode: emergency ? "emergency" : "quotes",
+    providerKind: job.providerKind || providerRole,
+  });
   await batch.commit();
   await notify(
     ranked.map((t) => t.token),
     "طلب جديد",
-    emergency ? "لديك 30 ثانية لقبول الطلب وإدخال السعر المبدئي" : "أرسل سعراً مبدئياً خلال دقائق ليراه العميل",
-    { jobId, type: "offer" }
+    emergency
+      ? "لديك 30 ثانية لقبول الطلب وإدخال السعر المبدئي"
+      : "أرسل سعراً مبدئياً خلال دقائق ليراه العميل",
+    { jobId, type: "offer" },
   );
   return { ok: true, count: ranked.length };
 }
@@ -474,14 +524,25 @@ exports.onJobStatus = onDocumentUpdated("jobs/{jobId}", async (event) => {
   const tToken = tech?.data()?.fcmToken;
 
   const messages = {
+    quoted: { to: "cust", title: "عرض جاهز", body: "فني جاهز — راجع السعر المبدئي" },
     enRoute: { to: "tech", title: "العميل وافق", body: "توجه إلى موقع العميل الحقيقي" },
+    arrived: { to: "cust", title: "الفني وصل", body: "الفني في موقعك" },
     finalQuote: { to: "cust", title: "سعر نهائي", body: `السعر النهائي ${after.finalPrice || ""}` },
     inProgress: { to: "tech", title: "بدء العمل", body: "العميل وافق على السعر النهائي" },
     completed: { to: "cust", title: "انتهت المهمة", body: "قيّم الفني واطلع على الضمان" },
     comparing: { to: "cust", title: "قارن العروض", body: "اختر الفني حسب السعر والتقييم والمسافة" },
+    cancelled: {
+      to: "both",
+      title: "تم إلغاء الطلب",
+      body: "الطلب أُلغي ولم يعد نشطاً",
+    },
   };
   const msg = messages[after.status];
   if (!msg) return;
+  if (msg.to === "both") {
+    await notify([cToken, tToken], msg.title, msg.body, { jobId, type: after.status });
+    return;
+  }
   const token = msg.to === "tech" ? tToken : cToken;
   await notify([token], msg.title, msg.body, { jobId, type: after.status });
 });

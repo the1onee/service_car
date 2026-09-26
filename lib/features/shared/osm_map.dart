@@ -82,7 +82,9 @@ class _OsmMapState extends State<OsmMap> {
             ),
             onTap: widget.onTap == null ? null : (_, point) => widget.onTap!(point),
             onPositionChanged: (pos, hasGesture) {
-              if (!hasGesture || widget.onPositionChanged == null) return;
+              // أثناء السحب لا نُبلّغ الأب (يتجنّب setState المتكرر).
+              // عند انتهاء الحركة hasGesture=false فنُرسل المركز النهائي.
+              if (hasGesture || widget.onPositionChanged == null) return;
               widget.onPositionChanged!(pos.center);
             },
           ),

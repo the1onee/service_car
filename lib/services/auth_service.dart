@@ -110,6 +110,9 @@ class AuthService {
     String idCard = '',
     List<String> serviceIds = const [],
     List<String> vehicleTypeIds = const [],
+    String specialtyAr = '',
+    String workshopOps = '',
+    OilWorkshopTier? oilWorkshopTier,
   }) async {
     final e164 = pendingPhone;
     final user = _auth.currentUser;
@@ -119,14 +122,26 @@ class AuthService {
         message: 'انتهت الجلسة، أعد طلب رمز التحقق.',
       );
     }
-    if (role != UserRole.customer && role != UserRole.technician) {
+    if (role != UserRole.customer &&
+        role != UserRole.technician &&
+        role != UserRole.workshop &&
+        role != UserRole.oilWorkshop) {
       throw FirebaseAuthException(
         code: 'invalid-argument',
         message: 'نوع الحساب غير صالح.',
       );
     }
     final code = _requireCode(smsCode);
-    final isTech = role == UserRole.technician;
+    final needsApproval = role == UserRole.technician ||
+        role == UserRole.workshop ||
+        role == UserRole.oilWorkshop;
+    final resolvedServices = switch (role) {
+      UserRole.workshop =>
+        serviceIds.isEmpty ? const ['parts'] : serviceIds,
+      UserRole.oilWorkshop =>
+        serviceIds.isEmpty ? const ['oil'] : serviceIds,
+      _ => serviceIds,
+    };
 
     try {
       if (kIsWeb) {
@@ -159,12 +174,18 @@ class AuthService {
           phone: e164,
           address: address.trim(),
           idCard: idCard.trim(),
-          serviceIds: serviceIds,
+          serviceIds: resolvedServices,
           vehicleTypeIds: vehicleTypeIds,
+          specialtyAr: specialtyAr.trim(),
+          workshopOps: workshopOps.trim(),
+          oilWorkshopTier: role == UserRole.oilWorkshop
+              ? (oilWorkshopTier ?? OilWorkshopTier.trusted)
+              : null,
           geo: geo,
-          verified: !isTech,
-          verificationStatus:
-              isTech ? VerificationStatus.pending : VerificationStatus.approved,
+          verified: !needsApproval,
+          verificationStatus: needsApproval
+              ? VerificationStatus.pending
+              : VerificationStatus.approved,
         ).toMap(),
         // تحتاجه لوحة التحكم لترتيب الحسابات بتاريخ التسجيل.
         'createdAt': FieldValue.serverTimestamp(),

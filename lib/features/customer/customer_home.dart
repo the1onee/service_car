@@ -10,10 +10,13 @@ import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/geo.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/features/customer/customer_landing.dart';
 import 'package:barrr/features/customer/customer_ledger_page.dart';
 import 'package:barrr/features/customer/job_status_panel.dart';
+import 'package:barrr/features/customer/parts_order_screen.dart';
 import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/jobs/orders_screen.dart';
+import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/warranty/warranties_screen.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
@@ -23,6 +26,7 @@ import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/models/service_item.dart';
 import 'package:barrr/models/vehicle_type.dart';
+import 'package:barrr/services/fcm_service.dart';
 import 'package:barrr/services/location_service.dart';
 
 class CustomerHome extends StatefulWidget {
@@ -44,13 +48,18 @@ class _CustomerHomeState extends State<CustomerHome> {
   var _locStarted = false;
   var _tab = 0;
   var _submitting = false;
+  var _composing = false;
   ServiceItem? _selected;
+  /// نقطة الدخول من الهبوط (`technician` / `oil` / …) لتصفية شبكة الخدمات.
+  String? _entryId;
   VehicleType? _vehicleType;
-  late final Stream<CityZone?> _cityStream;
+  StreamSubscription<CityZone?>? _citySub;
   late final Stream<Job?> _activeJobStream;
   late final Stream<List<Job>> _recentJobsStream;
   late final Stream<List<ServiceItem>> _servicesStream;
   late final Stream<List<VehicleType>> _vehicleTypesStream;
+  VoidCallback? _fcmFocusListener;
+  FcmService? _fcm;
 
   @override
   void didChangeDependencies() {
@@ -58,12 +67,38 @@ class _CustomerHomeState extends State<CustomerHome> {
     if (_locStarted) return;
     _locStarted = true;
     final scope = AppScope.of(context);
-    _cityStream = scope.settings.watchActiveCity();
+    _fcm = scope.fcm;
     _activeJobStream = scope.jobs.watchActiveForCustomer(widget.profile.id);
     _recentJobsStream = scope.jobs.watchRecentForCustomer(widget.profile.id);
     _servicesStream = scope.users.watchServices();
     _vehicleTypesStream = scope.users.watchVehicleTypes();
+    _citySub = scope.settings.watchActiveCity().listen((zone) {
+      if (!mounted) return;
+      if (zone?.nameAr == _zone?.nameAr &&
+          zone?.centerLat == _zone?.centerLat) {
+        return;
+      }
+      setState(() => _zone = zone);
+    });
+    _fcmFocusListener = () {
+      final id = scope.fcm.focusJobId.value;
+      if (id == null || id.isEmpty || !mounted) return;
+      setState(() => _tab = 0);
+      scope.fcm.focusJobId.value = null;
+    };
+    scope.fcm.focusJobId.addListener(_fcmFocusListener!);
+    _fcmFocusListener!();
     _initLocation();
+  }
+
+  @override
+  void dispose() {
+    if (_fcmFocusListener != null) {
+      _fcm?.focusJobId.removeListener(_fcmFocusListener!);
+    }
+    _citySub?.cancel();
+    _timeoutWatch?.cancel();
+    super.dispose();
   }
 
   Future<void> _initLocation() async {
@@ -87,12 +122,6 @@ class _CustomerHomeState extends State<CustomerHome> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _map.move(loc, settings.defaultZoom);
     });
-  }
-
-  @override
-  void dispose() {
-    _timeoutWatch?.cancel();
-    super.dispose();
   }
 
   bool _pinInZone() {
@@ -198,8 +227,9 @@ class _CustomerHomeState extends State<CustomerHome> {
   }
 
   void _selectMapPoint(LatLng point) {
-    setState(() => _pin = point);
+    _pin = point;
     _map.move(point, _zoom);
+    setState(() {});
   }
 
   Future<void> _recenter() async {
@@ -224,59 +254,141 @@ class _CustomerHomeState extends State<CustomerHome> {
         ),
       );
     }
-    setState(() => _pin = result.latLng);
+    _pin = result.latLng;
     _map.move(result.latLng, _zoom);
+    setState(() {});
+  }
+
+  void _syncPinFromMap(LatLng center) {
+    // يُستدعى فقط عند انتهاء السحب (OsmMap يتجاهل hasGesture=true).
+    if (_pin.latitude == center.latitude &&
+        _pin.longitude == center.longitude) {
+      return;
+    }
+    _pin = center;
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<CityZone?>(
-      stream: _cityStream,
-      builder: (context, zoneSnap) {
-        final zone = zoneSnap.data ?? _zone;
-        if (zoneSnap.hasData) _zone = zone;
-        return StreamBuilder<Job?>(
-          stream: _activeJobStream,
-          builder: (context, snap) {
-            final job = snap.data;
-            _watchTimeout(job, context);
-            return FieldShell(
-              tab: _tab,
-              onTab: (i) => setState(() => _tab = i),
-              items: const [
-                FieldNavItem(
-                    icon: Icons.home_repair_service_outlined,
-                    label: 'الرئيسية'),
-                FieldNavItem(icon: Icons.assignment_outlined, label: 'الطلبات'),
-                FieldNavItem(
-                    icon: Icons.account_balance_wallet_outlined,
-                    label: 'المحفظة'),
-                FieldNavItem(icon: Icons.person_outline_rounded, label: 'حسابي'),
-              ],
-              body: IndexedStack(
-                index: _tab,
-                children: [
-                  _mapBody(job, zone),
-                  OrdersScreen(
-                    stream: _recentJobsStream,
-                    profile: widget.profile,
-                  ),
-                  CustomerLedgerPage(
-                    stream: _recentJobsStream,
-                    profile: widget.profile,
-                    city: zone?.nameAr,
-                  ),
-                  _account(zone?.nameAr),
-                ],
+    final zoneName = _zone?.nameAr;
+    return FieldShell(
+      tab: _tab,
+      onTab: (i) => setState(() => _tab = i),
+      items: const [
+        FieldNavItem(
+            icon: Icons.home_repair_service_outlined, label: 'الرئيسية'),
+        FieldNavItem(icon: Icons.assignment_outlined, label: 'الطلبات'),
+        FieldNavItem(
+            icon: Icons.account_balance_wallet_outlined, label: 'المحفظة'),
+        FieldNavItem(icon: Icons.person_outline_rounded, label: 'حسابي'),
+      ],
+      body: IndexedStack(
+        index: _tab,
+        children: [
+          _homeTab(),
+          OrdersScreen(
+            stream: _recentJobsStream,
+            profile: widget.profile,
+          ),
+          CustomerLedgerPage(
+            stream: _recentJobsStream,
+            profile: widget.profile,
+            city: zoneName,
+          ),
+          _account(zoneName),
+        ],
+      ),
+    );
+  }
+
+  /// تبويب الخريطة فقط يستمع للطلب النشط — لا يعيد بناء باقي التبويبات.
+  Widget _homeTab() {
+    return StreamBuilder<Job?>(
+      stream: _activeJobStream,
+      builder: (context, snap) {
+        final job = snap.data;
+        _watchTimeout(job, context);
+        if (job != null) {
+          if (_composing) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _composing) {
+                setState(() => _composing = false);
+              }
+            });
+          }
+          return _mapBody(job, _zone);
+        }
+        if (_composing) {
+          return _mapBody(null, _zone, showBack: true);
+        }
+        return CustomerLanding(
+          profile: widget.profile,
+          city: _zone?.nameAr,
+          addressLabel: _addressLabel,
+          services: _servicesStream,
+          recentJobs: _recentJobsStream,
+          onServiceTap: _onLandingService,
+          onEmergencyTap: _onEmergency,
+          onOpenWarranties: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => WarrantiesScreen(
+                  stream: _recentJobsStream,
+                  profile: widget.profile,
+                ),
               ),
             );
           },
+          onOpenAccount: () => setState(() => _tab = 3),
         );
       },
     );
   }
 
-  Widget _mapBody(Job? job, CityZone? zone) {
+  Future<void> _onLandingService(ServiceItem s) async {
+    if (s.id == 'parts') {
+      await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => PartsOrderScreen(
+            profile: widget.profile,
+            service: s,
+          ),
+        ),
+      );
+      return;
+    }
+    setState(() {
+      _entryId = s.id;
+      // للفني نفتح الشبكة المفلترة دون اختيار مسبق؛ لبقية البلاطات نثبت الخدمة.
+      _selected = s.id == 'technician' ? null : s;
+      _composing = true;
+    });
+  }
+
+  Future<void> _onEmergency() async {
+    final list = await _servicesStream.first;
+    final items = list.isEmpty ? seedServices : list;
+    ServiceItem? emergency;
+    for (final s in items) {
+      if (s.isEmergency || s.id == 'towing') {
+        emergency = s;
+        if (s.id == 'towing') break;
+      }
+    }
+    emergency ??= items.firstWhere(
+      (s) => s.id == 'towing',
+      orElse: () => seedServices.firstWhere((s) => s.id == 'towing'),
+    );
+    if (!mounted) return;
+    setState(() {
+      _entryId = emergency!.id;
+      _selected = emergency;
+      _composing = true;
+    });
+  }
+
+  Widget _mapBody(Job? job, CityZone? zone, {bool showBack = false}) {
     final markers = <Marker>[
       if (job != null)
         pinMarker(
@@ -304,10 +416,11 @@ class _CustomerHomeState extends State<CustomerHome> {
             circles: circles,
             markers: markers,
             onTap: job == null ? _selectMapPoint : null,
-            onPositionChanged: job == null
-                ? (c) => setState(() => _pin = c)
-                : null,
-            onLocated: (point) => setState(() => _pin = point),
+            onPositionChanged: job == null ? _syncPinFromMap : null,
+            onLocated: (point) {
+              _pin = point;
+              setState(() {});
+            },
           ),
         if (_ready && job == null)
           const IgnorePointer(
@@ -323,7 +436,26 @@ class _CustomerHomeState extends State<CustomerHome> {
           top: 0,
           left: 0,
           right: 0,
-          child: FieldTopBar(city: zone?.nameAr),
+          child: FieldTopBar(
+            city: zone?.nameAr,
+            caption: showBack ? 'تحديد الموقع والطلب' : 'خدمة ميدانية',
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (showBack)
+                  IconButton(
+                    tooltip: 'رجوع',
+                    onPressed: () => setState(() {
+                      _composing = false;
+                      _selected = null;
+                      _entryId = null;
+                    }),
+                    icon: const Icon(Icons.arrow_forward_ios_rounded, size: 18),
+                  ),
+                NotificationsBellButton(uid: widget.profile.id),
+              ],
+            ),
+          ),
         ),
         if (_ready && job != null)
           Positioned(
@@ -357,10 +489,12 @@ class _CustomerHomeState extends State<CustomerHome> {
         Expanded(child: map),
         job == null
             ? _RequestComposer(
+                profile: widget.profile,
                 zone: zone,
                 inZone: _pinInZone(),
                 addressLabel: _addressLabel,
                 selected: _selected,
+                entryId: _entryId,
                 vehicleType: _vehicleType,
                 services: _servicesStream,
                 vehicleTypes: _vehicleTypesStream,
@@ -384,7 +518,11 @@ class _CustomerHomeState extends State<CustomerHome> {
     final jobs = _recentJobsStream;
     return Column(
       children: [
-        FieldTopBar(city: city, caption: 'حسابي'),
+        FieldTopBar(
+          city: city,
+          caption: 'حسابي',
+          trailing: NotificationsBellButton(uid: me.id),
+        ),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -536,10 +674,12 @@ class _MapButton extends StatelessWidget {
 
 class _RequestComposer extends StatelessWidget {
   const _RequestComposer({
+    required this.profile,
     required this.zone,
     required this.inZone,
     required this.addressLabel,
     required this.selected,
+    required this.entryId,
     required this.vehicleType,
     required this.services,
     required this.vehicleTypes,
@@ -550,10 +690,12 @@ class _RequestComposer extends StatelessWidget {
     required this.onSubmit,
   });
 
+  final AppUser profile;
   final CityZone? zone;
   final bool inZone;
   final String addressLabel;
   final ServiceItem? selected;
+  final String? entryId;
   final VehicleType? vehicleType;
   final Stream<List<ServiceItem>> services;
   final Stream<List<VehicleType>> vehicleTypes;
@@ -682,80 +824,107 @@ class _RequestComposer extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            const SectionLabel('حدد نوع الخدمة'),
-            StreamBuilder<List<ServiceItem>>(
-              stream: services,
-              builder: (context, snap) {
-                final loaded = snap.data;
-                final items = (loaded == null || loaded.isEmpty)
-                    ? seedServices
-                    : loaded;
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: items.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisExtent: 88,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
-                  itemBuilder: (context, i) {
-                    final s = items[i];
-                    final on = selected?.id == s.id;
-                    return InkWell(
-                      onTap: () => onSelect(s),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: on
-                              ? (s.isEmergency
-                                  ? AppColors.slate
-                                  : AppColors.recessed)
-                              : AppColors.surface,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
+            if (entryId == 'technician' ||
+                (entryId != null && selected == null)) ...[
+              const SectionLabel('حدد نوع الخدمة'),
+              StreamBuilder<List<ServiceItem>>(
+                stream: services,
+                builder: (context, snap) {
+                  final loaded = snap.data;
+                  final raw = (loaded == null || loaded.isEmpty)
+                      ? seedServices
+                      : loaded;
+                  final items = filterServicesForEntry(entryId, raw);
+                  if (items.isEmpty) {
+                    return const Text(
+                      'لا توجد خدمات متاحة حالياً.',
+                      style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
+                    );
+                  }
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: items.length,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisExtent: 88,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                    ),
+                    itemBuilder: (context, i) {
+                      final s = items[i];
+                      final on = selected?.id == s.id;
+                      return InkWell(
+                        onTap: () => onSelect(s),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
                             color: on
                                 ? (s.isEmergency
                                     ? AppColors.slate
-                                    : AppColors.amber)
-                                : AppColors.outline,
-                            width: on ? 1.5 : 1,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              _serviceIcon(s.id),
-                              size: 20,
-                              color: on && s.isEmergency
-                                  ? AppColors.amber
-                                  : AppColors.ink,
+                                    : AppColors.recessed)
+                                : AppColors.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: on
+                                  ? (s.isEmergency
+                                      ? AppColors.slate
+                                      : AppColors.amber)
+                                  : AppColors.outline,
+                              width: on ? 1.5 : 1,
                             ),
-                            const Spacer(),
-                            Text(
-                              s.titleAr,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                _serviceIcon(s.id),
+                                size: 20,
                                 color: on && s.isEmergency
-                                    ? Colors.white
+                                    ? AppColors.amber
                                     : AppColors.ink,
                               ),
-                            ),
-                          ],
+                              const Spacer(),
+                              Text(
+                                s.titleAr,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                  color: on && s.isEmergency
+                                      ? Colors.white
+                                      : AppColors.ink,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                      );
+                    },
+                  );
+                },
+              ),
+              const SizedBox(height: 14),
+            ] else if (selected != null) ...[
+              FieldCard(
+                child: Row(
+                  children: [
+                    Icon(_serviceIcon(selected!.id), color: AppColors.amberDeep),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        selected!.titleAr,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
-                    );
-                  },
-                );
-              },
-            ),
-            const SizedBox(height: 14),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
             const SectionLabel(AppStrings.pickVehicleType),
             StreamBuilder<List<VehicleType>>(
               stream: vehicleTypes,
@@ -808,6 +977,8 @@ class _RequestComposer extends StatelessWidget {
 
 IconData _serviceIcon(String id) {
   switch (id) {
+    case 'technician':
+      return Icons.handyman_outlined;
     case 'battery':
       return Icons.battery_charging_full;
     case 'towing':
@@ -820,6 +991,12 @@ IconData _serviceIcon(String id) {
       return Icons.key_outlined;
     case 'oil':
       return Icons.oil_barrel_outlined;
+    case 'wash':
+      return Icons.local_car_wash_outlined;
+    case 'parts':
+      return Icons.settings_suggest_outlined;
+    case 'paint':
+      return Icons.format_paint_outlined;
     case 'ac':
       return Icons.ac_unit;
     default:

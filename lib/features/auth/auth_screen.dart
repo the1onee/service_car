@@ -36,11 +36,14 @@ class _AuthScreenState extends State<AuthScreen> {
   final _confirm = TextEditingController();
   final _address = TextEditingController();
   final _idCard = TextEditingController();
+  final _specialty = TextEditingController();
+  final _workshopOps = TextEditingController();
   final _otp = TextEditingController();
   GeoPoint? _registerGeo;
 
   _Stage _stage = _Stage.login;
   UserRole _registerRole = UserRole.customer;
+  OilWorkshopTier _oilWorkshopTier = OilWorkshopTier.trusted;
   final Set<String> _skills = {};
   final Set<String> _vehicleTypes = {};
   OtpPurpose _purpose = OtpPurpose.register;
@@ -64,6 +67,8 @@ class _AuthScreenState extends State<AuthScreen> {
       _confirm,
       _address,
       _idCard,
+      _specialty,
+      _workshopOps,
       _otp,
     ]) {
       c.dispose();
@@ -144,8 +149,20 @@ class _AuthScreenState extends State<AuthScreen> {
           geo: _registerGeo,
           role: _registerRole,
           idCard: _idCard.text,
-          serviceIds: _skills.toList(),
-          vehicleTypeIds: _vehicleTypes.toList(),
+          serviceIds: switch (_registerRole) {
+            UserRole.workshop => const ['parts'],
+            UserRole.oilWorkshop => const ['oil'],
+            _ => _skills.toList(),
+          },
+          vehicleTypeIds: _registerRole == UserRole.oilWorkshop ||
+                  _registerRole == UserRole.technician
+              ? _vehicleTypes.toList()
+              : const [],
+          specialtyAr: _specialty.text,
+          workshopOps: _workshopOps.text,
+          oilWorkshopTier: _registerRole == UserRole.oilWorkshop
+              ? _oilWorkshopTier
+              : null,
         );
         return;
       }
@@ -435,14 +452,31 @@ class _AuthScreenState extends State<AuthScreen> {
                 textInputAction: TextInputAction.next,
                 textCapitalization: TextCapitalization.words,
                 autofillHints: const [AutofillHints.name],
-                  decoration: const InputDecoration(
-                  labelText: AppStrings.name,
-                  hintText: 'مثال: علي حسن الجابري',
-                  prefixIcon: Icon(Icons.person_outline_rounded),
+                decoration: InputDecoration(
+                  labelText: _registerRole == UserRole.workshop ||
+                          _registerRole == UserRole.oilWorkshop
+                      ? AppStrings.workshopName
+                      : AppStrings.name,
+                  hintText: _registerRole == UserRole.oilWorkshop
+                      ? 'مثال: وكالة تويوتا — خدمة زيوت متنقلة'
+                      : (_registerRole == UserRole.workshop
+                          ? 'مثال: ورشة النور لقطع الغيار'
+                          : 'مثال: علي حسن الجابري'),
+                  prefixIcon: Icon(
+                    _registerRole == UserRole.workshop ||
+                            _registerRole == UserRole.oilWorkshop
+                        ? Icons.storefront_outlined
+                        : Icons.person_outline_rounded,
+                  ),
                 ),
                 validator: (v) {
                   final name = (v ?? '').trim();
-                  if (name.length < 3) return 'أدخل الاسم الكامل.';
+                  if (name.length < 3) {
+                    return _registerRole == UserRole.workshop ||
+                            _registerRole == UserRole.oilWorkshop
+                        ? 'أدخل اسم الورشة.'
+                        : 'أدخل الاسم الكامل.';
+                  }
                   return null;
                 },
               ),
@@ -472,7 +506,9 @@ class _AuthScreenState extends State<AuthScreen> {
                   return null;
                 },
               ),
-              if (_registerRole == UserRole.technician) ...[
+              if (_registerRole == UserRole.technician ||
+                  _registerRole == UserRole.workshop ||
+                  _registerRole == UserRole.oilWorkshop) ...[
                 const SizedBox(height: 14),
                 TextFormField(
                   controller: _idCard,
@@ -481,6 +517,94 @@ class _AuthScreenState extends State<AuthScreen> {
                     labelText: AppStrings.idCard,
                     hintText: AppStrings.optional,
                     prefixIcon: Icon(Icons.badge_outlined),
+                  ),
+                ),
+              ],
+              if (_registerRole == UserRole.oilWorkshop) ...[
+                const SizedBox(height: 14),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    AppStrings.oilWorkshopTier,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.inkSoft,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilterChip(
+                        label: const Text(AppStrings.oilWorkshopAgency),
+                        selected:
+                            _oilWorkshopTier == OilWorkshopTier.agency,
+                        onSelected: (_) => setState(
+                          () => _oilWorkshopTier = OilWorkshopTier.agency,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilterChip(
+                        label: const Text(AppStrings.oilWorkshopTrusted),
+                        selected:
+                            _oilWorkshopTier == OilWorkshopTier.trusted,
+                        onSelected: (_) => setState(
+                          () => _oilWorkshopTier = OilWorkshopTier.trusted,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _specialty,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: AppStrings.workshopSpecialty,
+                    hintText: 'مثال: زيوت وكالة / فلاتر أصلية',
+                    prefixIcon: Icon(Icons.oil_barrel_outlined),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _workshopOps,
+                  maxLines: 2,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: AppStrings.workshopOps,
+                    hintText: 'مثال: تبديل زيت في الموقع، زيوت أصلية، فلاتر',
+                    prefixIcon: Icon(Icons.handyman_outlined),
+                    alignLabelWithHint: true,
+                  ),
+                ),
+              ],
+              if (_registerRole == UserRole.workshop) ...[
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _specialty,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: AppStrings.workshopSpecialty,
+                    hintText: 'مثال: قطع غيار ياباني / كهرباء سيارات',
+                    prefixIcon: Icon(Icons.category_outlined),
+                  ),
+                  validator: (v) => (v ?? '').trim().length < 2
+                      ? 'أدخل اختصاص الورشة.'
+                      : null,
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _workshopOps,
+                  maxLines: 2,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: AppStrings.workshopOps,
+                    hintText: 'مثال: توفير قطع أصلية، توصيل، فحص قبل البيع',
+                    prefixIcon: Icon(Icons.handyman_outlined),
+                    alignLabelWithHint: true,
                   ),
                 ),
               ],
@@ -533,7 +657,9 @@ class _AuthScreenState extends State<AuthScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    for (final s in seedServices)
+                    for (final s in seedServices.where(
+                      (s) => s.id != 'oil' && s.id != 'parts',
+                    ))
                       FilterChip(
                         label: Text(s.titleAr),
                         selected: _skills.contains(s.id),
@@ -547,6 +673,38 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                   ],
                 ),
+                const SizedBox(height: 16),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    '${AppStrings.vehicleTypes} (${AppStrings.optional})',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.inkSoft,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final t in seedVehicleTypes)
+                      FilterChip(
+                        label: Text(t.nameAr),
+                        selected: _vehicleTypes.contains(t.id),
+                        onSelected: (on) => setState(() {
+                          if (on) {
+                            _vehicleTypes.add(t.id);
+                          } else {
+                            _vehicleTypes.remove(t.id);
+                          }
+                        }),
+                      ),
+                  ],
+                ),
+              ],
+              if (_registerRole == UserRole.oilWorkshop) ...[
                 const SizedBox(height: 16),
                 Align(
                   alignment: AlignmentDirectional.centerStart,
@@ -935,22 +1093,46 @@ class _RolePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: _roleTile(
-            label: AppStrings.customer,
-            selected: role == UserRole.customer,
-            onTap: () => onChanged(UserRole.customer),
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _roleTile(
+                label: AppStrings.customer,
+                selected: role == UserRole.customer,
+                onTap: () => onChanged(UserRole.customer),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _roleTile(
+                label: AppStrings.technician,
+                selected: role == UserRole.technician,
+                onTap: () => onChanged(UserRole.technician),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _roleTile(
-            label: AppStrings.technician,
-            selected: role == UserRole.technician,
-            onTap: () => onChanged(UserRole.technician),
-          ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _roleTile(
+                label: AppStrings.workshop,
+                selected: role == UserRole.workshop,
+                onTap: () => onChanged(UserRole.workshop),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _roleTile(
+                label: AppStrings.oilWorkshop,
+                selected: role == UserRole.oilWorkshop,
+                onTap: () => onChanged(UserRole.oilWorkshop),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -997,10 +1179,29 @@ class _RoleNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isTech = role == UserRole.technician;
+    final isWorkshop = role == UserRole.workshop;
+    final isOilWorkshop = role == UserRole.oilWorkshop;
+    final tint = isOilWorkshop
+        ? AppColors.amberTint
+        : (isWorkshop
+            ? AppColors.recessed
+            : (isTech ? AppColors.amberTint : AppColors.petrolTint));
+    final badge = isOilWorkshop
+        ? AppColors.amber
+        : (isWorkshop
+            ? AppColors.slate
+            : (isTech ? AppColors.amber : AppColors.petrol));
+    final note = isOilWorkshop
+        ? AppStrings.oilWorkshopAccountNote
+        : (isWorkshop
+            ? AppStrings.workshopAccountNote
+            : (isTech
+                ? AppStrings.technicianAccountNote
+                : AppStrings.customerAccountNote));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: isTech ? AppColors.amberTint : AppColors.petrolTint,
+        color: tint,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
@@ -1009,25 +1210,31 @@ class _RoleNotice extends StatelessWidget {
             height: 34,
             width: 34,
             decoration: BoxDecoration(
-              color: isTech ? AppColors.amber : AppColors.petrol,
+              color: badge,
               shape: BoxShape.circle,
             ),
             child: Icon(
-              isTech ? Icons.handyman_rounded : Icons.person_rounded,
-              color: isTech ? AppColors.ink : Colors.white,
+              isOilWorkshop
+                  ? Icons.oil_barrel_rounded
+                  : (isWorkshop
+                      ? Icons.storefront_rounded
+                      : (isTech
+                          ? Icons.handyman_rounded
+                          : Icons.person_rounded)),
+              color: isTech || isOilWorkshop ? AppColors.ink : Colors.white,
               size: 19,
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              isTech
-                  ? AppStrings.technicianAccountNote
-                  : AppStrings.customerAccountNote,
+              note,
               style: TextStyle(
                 fontSize: 12.5,
                 height: 1.5,
-                color: isTech ? AppColors.ink : AppColors.petrolDark,
+                color: isTech || isOilWorkshop
+                    ? AppColors.ink
+                    : AppColors.petrolDark,
                 fontWeight: FontWeight.w600,
               ),
             ),

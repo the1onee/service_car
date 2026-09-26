@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:barrr/firebase_options.dart';
 import 'package:barrr/services/user_repository.dart';
@@ -18,21 +19,32 @@ class FcmService {
   final UserRepository _users;
   final GlobalKey<ScaffoldMessengerState>? messengerKey;
 
+  /// عند فتح إشعار يحمل jobId — الشاشات الرئيسية تنتقل لتبويب الطلب.
+  final ValueNotifier<String?> focusJobId = ValueNotifier<String?>(null);
+
   StreamSubscription<String>? _tokenSub;
   StreamSubscription<RemoteMessage>? _foregroundSub;
   StreamSubscription<RemoteMessage>? _openedSub;
   var _listening = false;
 
   Future<void> init(String uid) async {
+    if (kIsWeb) return;
     try {
       final messaging = FirebaseMessaging.instance;
 
-      await messaging.requestPermission(
+      final settings = await messaging.requestPermission(
         alert: true,
         badge: true,
         sound: true,
         provisional: false,
       );
+      final allowed =
+          settings.authorizationStatus == AuthorizationStatus.authorized ||
+          settings.authorizationStatus == AuthorizationStatus.provisional;
+      if (!allowed) {
+        debugPrint('FCM permission denied: ${settings.authorizationStatus}');
+        return;
+      }
 
       await messaging.setForegroundNotificationPresentationOptions(
         alert: true,
@@ -80,12 +92,19 @@ class FcmService {
           content: Text(text),
           duration: const Duration(seconds: 6),
           behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'عرض',
+            onPressed: () => _onOpened(message),
+          ),
         ),
       );
   }
 
   void _onOpened(RemoteMessage message) {
-    // الحمولة متاحة للتنقل لاحقاً (مثل jobId). حالياً يكفي العرض عند الفتح.
+    final jobId = message.data['jobId']?.toString().trim();
+    if (jobId != null && jobId.isNotEmpty) {
+      focusJobId.value = jobId;
+    }
     debugPrint('FCM opened: ${message.messageId} data=${message.data}');
   }
 

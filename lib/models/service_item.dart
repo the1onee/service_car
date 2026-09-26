@@ -1,3 +1,41 @@
+/// نوع جهة تقديم الخدمة — يحدد مسار العرض والطلب.
+enum ServiceProviderKind {
+  fieldTech,
+  mobile,
+  partsShop,
+  paintShop,
+}
+
+extension ServiceProviderKindX on ServiceProviderKind {
+  String get firestoreValue => switch (this) {
+        ServiceProviderKind.fieldTech => 'field_tech',
+        ServiceProviderKind.mobile => 'mobile',
+        ServiceProviderKind.partsShop => 'parts_shop',
+        ServiceProviderKind.paintShop => 'paint_shop',
+      };
+
+  String get labelAr => switch (this) {
+        ServiceProviderKind.fieldTech => 'فني ميداني',
+        ServiceProviderKind.mobile => 'خدمة متنقلة في موقعك',
+        ServiceProviderKind.partsShop => 'ورش ومورّدو قطع غيار',
+        ServiceProviderKind.paintShop => 'ورش الدهان الرسمية',
+      };
+
+  static ServiceProviderKind fromFirestore(String? raw) {
+    switch (raw) {
+      case 'field_tech':
+        return ServiceProviderKind.fieldTech;
+      case 'parts_shop':
+        return ServiceProviderKind.partsShop;
+      case 'paint_shop':
+        return ServiceProviderKind.paintShop;
+      case 'mobile':
+      default:
+        return ServiceProviderKind.mobile;
+    }
+  }
+}
+
 class ServiceItem {
   const ServiceItem({
     required this.id,
@@ -8,6 +46,8 @@ class ServiceItem {
     this.commissionPercent = 10,
     this.discountPercent = 0,
     this.descriptionAr = '',
+    this.highlightsAr = const [],
+    this.providerKind = ServiceProviderKind.mobile,
     this.sortOrder = 0,
   });
 
@@ -21,6 +61,8 @@ class ServiceItem {
   /// نسبة خصم ترويجي تظهر للزبون (0–100).
   final double discountPercent;
   final String descriptionAr;
+  final List<String> highlightsAr;
+  final ServiceProviderKind providerKind;
   final int sortOrder;
 
   /// معدل العمولة ككسر (مثلاً 0.10 لـ 10%).
@@ -34,6 +76,8 @@ class ServiceItem {
         'commissionPercent': commissionPercent,
         'discountPercent': discountPercent,
         'descriptionAr': descriptionAr,
+        'highlightsAr': highlightsAr,
+        'providerKind': providerKind.firestoreValue,
         'sortOrder': sortOrder,
       };
 
@@ -41,6 +85,13 @@ class ServiceItem {
     final discountRaw = data['discountPercent'];
     final commissionRaw = data['commissionPercent'];
     final sortRaw = data['sortOrder'];
+    final highlightsRaw = data['highlightsAr'];
+    final highlights = highlightsRaw is List
+        ? highlightsRaw
+            .map((e) => e.toString().trim())
+            .where((e) => e.isNotEmpty)
+            .toList()
+        : const <String>[];
     return ServiceItem(
       id: id,
       titleAr: data['titleAr'] as String? ?? id,
@@ -49,8 +100,12 @@ class ServiceItem {
       active: data['active'] as bool? ?? true,
       commissionPercent:
           commissionRaw is num ? commissionRaw.toDouble().clamp(0, 100) : 10,
-      discountPercent: discountRaw is num ? discountRaw.toDouble().clamp(0, 100) : 0,
+      discountPercent:
+          discountRaw is num ? discountRaw.toDouble().clamp(0, 100) : 0,
       descriptionAr: data['descriptionAr'] as String? ?? '',
+      highlightsAr: highlights,
+      providerKind:
+          ServiceProviderKindX.fromFirestore(data['providerKind'] as String?),
       sortOrder: sortRaw is num ? sortRaw.toInt() : 0,
     );
   }

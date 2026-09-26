@@ -9,4 +9,5 @@ class Cols {
   static const serviceAreas = 'serviceAreas';
   static const walletEntries = 'walletEntries';
   static const walletTopUps = 'walletTopUps';
+  static const notifications = 'notifications';
 }

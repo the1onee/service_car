@@ -18,17 +18,36 @@ class QuoteCompareList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final oil = job.isOilOrder;
+    final emptyLabel = oil
+        ? 'لم تصل عروض بعد. انتظر ورش الزيوت القريبة.'
+        : 'لم تصل عروض بعد. انتظر الفنيين القريبين.';
+    final pickLabel = oil ? 'اختيار هذه الورشة' : 'اختيار هذا الفني';
+
     return StreamBuilder<List<JobOffer>>(
       stream: AppScope.of(context).jobs.watchJobQuotes(job.id),
       builder: (context, snap) {
         final quotes = snap.data ?? const <JobOffer>[];
         if (quotes.isEmpty) {
-          return const Text('لم تصل عروض بعد. انتظر الفنيين القريبين.');
+          return Text(emptyLabel);
         }
+        final sorted = [...quotes]..sort((a, b) {
+            // وكالات أصلية أولاً ثم الموثوقة ثم الباقي.
+            int rank(JobOffer q) {
+              if (q.isAgencyOilWorkshop) return 0;
+              if (q.isTrustedOilWorkshop) return 1;
+              return 2;
+            }
+
+            final byTier = rank(a).compareTo(rank(b));
+            if (byTier != 0) return byTier;
+            return (a.initialPrice ?? double.infinity)
+                .compareTo(b.initialPrice ?? double.infinity);
+          });
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final q in quotes)
+            for (final q in sorted)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: FieldCard(
@@ -39,12 +58,24 @@ class QuoteCompareList extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              q.technicianName ?? 'فني',
+                              q.technicianName ?? (oil ? 'ورشة زيوت' : 'فني'),
                               style:
                                   const TextStyle(fontWeight: FontWeight.w700),
                             ),
                           ),
-                          if (q.verified)
+                          if (oil && q.isAgencyOilWorkshop)
+                            const StatusPill(
+                              label: AppStrings.oilWorkshopAgency,
+                              icon: Icons.verified,
+                              color: AppColors.petrolDark,
+                              background: AppColors.petrolTint,
+                            )
+                          else if (oil && q.isTrustedOilWorkshop)
+                            const StatusPill(
+                              label: AppStrings.oilWorkshopTrusted,
+                              icon: Icons.shield_outlined,
+                            )
+                          else if (q.verified)
                             const StatusPill(
                               label: AppStrings.verifiedBadge,
                               icon: Icons.verified_outlined,
@@ -76,7 +107,7 @@ class QuoteCompareList extends StatelessWidget {
                                     jobId: job.id,
                                     offer: q,
                                   ),
-                          child: const Text('اختيار هذا الفني'),
+                          child: Text(pickLabel),
                         ),
                       ],
                     ],

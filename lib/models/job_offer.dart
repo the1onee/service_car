@@ -17,6 +17,15 @@ class JobOffer {
     this.ratingAvg = 5,
     this.distanceKm,
     this.verified = false,
+    this.partName = '',
+    this.carMake = '',
+    this.carModel = '',
+    this.partCondition = '',
+    this.warrantyDays = 0,
+    this.warrantyNote = '',
+    this.deliveryType = '',
+    this.vendorNote = '',
+    this.oilWorkshopTier = '',
   });
 
   final String id;
@@ -32,6 +41,19 @@ class JobOffer {
   final double ratingAvg;
   final double? distanceKm;
   final bool verified;
+  final String partName;
+  final String carMake;
+  final String carModel;
+  final String partCondition;
+  final int warrantyDays;
+  final String warrantyNote;
+  final String deliveryType;
+  final String vendorNote;
+  /// agency | trusted — لورش الزيوت.
+  final String oilWorkshopTier;
+
+  bool get isAgencyOilWorkshop => oilWorkshopTier == 'agency';
+  bool get isTrustedOilWorkshop => oilWorkshopTier == 'trusted';
 
   int remainingSeconds() {
     final s = expiresAt.difference(DateTime.now()).inSeconds;
@@ -57,7 +79,16 @@ class JobOffer {
       technicianName: d['technicianName'] as String?,
       ratingAvg: (d['ratingAvg'] as num?)?.toDouble() ?? 5,
       distanceKm: (d['distanceKm'] as num?)?.toDouble(),
-      verified: d['verified'] as bool? ?? false,
+      verified: d['verified'] == true,
+      partName: d['partName'] as String? ?? '',
+      carMake: d['carMake'] as String? ?? '',
+      carModel: d['carModel'] as String? ?? '',
+      partCondition: d['partCondition'] as String? ?? '',
+      warrantyDays: (d['warrantyDays'] as num?)?.toInt() ?? 0,
+      warrantyNote: d['warrantyNote'] as String? ?? '',
+      deliveryType: d['deliveryType'] as String? ?? '',
+      vendorNote: d['vendorNote'] as String? ?? '',
+      oilWorkshopTier: d['oilWorkshopTier'] as String? ?? '',
     );
   }
 }

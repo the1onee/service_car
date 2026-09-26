@@ -25,11 +25,21 @@ class DispatchService {
     required String technicianId,
     required String technicianName,
     required double initialPrice,
+    String partCondition = '',
+    int warrantyDays = 0,
+    String warrantyNote = '',
+    String deliveryType = '',
+    String vendorNote = '',
   }) async {
     try {
       final res = await _functions.httpsCallable('acceptOffer').call({
         'offerId': offerId,
         'initialPrice': initialPrice,
+        if (partCondition.isNotEmpty) 'partCondition': partCondition,
+        if (warrantyDays > 0) 'warrantyDays': warrantyDays,
+        if (warrantyNote.isNotEmpty) 'warrantyNote': warrantyNote,
+        if (deliveryType.isNotEmpty) 'deliveryType': deliveryType,
+        if (vendorNote.isNotEmpty) 'vendorNote': vendorNote,
       });
       return res.data == true || (res.data is Map && res.data['ok'] == true);
     } catch (_) {
@@ -38,6 +48,11 @@ class DispatchService {
         technicianId: technicianId,
         technicianName: technicianName,
         initialPrice: initialPrice,
+        partCondition: partCondition,
+        warrantyDays: warrantyDays,
+        warrantyNote: warrantyNote,
+        deliveryType: deliveryType,
+        vendorNote: vendorNote,
       );
     }
   }

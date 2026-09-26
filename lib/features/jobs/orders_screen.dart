@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/jobs/job_detail_screen.dart';
 import 'package:barrr/features/jobs/job_present.dart';
+import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
@@ -30,7 +31,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const FieldTopBar(caption: 'الطلبات'),
+        FieldTopBar(
+          caption: 'الطلبات',
+          trailing: NotificationsBellButton(uid: widget.profile.id),
+        ),
         Expanded(
           child: StreamBuilder<List<Job>>(
             stream: widget.stream,

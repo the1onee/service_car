@@ -3,6 +3,7 @@ import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/jobs/job_detail_screen.dart';
 import 'package:barrr/features/jobs/job_present.dart';
+import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
@@ -23,7 +24,11 @@ class CustomerLedgerPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        FieldTopBar(city: city, caption: 'المحفظة'),
+        FieldTopBar(
+          city: city,
+          caption: 'المحفظة',
+          trailing: NotificationsBellButton(uid: profile.id),
+        ),
         Expanded(
           child: StreamBuilder<List<Job>>(
             stream: stream,
