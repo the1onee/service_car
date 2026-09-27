@@ -8,7 +8,7 @@ import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
 
-class CustomerLedgerPage extends StatelessWidget {
+class CustomerLedgerPage extends StatefulWidget {
   const CustomerLedgerPage({
     super.key,
     required this.stream,
@@ -21,7 +21,22 @@ class CustomerLedgerPage extends StatelessWidget {
   final String? city;
 
   @override
+  State<CustomerLedgerPage> createState() => _CustomerLedgerPageState();
+}
+
+class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
+  late final Stream<List<Job>> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = widget.stream;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final profile = widget.profile;
+    final city = widget.city;
     return Column(
       children: [
         FieldTopBar(
@@ -31,7 +46,7 @@ class CustomerLedgerPage extends StatelessWidget {
         ),
         Expanded(
           child: StreamBuilder<List<Job>>(
-            stream: stream,
+            stream: _stream,
             builder: (context, snap) {
               final jobs = (snap.data ?? const <Job>[])
                   .where((j) =>

@@ -60,7 +60,6 @@ class _TechnicianHomeState extends State<TechnicianHome> {
   FcmService? _fcm;
   Stream<AppUser?>? _userStream;
   Stream<Job?>? _activeJobStream;
-  Stream<List<JobOffer>>? _offersStream;
   Stream<List<Job>>? _recentJobsStream;
 
   @override
@@ -78,14 +77,13 @@ class _TechnicianHomeState extends State<TechnicianHome> {
     final uid = widget.profile.id;
     // الملف الشخصي + العروض الواردة + الطلب النشط دائماً (لا تفويت عرض طارئ).
     _userStream ??= scope.users.watch(uid);
-    _offersStream ??= scope.jobs.watchPendingOffers(uid);
     if (_booted) return;
     _booted = true;
     _activeJobSub = scope.jobs.watchActiveForTechnician(uid).listen((job) {
       if (!mounted) return;
       setState(() => _activeJob = job);
     });
-    _offersSub = _offersStream!.listen((offers) {
+    _offersSub = scope.jobs.watchPendingOffers(uid).listen((offers) {
       if (!mounted) return;
       final live = offers.where((o) => o.remainingSeconds() > 0).toList();
       if (_incoming == null && live.isNotEmpty && _activeJob == null) {
@@ -229,8 +227,7 @@ class _TechnicianHomeState extends State<TechnicianHome> {
 
   Widget _buildTabBody() {
     final userStream = _userStream;
-    final offersStream = _offersStream;
-    if (userStream == null || offersStream == null) {
+    if (userStream == null) {
       return const Center(child: CircularProgressIndicator());
     }
     if (_tab == 0) {
@@ -250,16 +247,11 @@ class _TechnicianHomeState extends State<TechnicianHome> {
           meListenable: _meNotifier,
           userStream: userStream,
           activeJobStream: activeJobStream!,
-          offersStream: offersStream,
           dutyOverride: _duty,
           dutyBusy: _dutyBusy,
           dutyHint: _dutyHint,
           incoming: _incoming,
           onToggle: _toggleOnline,
-          onIncoming: (offer) {
-            if (_incoming?.id == offer?.id) return;
-            setState(() => _incoming = offer);
-          },
           onClearIncoming: () => setState(() => _incoming = null),
           onLocated: (point) => _meNotifier.value = point,
         ),
@@ -323,13 +315,11 @@ class _TechnicianMapTab extends StatelessWidget {
     required this.meListenable,
     required this.userStream,
     required this.activeJobStream,
-    required this.offersStream,
     required this.dutyOverride,
     required this.dutyBusy,
     required this.dutyHint,
     required this.incoming,
     required this.onToggle,
-    required this.onIncoming,
     required this.onClearIncoming,
     required this.onLocated,
   });
@@ -340,13 +330,11 @@ class _TechnicianMapTab extends StatelessWidget {
   final ValueNotifier<LatLng> meListenable;
   final Stream<AppUser?> userStream;
   final Stream<Job?> activeJobStream;
-  final Stream<List<JobOffer>> offersStream;
   final bool? dutyOverride;
   final bool dutyBusy;
   final String? dutyHint;
   final JobOffer? incoming;
   final Future<void> Function(bool value) onToggle;
-  final ValueChanged<JobOffer?> onIncoming;
   final VoidCallback onClearIncoming;
   final ValueChanged<LatLng> onLocated;
 
@@ -361,25 +349,7 @@ class _TechnicianMapTab extends StatelessWidget {
           stream: activeJobStream,
           builder: (context, jobSnap) {
             final job = jobSnap.data;
-            return StreamBuilder<List<JobOffer>>(
-              stream: offersStream,
-              builder: (context, offerSnap) {
-                final offers = offerSnap.data ?? const <JobOffer>[];
-                final live =
-                    offers.where((o) => o.remainingSeconds() > 0).toList();
-                final nextIncoming =
-                    (incoming == null && live.isNotEmpty && job == null)
-                        ? live.first
-                        : incoming;
-                if (incoming == null &&
-                    live.isNotEmpty &&
-                    job == null &&
-                    nextIncoming != null) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    onIncoming(nextIncoming);
-                  });
-                }
-                return Stack(
+            return Stack(
                   children: [
                     ValueListenableBuilder<LatLng>(
                       valueListenable: meListenable,
@@ -501,8 +471,6 @@ class _TechnicianMapTab extends StatelessWidget {
                       ),
                   ],
                 );
-              },
-            );
           },
         );
       },

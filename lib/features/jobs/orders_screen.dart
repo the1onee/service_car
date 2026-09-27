@@ -25,6 +25,13 @@ class OrdersScreen extends StatefulWidget {
 
 class _OrdersScreenState extends State<OrdersScreen> {
   var _filter = OrdersFilter.all;
+  late final Stream<List<Job>> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = widget.stream;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +44,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         ),
         Expanded(
           child: StreamBuilder<List<Job>>(
-            stream: widget.stream,
+            stream: _stream,
             builder: (context, snap) {
               final rows = snap.data ?? const <Job>[];
               if (snap.connectionState == ConnectionState.waiting &&

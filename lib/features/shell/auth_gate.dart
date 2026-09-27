@@ -5,9 +5,26 @@ import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/auth/auth_screen.dart';
 import 'package:barrr/features/shell/role_home.dart';
 import 'package:barrr/models/app_user.dart';
+import 'package:barrr/services/user_repository.dart';
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  AppUser? _cached;
+
+  @override
+  void initState() {
+    super.initState();
+    readCachedProfile().then((user) {
+      if (!mounted) return;
+      setState(() => _cached = user);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,26 +36,50 @@ class AuthGate extends StatelessWidget {
         builder: (context, snap) {
           // أثناء التسجيل تبقى شاشة المصادقة حتى يُحفظ الملف كاملاً.
           if (registering) return const AuthScreen();
+          final cached = _cached;
+          final currentUid = scope.auth.currentUid;
+          if (cached != null &&
+              currentUid != null &&
+              cached.id == currentUid &&
+              (snap.connectionState == ConnectionState.waiting ||
+                  snap.data == currentUid)) {
+            return _HomeFromProfile(seed: cached, uid: currentUid);
+          }
           // الجلسة تنتظر قراءة الملف؛ لا نعرض الدخول قبل أن يصدر البث قيمة.
           if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
             return const BrandSplash();
           }
           final uid = snap.data;
           if (uid == null) return const AuthScreen();
-          return StreamBuilder<AppUser?>(
-            stream: scope.users.watch(uid),
-            builder: (context, profile) {
-              if (profile.connectionState == ConnectionState.waiting &&
-                  !profile.hasData) {
-                return const BrandSplash();
-              }
-              final appUser = profile.data;
-              if (appUser == null) return const _MissingProfile();
-              return RoleHome(profile: appUser);
-            },
-          );
+          return _HomeFromProfile(uid: uid);
         },
       ),
+    );
+  }
+}
+
+class _HomeFromProfile extends StatelessWidget {
+  const _HomeFromProfile({required this.uid, this.seed});
+
+  final String uid;
+  final AppUser? seed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = AppScope.of(context);
+    return StreamBuilder<AppUser?>(
+      stream: scope.users.watch(uid),
+      builder: (context, profile) {
+        final appUser = profile.data ?? seed;
+        if (appUser == null) {
+          if (profile.connectionState == ConnectionState.waiting &&
+              !profile.hasData) {
+            return const BrandSplash();
+          }
+          return const _MissingProfile();
+        }
+        return RoleHome(profile: appUser);
+      },
     );
   }
 }

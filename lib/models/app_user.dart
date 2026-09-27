@@ -111,12 +111,26 @@ class AppUser {
       };
 
   factory AppUser.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final d = doc.data() ?? {};
+    return AppUser._fromData(doc.id, doc.data() ?? {});
+  }
+
+  factory AppUser.fromCache(Map<String, dynamic> raw) {
+    final d = Map<String, dynamic>.from(raw);
+    final geoRaw = d['geo'];
+    if (geoRaw is Map) {
+      final lat = (geoRaw['lat'] as num?)?.toDouble();
+      final lng = (geoRaw['lng'] as num?)?.toDouble();
+      d['geo'] = (lat != null && lng != null) ? GeoPoint(lat, lng) : null;
+    }
+    return AppUser._fromData(d['id'] as String? ?? '', d);
+  }
+
+  factory AppUser._fromData(String id, Map<String, dynamic> d) {
     final roleRaw = d['role'] as String?;
     final verifiedFlag = d['verified'] == true;
     final tierRaw = d['oilWorkshopTier'] as String?;
     return AppUser(
-      id: doc.id,
+      id: id,
       role: UserRole.values.firstWhere(
         (r) => r.name == roleRaw,
         orElse: () => UserRole.customer,

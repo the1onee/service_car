@@ -11,8 +11,8 @@ import 'package:barrr/core/geo.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/customer/customer_landing.dart';
+import 'package:barrr/features/customer/customer_request_map.dart';
 import 'package:barrr/features/customer/customer_ledger_page.dart';
-import 'package:barrr/features/customer/job_status_panel.dart';
 import 'package:barrr/features/customer/parts_order_screen.dart';
 import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/jobs/orders_screen.dart';
@@ -20,7 +20,6 @@ import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/warranty/warranties_screen.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
-import 'package:barrr/features/shared/osm_map.dart';
 import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
@@ -58,6 +57,11 @@ class _CustomerHomeState extends State<CustomerHome> {
   Stream<Job?>? _activeJobStream;
   Stream<List<Job>>? _recentJobsStream;
   Stream<List<ServiceItem>>? _servicesStream;
+  var _deferredStarted = false;
+  late final Stream<List<ServiceItem>> _seedServicesStream = Stream.value(
+    seedServices.where((e) => e.active).toList(),
+  );
+  late final Stream<List<Job>> _emptyJobsStream = Stream.value(const []);
   Stream<List<VehicleType>>? _vehicleTypesStream;
   VoidCallback? _fcmFocusListener;
   FcmService? _fcm;
@@ -69,14 +73,6 @@ class _CustomerHomeState extends State<CustomerHome> {
     if (_locStarted) return;
     _locStarted = true;
     _fcm = scope.fcm;
-    _citySub = scope.settings.watchActiveCity().listen((zone) {
-      if (!mounted) return;
-      if (zone?.nameAr == _zone?.nameAr &&
-          zone?.centerLat == _zone?.centerLat) {
-        return;
-      }
-      setState(() => _zone = zone);
-    });
     _fcmFocusListener = () {
       final id = scope.fcm.focusJobId.value;
       if (id == null || id.isEmpty || !mounted) return;
@@ -92,8 +88,33 @@ class _CustomerHomeState extends State<CustomerHome> {
     };
     scope.fcm.focusJobId.addListener(_fcmFocusListener!);
     _fcmFocusListener!();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startDeferred());
+  }
+
+  void _startDeferred() {
+    if (!mounted || _deferredStarted) return;
+    _deferredStarted = true;
+    final scope = AppScope.of(context);
+    _citySub = scope.settings.watchActiveCity().listen((zone) {
+      if (!mounted) return;
+      if (zone?.nameAr == _zone?.nameAr &&
+          zone?.centerLat == _zone?.centerLat) {
+        return;
+      }
+      setState(() => _zone = zone);
+    });
+    setState(() {
+      _servicesStream ??= scope.users.watchServices();
+      _recentJobsStream ??=
+          scope.jobs.watchRecentForCustomer(widget.profile.id);
+    });
     _initLocation();
   }
+
+  Stream<List<ServiceItem>> get _landingServices =>
+      _servicesStream ?? _seedServicesStream;
+
+  Stream<List<Job>> get _landingRecent => _recentJobsStream ?? _emptyJobsStream;
 
   Stream<List<Job>> _ensureRecentJobs() {
     return _recentJobsStream ??=
@@ -104,10 +125,6 @@ class _CustomerHomeState extends State<CustomerHome> {
   void _dropJobStreams() {
     _activeJobStream = null;
     _recentJobsStream = null;
-  }
-
-  Stream<List<ServiceItem>> _ensureServices() {
-    return _servicesStream ??= AppScope.of(context).users.watchServices();
   }
 
   Stream<List<VehicleType>> _ensureVehicleTypes() {
@@ -401,8 +418,8 @@ class _CustomerHomeState extends State<CustomerHome> {
         3 => _account(zoneName, _ensureRecentJobs()),
         _ => _homeTab(
             active: active!,
-            recent: _ensureRecentJobs(),
-            services: _ensureServices(),
+            recent: _landingRecent,
+            services: _landingServices,
           ),
       },
     ),
@@ -579,128 +596,40 @@ class _CustomerHomeState extends State<CustomerHome> {
     required Stream<List<VehicleType>> vehicles,
     bool showBack = false,
   }) {
-    if (_ready) _ensureGps();
-    final markers = <Marker>[
-      if (job != null)
-        pinMarker(
-          LatLng(job.displayLocation.latitude, job.displayLocation.longitude),
-          color: AppColors.amber,
-        ),
-    ];
-    final circles = <CircleMarker>[
-      if (zone != null)
-        coverageCircle(
-          centerLat: zone.centerLat,
-          centerLng: zone.centerLng,
-          radiusKm: zone.radiusKm,
-        ),
-    ];
-    final map = Stack(
-      children: [
-        if (!_ready)
-          const Center(child: CircularProgressIndicator())
-        else
-          OsmMap(
-            mapController: _map,
-            center: _pin,
-            zoom: _zoom,
-            circles: circles,
-            markers: markers,
-            onTap: job == null ? _selectMapPoint : null,
-            onPositionChanged: job == null ? _syncPinFromMap : null,
-            onLocated: (point) {
-              _pin = point;
-              setState(() {});
-            },
-          ),
-        if (_ready && job == null)
-          const IgnorePointer(
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.only(bottom: 36),
-                child: Icon(Icons.location_on,
-                    color: AppColors.amberDeep, size: 42),
-              ),
-            ),
-          ),
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: FieldTopBar(
-            city: zone?.nameAr,
-            caption: showBack ? 'تحديد الموقع والطلب' : 'خدمة ميدانية',
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (showBack)
-                  IconButton(
-                    tooltip: 'رجوع',
-                    onPressed: () => setState(() {
-                      _composing = false;
-                      _selected = null;
-                      _entryId = null;
-                    }),
-                    icon: const Icon(Icons.arrow_forward_ios_rounded, size: 18),
-                  ),
-                NotificationsBellButton(uid: widget.profile.id),
-              ],
-            ),
-          ),
-        ),
-        if (_ready && job != null)
-          Positioned(
-            top: 108,
-            left: 16,
-            right: 16,
-            child: Material(
-              color: AppColors.surface,
-              elevation: 2,
-              borderRadius: BorderRadius.circular(12),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                child: Text(
-                  AppStrings.locationLockedDuringJob,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-          ),
-        if (_ready && job == null)
-          Positioned(
-            top: 108,
-            left: 16,
-            child: _MapButton(icon: Icons.my_location, onTap: _recenter),
-          ),
-      ],
-    );
-    return Column(
-      children: [
-        Expanded(child: map),
-        job == null
-            ? _RequestComposer(
-                profile: widget.profile,
-                zone: zone,
-                inZone: _pinInZone(),
-                addressLabel: _addressLabel,
-                selected: _selected,
-                entryId: _entryId,
-                vehicleType: _vehicleType,
-                services: services,
-                vehicleTypes: vehicles,
-                busy: _submitting,
-                onSelect: (s) {
-                  setState(() => _selected = s);
-                },
-                onSelectVehicle: (t) {
-                  setState(() => _vehicleType = t);
-                },
-                onPickLocation: _openMapPicker,
-                onSubmit: _confirmAndRequest,
-              )
-            : CustomerJobPanel(job: job, me: widget.profile),
-      ],
+    return CustomerRequestMap(
+      profile: widget.profile,
+      job: job,
+      zone: zone,
+      ready: _ready,
+      mapController: _map,
+      pin: _pin,
+      zoom: _zoom,
+      showBack: showBack,
+      inZone: _pinInZone(),
+      addressLabel: _addressLabel,
+      selected: _selected,
+      entryId: _entryId,
+      vehicleType: _vehicleType,
+      services: services,
+      vehicleTypes: vehicles,
+      busy: _submitting,
+      onBack: () => setState(() {
+        _composing = false;
+        _selected = null;
+        _entryId = null;
+      }),
+      onSelect: (s) => setState(() => _selected = s),
+      onSelectVehicle: (t) => setState(() => _vehicleType = t),
+      onPickLocation: _openMapPicker,
+      onSubmit: _confirmAndRequest,
+      onMapTap: job == null ? _selectMapPoint : null,
+      onPositionChanged: job == null ? _syncPinFromMap : null,
+      onLocated: (point) {
+        _pin = point;
+        setState(() {});
+      },
+      onRecenter: _recenter,
+      onShown: _ensureGps,
     );
   }
 
@@ -839,357 +768,3 @@ class _MiniStat extends StatelessWidget {
   }
 }
 
-class _MapButton extends StatelessWidget {
-  const _MapButton({required this.icon, required this.onTap});
-
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      elevation: 2,
-      shadowColor: AppColors.slate.withValues(alpha: 0.2),
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: SizedBox(
-            width: 44, height: 44, child: Icon(icon, color: AppColors.ink)),
-      ),
-    );
-  }
-}
-
-class _RequestComposer extends StatelessWidget {
-  const _RequestComposer({
-    required this.profile,
-    required this.zone,
-    required this.inZone,
-    required this.addressLabel,
-    required this.selected,
-    required this.entryId,
-    required this.vehicleType,
-    required this.services,
-    required this.vehicleTypes,
-    required this.busy,
-    required this.onSelect,
-    required this.onSelectVehicle,
-    required this.onPickLocation,
-    required this.onSubmit,
-  });
-
-  final AppUser profile;
-  final CityZone? zone;
-  final bool inZone;
-  final String addressLabel;
-  final ServiceItem? selected;
-  final String? entryId;
-  final VehicleType? vehicleType;
-  final Stream<List<ServiceItem>> services;
-  final Stream<List<VehicleType>> vehicleTypes;
-  final bool busy;
-  final ValueChanged<ServiceItem> onSelect;
-  final ValueChanged<VehicleType> onSelectVehicle;
-  final VoidCallback onPickLocation;
-  final VoidCallback onSubmit;
-
-  @override
-  Widget build(BuildContext context) {
-    final emergency = selected?.isEmergency ?? false;
-    return Material(
-      color: AppColors.surface,
-      elevation: 16,
-      shadowColor: AppColors.slate.withValues(alpha: 0.18),
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      child: ConstrainedBox(
-        constraints:
-            BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.58),
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.outlineStrong,
-                  borderRadius: BorderRadius.circular(99),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: emergency ? AppColors.amberTint : AppColors.recessed,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          emergency
-                              ? 'استجابة طوارئ الطريق'
-                              : 'طلب خدمة ميدانية',
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          zone == null
-                              ? 'حرّك الخريطة أو حدد الموقع من الزر'
-                              : 'تغطية ${zone!.nameAr}',
-                          style: const TextStyle(
-                              color: AppColors.inkSoft, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: emergency ? AppColors.amber : AppColors.slate,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      emergency ? Icons.bolt : Icons.build_outlined,
-                      color: emergency ? AppColors.ink : Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            FieldCard(
-              padding: EdgeInsets.zero,
-              child: InkWell(
-                onTap: onPickLocation,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.place_outlined, color: AppColors.inkSoft),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'العنوان',
-                              style: TextStyle(
-                                  fontSize: 12, color: AppColors.inkSoft),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              inZone ? addressLabel : AppStrings.outsideCoverage,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: inZone ? AppColors.ink : AppColors.danger,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        AppStrings.pickLocationOnMap,
-                        style: TextStyle(
-                          color: AppColors.amberDeep,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            if (entryId == 'technician' ||
-                (entryId != null && selected == null)) ...[
-              const SectionLabel('حدد نوع الخدمة'),
-              StreamBuilder<List<ServiceItem>>(
-                stream: services,
-                builder: (context, snap) {
-                  final loaded = snap.data;
-                  final raw = (loaded == null || loaded.isEmpty)
-                      ? seedServices
-                      : loaded;
-                  final items = filterServicesForEntry(entryId, raw);
-                  if (items.isEmpty) {
-                    return const Text(
-                      'لا توجد خدمات متاحة حالياً.',
-                      style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
-                    );
-                  }
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: items.length,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisExtent: 88,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                    ),
-                    itemBuilder: (context, i) {
-                      final s = items[i];
-                      final on = selected?.id == s.id;
-                      return InkWell(
-                        onTap: () => onSelect(s),
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: on
-                                ? (s.isEmergency
-                                    ? AppColors.slate
-                                    : AppColors.recessed)
-                                : AppColors.surface,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: on
-                                  ? (s.isEmergency
-                                      ? AppColors.slate
-                                      : AppColors.amber)
-                                  : AppColors.outline,
-                              width: on ? 1.5 : 1,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(
-                                _serviceIcon(s.id),
-                                size: 20,
-                                color: on && s.isEmergency
-                                    ? AppColors.amber
-                                    : AppColors.ink,
-                              ),
-                              const Spacer(),
-                              Text(
-                                s.titleAr,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                  color: on && s.isEmergency
-                                      ? Colors.white
-                                      : AppColors.ink,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-              const SizedBox(height: 14),
-            ] else if (selected != null) ...[
-              FieldCard(
-                child: Row(
-                  children: [
-                    Icon(_serviceIcon(selected!.id), color: AppColors.amberDeep),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        selected!.titleAr,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-            ],
-            const SectionLabel(AppStrings.pickVehicleType),
-            StreamBuilder<List<VehicleType>>(
-              stream: vehicleTypes,
-              builder: (context, snap) {
-                final items = snap.data ?? seedVehicleTypes;
-                return Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final t in items)
-                      FilterChip(
-                        label: Text(t.nameAr),
-                        selected: vehicleType?.id == t.id,
-                        onSelected: (_) => onSelectVehicle(t),
-                      ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'السعر يحدده الفني بعد الفحص، والدفع نقداً عند انتهاء العمل.',
-              style: TextStyle(color: AppColors.inkSoft, fontSize: 12),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: busy || selected == null || vehicleType == null
-                  ? null
-                  : onSubmit,
-              style: FilledButton.styleFrom(
-                backgroundColor: emergency ? AppColors.amber : AppColors.slate,
-                foregroundColor: emergency ? AppColors.ink : Colors.white,
-                disabledBackgroundColor: AppColors.outline,
-              ),
-              icon: Icon(emergency ? Icons.bolt : Icons.arrow_back),
-              label: Text(
-                busy
-                    ? 'جارٍ إرسال الطلب...'
-                    : emergency
-                        ? 'طلب فني طوارئ فوري'
-                        : 'اطلب الفني',
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-IconData _serviceIcon(String id) {
-  switch (id) {
-    case 'technician':
-      return Icons.handyman_outlined;
-    case 'battery':
-      return Icons.battery_charging_full;
-    case 'towing':
-      return Icons.local_shipping_outlined;
-    case 'tires':
-      return Icons.album_outlined;
-    case 'fuel':
-      return Icons.local_gas_station_outlined;
-    case 'locks':
-      return Icons.key_outlined;
-    case 'oil':
-      return Icons.oil_barrel_outlined;
-    case 'wash':
-      return Icons.local_car_wash_outlined;
-    case 'parts':
-      return Icons.settings_suggest_outlined;
-    case 'paint':
-      return Icons.format_paint_outlined;
-    case 'ac':
-      return Icons.ac_unit;
-    default:
-      return Icons.build_outlined;
-  }
-}

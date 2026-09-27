@@ -13,11 +13,26 @@ class JobRepository {
 
   final FirebaseFirestore? _injected;
   FirebaseFirestore get _db => _injected ?? FirebaseFirestore.instance;
-  final _pendingOffers = <String, Stream<List<JobOffer>>>{};
-  final _submittedOffers = <String, Stream<List<JobOffer>>>{};
-
   CollectionReference<Map<String, dynamic>> get _jobs => _db.collection(Cols.jobs);
   CollectionReference<Map<String, dynamic>> get _offers => _db.collection(Cols.jobOffers);
+
+  Stream<List<JobOffer>> watchPendingOffers(String technicianId) {
+    return _offers
+        .where('technicianId', isEqualTo: technicianId)
+        .where('status', isEqualTo: 'pending')
+        .limit(20)
+        .snapshots()
+        .map((s) => s.docs.map(JobOffer.fromDoc).toList());
+  }
+
+  Stream<List<JobOffer>> watchSubmittedOffers(String technicianId) {
+    return _offers
+        .where('technicianId', isEqualTo: technicianId)
+        .where('status', isEqualTo: 'submitted')
+        .limit(20)
+        .snapshots()
+        .map((s) => s.docs.map(JobOffer.fromDoc).toList());
+  }
 
   Stream<Job?> watchJob(String jobId) {
     return _jobs.doc(jobId).snapshots().map((d) => d.exists ? Job.fromDoc(d) : null);
@@ -89,32 +104,6 @@ class JobRepository {
       if (active.contains(job.status)) return job;
     }
     return null;
-  }
-
-  Stream<List<JobOffer>> watchPendingOffers(String technicianId) {
-    return _pendingOffers.putIfAbsent(
-      technicianId,
-      () => _offers
-          .where('technicianId', isEqualTo: technicianId)
-          .where('status', isEqualTo: 'pending')
-          .limit(20)
-          .snapshots()
-          .map((s) => s.docs.map(JobOffer.fromDoc).toList())
-          .asBroadcastStream(),
-    );
-  }
-
-  Stream<List<JobOffer>> watchSubmittedOffers(String technicianId) {
-    return _submittedOffers.putIfAbsent(
-      technicianId,
-      () => _offers
-          .where('technicianId', isEqualTo: technicianId)
-          .where('status', isEqualTo: 'submitted')
-          .limit(20)
-          .snapshots()
-          .map((s) => s.docs.map(JobOffer.fromDoc).toList())
-          .asBroadcastStream(),
-    );
   }
 
   Future<String> createJob({

@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/data/collections.dart';
 import 'package:barrr/data/service_catalog.dart';
@@ -46,7 +49,11 @@ class UserRepository {
   Stream<AppUser?> watch(String uid) {
     return _userStreams.putIfAbsent(
       uid,
-      () => _userRef(uid).snapshots().map((d) => d.exists ? AppUser.fromDoc(d) : null),
+      () => _userRef(uid).snapshots().map((d) {
+        final user = d.exists ? AppUser.fromDoc(d) : null;
+        if (user != null) saveCachedProfile(user);
+        return user;
+      }),
     );
   }
 
@@ -324,4 +331,35 @@ class UserRepository {
       return list.isEmpty ? seedVehicleTypes : list;
     });
   }
+}
+
+const _cachedProfileKey = 'cached_app_user_v1';
+
+Future<void> saveCachedProfile(AppUser user) async {
+  final prefs = await SharedPreferences.getInstance();
+  final map = user.toMap();
+  map['id'] = user.id;
+  final geo = user.geo;
+  map['geo'] = geo == null
+      ? null
+      : <String, double>{'lat': geo.latitude, 'lng': geo.longitude};
+  await prefs.setString(_cachedProfileKey, jsonEncode(map));
+}
+
+Future<AppUser?> readCachedProfile() async {
+  final prefs = await SharedPreferences.getInstance();
+  final raw = prefs.getString(_cachedProfileKey);
+  if (raw == null || raw.isEmpty) return null;
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return null;
+    return AppUser.fromCache(Map<String, dynamic>.from(decoded));
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<void> clearCachedProfile() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.remove(_cachedProfileKey);
 }

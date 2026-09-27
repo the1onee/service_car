@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:barrr/core/phone.dart';
 import 'package:barrr/data/collections.dart';
 import 'package:barrr/models/app_user.dart';
+import 'package:barrr/services/user_repository.dart';
 
 /// سبب طلب رمز التحقق، يحدد ما يحدث بعد تأكيد الرمز.
 enum OtpPurpose { register, resetPassword }
@@ -266,13 +267,14 @@ class AuthService {
     await user.updatePassword(newPassword);
   }
 
-  Future<void> signOut() {
+  Future<void> signOut() async {
     _verificationId = null;
     _resendToken = null;
     _webConfirmation = null;
     pendingPhone = null;
     registering.value = false;
-    return _auth.signOut();
+    await clearCachedProfile();
+    await _auth.signOut();
   }
 
   /// إلغاء تسجيل لم يكتمل عند تراجع المستخدم عن شاشة التحقق.
