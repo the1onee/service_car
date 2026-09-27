@@ -1,11 +1,7 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/theme.dart';
-import 'package:barrr/data/collections.dart';
-import 'package:barrr/features/jobs/job_detail_screen.dart';
 import 'package:barrr/models/app_notification.dart';
-import 'package:barrr/models/job.dart';
 import 'package:barrr/services/notifications_repository.dart';
 
 Future<void> openNotifications(BuildContext context) {
@@ -89,25 +85,11 @@ class NotificationsScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(14),
                         onTap: () async {
                           if (!n.read) await repo.markRead(n.id);
+                          if (!context.mounted) return;
                           final jobId = n.jobId?.trim();
-                          if (jobId == null ||
-                              jobId.isEmpty ||
-                              !context.mounted) {
-                            return;
-                          }
-                          scope.fcm.focusJobId.value = jobId;
-                          final jobSnap = await FirebaseFirestore.instance
-                              .collection(Cols.jobs)
-                              .doc(jobId)
-                              .get();
-                          if (!jobSnap.exists || !context.mounted) return;
-                          final profile = await scope.users.get(uid);
-                          if (profile == null || !context.mounted) return;
-                          openJobDetail(
-                            context,
-                            Job.fromDoc(jobSnap),
-                            profile,
-                          );
+                          scope.fcm.focusJobId.value =
+                              (jobId != null && jobId.isNotEmpty) ? jobId : 'home';
+                          Navigator.of(context).popUntil((route) => route.isFirst);
                         },
                         child: Padding(
                           padding: const EdgeInsets.all(14),

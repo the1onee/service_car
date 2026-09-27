@@ -41,7 +41,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
             builder: (context, snap) {
               final rows = snap.data ?? const <Job>[];
               if (snap.connectionState == ConnectionState.waiting &&
-                  rows.isEmpty) {
+                  !snap.hasError &&
+                  !snap.hasData) {
                 return const Center(child: CircularProgressIndicator());
               }
               final shown = rows.where((j) => _matches(_filter, j)).toList();

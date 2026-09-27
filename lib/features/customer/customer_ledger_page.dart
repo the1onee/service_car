@@ -43,7 +43,8 @@ class CustomerLedgerPage extends StatelessWidget {
                 (sum, j) => sum + (j.receivedAmount ?? j.finalPrice ?? 0),
               );
               if (snap.connectionState == ConnectionState.waiting &&
-                  (snap.data == null)) {
+                  !snap.hasError &&
+                  !snap.hasData) {
                 return const Center(child: CircularProgressIndicator());
               }
               return ListView(

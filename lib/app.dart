@@ -13,14 +13,7 @@ import 'package:barrr/services/settings_repository.dart';
 import 'package:barrr/services/user_repository.dart';
 
 class FanniApp extends StatelessWidget {
-  FanniApp({super.key, required this.firebaseReady}) {
-    if (firebaseReady) {
-      // مرة عند إنشاء التطبيق فقط — ليست داخل build.
-      _users.syncSeedVehicleTypes().catchError((Object e) {
-        debugPrint('syncSeedVehicleTypes: $e');
-      });
-    }
-  }
+  FanniApp({super.key, required this.firebaseReady});
 
   final bool firebaseReady;
   final _auth = AuthService();

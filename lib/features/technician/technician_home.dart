@@ -78,11 +78,10 @@ class _TechnicianHomeState extends State<TechnicianHome> {
     final uid = widget.profile.id;
     // الملف الشخصي + العروض الواردة + الطلب النشط دائماً (لا تفويت عرض طارئ).
     _userStream ??= scope.users.watch(uid);
-    _activeJobStream ??= scope.jobs.watchActiveForTechnician(uid);
     _offersStream ??= scope.jobs.watchPendingOffers(uid);
     if (_booted) return;
     _booted = true;
-    _activeJobSub = _activeJobStream!.listen((job) {
+    _activeJobSub = scope.jobs.watchActiveForTechnician(uid).listen((job) {
       if (!mounted) return;
       setState(() => _activeJob = job);
     });
@@ -210,7 +209,13 @@ class _TechnicianHomeState extends State<TechnicianHome> {
   Widget build(BuildContext context) {
     return FieldShell(
       tab: _tab,
-      onTab: (i) => setState(() => _tab = i),
+      onTab: (i) => setState(() {
+        if (i != _tab) {
+          _activeJobStream = null;
+          _recentJobsStream = null;
+        }
+        _tab = i;
+      }),
       items: const [
         FieldNavItem(icon: Icons.home_rounded, label: 'الرئيسية'),
         FieldNavItem(icon: Icons.receipt_long_outlined, label: 'الطلبات'),
@@ -224,13 +229,16 @@ class _TechnicianHomeState extends State<TechnicianHome> {
 
   Widget _buildTabBody() {
     final userStream = _userStream;
-    final activeJobStream = _activeJobStream;
     final offersStream = _offersStream;
-    if (userStream == null ||
-        activeJobStream == null ||
-        offersStream == null) {
+    if (userStream == null || offersStream == null) {
       return const Center(child: CircularProgressIndicator());
     }
+    if (_tab == 0) {
+      _activeJobStream ??= AppScope.of(context)
+          .jobs
+          .watchActiveForTechnician(widget.profile.id);
+    }
+    final activeJobStream = _activeJobStream;
     return switch (_tab) {
       1 => _ordersTab(userStream, _ensureRecentJobs()),
       2 => _walletTab(userStream),
@@ -241,7 +249,7 @@ class _TechnicianHomeState extends State<TechnicianHome> {
           zone: _zone,
           meListenable: _meNotifier,
           userStream: userStream,
-          activeJobStream: activeJobStream,
+          activeJobStream: activeJobStream!,
           offersStream: offersStream,
           dutyOverride: _duty,
           dutyBusy: _dutyBusy,

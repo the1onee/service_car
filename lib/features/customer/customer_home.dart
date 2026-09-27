@@ -46,6 +46,7 @@ class _CustomerHomeState extends State<CustomerHome> {
   CityZone? _zone;
   double _zoom = 12;
   var _locStarted = false;
+  var _gpsStarted = false;
   var _tab = 0;
   var _submitting = false;
   var _composing = false;
@@ -65,8 +66,6 @@ class _CustomerHomeState extends State<CustomerHome> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final scope = AppScope.of(context);
-    // الطلب النشط للرئيسية؛ الخدمات/المركبات عند الحاجة؛ الطلبات الحديثة لتبويباتها.
-    _activeJobStream ??= scope.jobs.watchActiveForCustomer(widget.profile.id);
     if (_locStarted) return;
     _locStarted = true;
     _fcm = scope.fcm;
@@ -81,7 +80,14 @@ class _CustomerHomeState extends State<CustomerHome> {
     _fcmFocusListener = () {
       final id = scope.fcm.focusJobId.value;
       if (id == null || id.isEmpty || !mounted) return;
-      setState(() => _tab = 0);
+      setState(() {
+        if (_tab != 0) _dropJobStreams();
+        _tab = 0;
+        _composing = false;
+        _selected = null;
+        _entryId = null;
+        _vehicleType = null;
+      });
       scope.fcm.focusJobId.value = null;
     };
     scope.fcm.focusJobId.addListener(_fcmFocusListener!);
@@ -92,6 +98,12 @@ class _CustomerHomeState extends State<CustomerHome> {
   Stream<List<Job>> _ensureRecentJobs() {
     return _recentJobsStream ??=
         AppScope.of(context).jobs.watchRecentForCustomer(widget.profile.id);
+  }
+
+  /// البث أحادي الاستماع؛ بعد إغلاق التبويب لا يُعاد استخدامه.
+  void _dropJobStreams() {
+    _activeJobStream = null;
+    _recentJobsStream = null;
   }
 
   Stream<List<ServiceItem>> _ensureServices() {
@@ -137,7 +149,28 @@ class _CustomerHomeState extends State<CustomerHome> {
           _map.move(fallback, settings.defaultZoom);
         } catch (_) {}
       });
-      final loc = await scope.location.currentOrDefault(fallback: fallback);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _ready = true);
+    }
+  }
+
+  /// الموقع الحي عند فتح الخريطة فقط، لا على صفحة الهبوط.
+  void _ensureGps() {
+    if (_gpsStarted || !_ready) return;
+    _gpsStarted = true;
+    final fallback = _pin;
+    final zoom = _zoom;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _refreshGps(fallback, zoom);
+    });
+  }
+
+  Future<void> _refreshGps(LatLng fallback, double zoom) async {
+    try {
+      final loc = await AppScope.of(context)
+          .location
+          .currentOrDefault(fallback: fallback);
       if (!mounted) return;
       if (loc.latitude == _pin.latitude && loc.longitude == _pin.longitude) {
         return;
@@ -146,13 +179,10 @@ class _CustomerHomeState extends State<CustomerHome> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         try {
-          _map.move(loc, settings.defaultZoom);
+          _map.move(loc, zoom);
         } catch (_) {}
       });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _ready = true);
-    }
+    } catch (_) {}
   }
 
   bool _pinInZone() {
@@ -314,14 +344,39 @@ class _CustomerHomeState extends State<CustomerHome> {
 
   @override
   Widget build(BuildContext context) {
+    if (_tab == 0) {
+      _activeJobStream ??=
+          AppScope.of(context).jobs.watchActiveForCustomer(widget.profile.id);
+    }
     final active = _activeJobStream;
-    if (active == null) {
+    if (_tab == 0 && active == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }
     final zoneName = _zone?.nameAr;
-    return FieldShell(
+    final stayInApp = _composing || _tab != 0;
+    return PopScope(
+      canPop: !stayInApp,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_composing) {
+          setState(() {
+            _composing = false;
+            _selected = null;
+            _entryId = null;
+            _vehicleType = null;
+          });
+          return;
+        }
+        if (_tab != 0) {
+          setState(() {
+            _dropJobStreams();
+            _tab = 0;
+          });
+        }
+      },
+      child: FieldShell(
       tab: _tab,
       onTab: _onTab,
       items: const [
@@ -345,12 +400,12 @@ class _CustomerHomeState extends State<CustomerHome> {
           ),
         3 => _account(zoneName, _ensureRecentJobs()),
         _ => _homeTab(
-            active: active,
+            active: active!,
             recent: _ensureRecentJobs(),
             services: _ensureServices(),
-            vehicles: _ensureVehicleTypes(),
           ),
       },
+    ),
     );
   }
 
@@ -361,6 +416,7 @@ class _CustomerHomeState extends State<CustomerHome> {
         nav.popUntil((route) => route.isFirst);
       }
       setState(() {
+        if (_tab != 0) _dropJobStreams();
         _tab = 0;
         _composing = false;
         _selected = null;
@@ -369,7 +425,10 @@ class _CustomerHomeState extends State<CustomerHome> {
       });
       return;
     }
-    setState(() => _tab = i);
+    setState(() {
+      if (i != _tab) _dropJobStreams();
+      _tab = i;
+    });
   }
 
   /// تبويب الخريطة فقط يستمع للطلب النشط — لا يعيد بناء باقي التبويبات.
@@ -377,7 +436,6 @@ class _CustomerHomeState extends State<CustomerHome> {
     required Stream<Job?> active,
     required Stream<List<Job>> recent,
     required Stream<List<ServiceItem>> services,
-    required Stream<List<VehicleType>> vehicles,
   }) {
     return StreamBuilder<Job?>(
       stream: active,
@@ -397,7 +455,7 @@ class _CustomerHomeState extends State<CustomerHome> {
             job,
             _zone,
             services: services,
-            vehicles: vehicles,
+            vehicles: _ensureVehicleTypes(),
           );
         }
         if (_composing) {
@@ -405,7 +463,7 @@ class _CustomerHomeState extends State<CustomerHome> {
             null,
             _zone,
             services: services,
-            vehicles: vehicles,
+            vehicles: _ensureVehicleTypes(),
             showBack: true,
           );
         }
@@ -521,6 +579,7 @@ class _CustomerHomeState extends State<CustomerHome> {
     required Stream<List<VehicleType>> vehicles,
     bool showBack = false,
   }) {
+    if (_ready) _ensureGps();
     final markers = <Marker>[
       if (job != null)
         pinMarker(

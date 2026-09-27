@@ -26,9 +26,17 @@ class _RoleHomeState extends State<RoleHome> {
     if (_booted) return;
     _booted = true;
     final scope = AppScope.of(context);
-    scope.fcm.init(widget.profile.id);
-    // كتالوج الخدمات يُدار من لوحة التحكم، والقواعد تسمح بالكتابة للأدمن فقط.
-    if (widget.profile.isAdmin) scope.users.seedServicesIfNeeded();
+    final profile = widget.profile;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      scope.fcm.init(profile.id);
+      // الكتالوج يُدار من لوحة التحكم، والقواعد تسمح بالكتابة للأدمن فقط.
+      if (!profile.isAdmin) return;
+      scope.users.seedServicesIfNeeded();
+      scope.users.syncSeedVehicleTypes().catchError((Object e) {
+        debugPrint('syncSeedVehicleTypes: $e');
+      });
+    });
   }
 
   @override

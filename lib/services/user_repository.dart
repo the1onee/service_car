@@ -289,7 +289,6 @@ class UserRepository {
     return _servicesStream ??= _db
         .collection(Cols.services)
         .where('active', isEqualTo: true)
-        .orderBy('sortOrder')
         .limit(100)
         .snapshots()
         .map((s) {
@@ -309,7 +308,6 @@ class UserRepository {
     return _vehicleTypesStream ??= _db
         .collection(Cols.vehicleTypes)
         .where('active', isEqualTo: true)
-        .orderBy('sortOrder')
         .limit(100)
         .snapshots()
         .map((s) {

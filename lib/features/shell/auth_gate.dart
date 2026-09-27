@@ -18,14 +18,19 @@ class AuthGate extends StatelessWidget {
         stream: scope.auth.uidChanges,
         builder: (context, snap) {
           // أثناء التسجيل تبقى شاشة المصادقة حتى يُحفظ الملف كاملاً.
-          final uid = registering ? null : snap.data;
+          if (registering) return const AuthScreen();
+          // الجلسة تنتظر قراءة الملف؛ لا نعرض الدخول قبل أن يصدر البث قيمة.
+          if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
+            return const BrandSplash();
+          }
+          final uid = snap.data;
           if (uid == null) return const AuthScreen();
           return StreamBuilder<AppUser?>(
             stream: scope.users.watch(uid),
             builder: (context, profile) {
               if (profile.connectionState == ConnectionState.waiting &&
                   !profile.hasData) {
-                return const _Splash();
+                return const BrandSplash();
               }
               final appUser = profile.data;
               if (appUser == null) return const _MissingProfile();
@@ -38,8 +43,8 @@ class AuthGate extends StatelessWidget {
   }
 }
 
-class _Splash extends StatelessWidget {
-  const _Splash();
+class BrandSplash extends StatelessWidget {
+  const BrandSplash({super.key});
 
   @override
   Widget build(BuildContext context) {

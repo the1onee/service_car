@@ -13,10 +13,6 @@ class JobRepository {
 
   final FirebaseFirestore? _injected;
   FirebaseFirestore get _db => _injected ?? FirebaseFirestore.instance;
-  final _activeCustomer = <String, Stream<Job?>>{};
-  final _activeTech = <String, Stream<Job?>>{};
-  final _recentCustomer = <String, Stream<List<Job>>>{};
-  final _recentTech = <String, Stream<List<Job>>>{};
   final _pendingOffers = <String, Stream<List<JobOffer>>>{};
   final _submittedOffers = <String, Stream<List<JobOffer>>>{};
 
@@ -28,55 +24,39 @@ class JobRepository {
   }
 
   Stream<Job?> watchActiveForCustomer(String uid) {
-    return _activeCustomer.putIfAbsent(
-      uid,
-      () => _jobs
-          .where('customerId', isEqualTo: uid)
-          .orderBy('createdAt', descending: true)
-          .limit(8)
-          .snapshots()
-          .map(_firstActive)
-          .asBroadcastStream(),
-    );
+    return _jobs
+        .where('customerId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(8)
+        .snapshots()
+        .map(_firstActive);
   }
 
   Stream<Job?> watchActiveForTechnician(String uid) {
-    return _activeTech.putIfAbsent(
-      uid,
-      () => _jobs
-          .where('technicianId', isEqualTo: uid)
-          .orderBy('createdAt', descending: true)
-          .limit(8)
-          .snapshots()
-          .map(_firstActive)
-          .asBroadcastStream(),
-    );
+    return _jobs
+        .where('technicianId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(8)
+        .snapshots()
+        .map(_firstActive);
   }
 
   Stream<List<Job>> watchRecentForCustomer(String uid) {
-    return _recentCustomer.putIfAbsent(
-      uid,
-      () => _jobs
-          .where('customerId', isEqualTo: uid)
-          .orderBy('createdAt', descending: true)
-          .limit(20)
-          .snapshots()
-          .map((s) => s.docs.map(Job.fromDoc).toList())
-          .asBroadcastStream(),
-    );
+    return _jobs
+        .where('customerId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(20)
+        .snapshots()
+        .map((s) => s.docs.map(Job.fromDoc).toList());
   }
 
   Stream<List<Job>> watchRecentForTechnician(String uid) {
-    return _recentTech.putIfAbsent(
-      uid,
-      () => _jobs
-          .where('technicianId', isEqualTo: uid)
-          .orderBy('createdAt', descending: true)
-          .limit(20)
-          .snapshots()
-          .map((s) => s.docs.map(Job.fromDoc).toList())
-          .asBroadcastStream(),
-    );
+    return _jobs
+        .where('technicianId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(20)
+        .snapshots()
+        .map((s) => s.docs.map(Job.fromDoc).toList());
   }
 
   Stream<List<JobOffer>> watchJobQuotes(String jobId) {
