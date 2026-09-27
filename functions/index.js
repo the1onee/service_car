@@ -657,3 +657,6 @@ exports.setUserDisabled = adminUsers.setUserDisabled;
 exports.creditWallet = walletFns.creditWallet;
 exports.adjustWallet = walletFns.adjustWallet;
 exports.completeJob = walletFns.completeJob;
+
+const cloudinaryFns = require("./cloudinary");
+exports.getCloudinaryUploadSign = cloudinaryFns.getCloudinaryUploadSign;

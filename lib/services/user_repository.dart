@@ -59,6 +59,7 @@ class UserRepository {
     return _db
         .collection(Cols.users)
         .where('role', isEqualTo: 'technician')
+        .limit(100)
         .snapshots()
         .map((s) => s.docs.map(AppUser.fromDoc).toList());
   }

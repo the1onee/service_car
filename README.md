@@ -21,10 +21,20 @@
 
 ```bash
 flutter pub get
-flutter run -d chrome --web-hostname localhost --web-port 8080
+flutter run -d chrome --web-hostname localhost --web-port 8080 \
+  --dart-define=CLOUDINARY_CLOUD_NAME=your_cloud \
+  --dart-define=CLOUDINARY_UPLOAD_PRESET=barrr_unsigned
 # أو
-flutter run -d android
+flutter run -d android \
+  --dart-define=CLOUDINARY_CLOUD_NAME=your_cloud \
+  --dart-define=CLOUDINARY_UPLOAD_PRESET=barrr_unsigned
 ```
+
+### رفع الصور (Cloudinary)
+
+لا تضع cloud name أو upload preset داخل المصدر. مرّرهما عبر `--dart-define` كما أعلاه،
+أو انشر دالة `getCloudinaryUploadSign` مع متغيرات البيئة
+`CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` للرفع الموقّع.
 
 ### الخرائط
 
@@ -52,6 +62,7 @@ firebase deploy --only firestore:rules,firestore:indexes,functions
 | `deleteUserAccount` | حذف حساب المصادقة وملف التعريف معاً. |
 | `setUserPassword` | تعيين كلمة مرور جديدة لمستخدم. |
 | `setUserDisabled` | تعطيل أو تفعيل حساب دون حذفه. |
+| `getCloudinaryUploadSign` | معاملات رفع موقّع لـ Cloudinary (يتطلب CLOUDINARY_* على الخادم). |
 
 كل الدوال على المنطقة الافتراضية `us-central1` لأن التطبيق يستدعيها عبر
 `FirebaseFunctions.instance`؛ تغيير المنطقة يكسر التوزيع.
@@ -61,6 +72,6 @@ firebase deploy --only firestore:rules,firestore:indexes,functions
 
 ## لوحة التحكم (ويب)
 
-مشروع منفصل في `C:\barrr-admin` (Vite + React + TypeScript) على نفس مشروع Firebase.
+مشروع منفصل في `../barrr-admin` (Vite + React + TypeScript) على نفس مشروع Firebase.
 الصلاحيات: القاعدة العامة في `firestore.rules` تمنح الأدمن قراءة وكتابة وحذفاً على كل
 المجموعات، وكتالوج `services` صار للأدمن فقط بينما يقرأه التطبيق.

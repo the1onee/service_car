@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
-import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/models/job.dart';
 
@@ -364,107 +363,6 @@ String jobStatusLabel(JobStatus status) {
       return (const Color(0xFF92400E), AppColors.amberTint);
     default:
       return (AppColors.inkSoft, AppColors.recessed);
-  }
-}
-
-class RecentJobsPage extends StatelessWidget {
-  const RecentJobsPage({super.key, required this.stream});
-
-  final Stream<List<Job>> stream;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const FieldTopBar(),
-        Expanded(
-          child: StreamBuilder<List<Job>>(
-            stream: stream,
-            builder: (context, snap) {
-              final rows = snap.data ?? const <Job>[];
-              if (snap.connectionState == ConnectionState.waiting &&
-                  rows.isEmpty) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (rows.isEmpty) {
-                return const Center(child: Text('لا توجد طلبات بعد.'));
-              }
-              return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                itemCount: rows.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                itemBuilder: (context, i) => _JobRow(job: rows[i]),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _JobRow extends StatelessWidget {
-  const _JobRow({required this.job});
-
-  final Job job;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = jobStatusColors(job.status);
-    final price = job.finalPrice ?? job.receivedAmount ?? job.initialPrice;
-    final short = job.id.length > 8 ? job.id.substring(0, 8) : job.id;
-    return FieldCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  job.serviceTitle ?? 'طلب خدمة',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 15),
-                ),
-              ),
-              StatusPill(
-                  label: jobStatusLabel(job.status),
-                  color: colors.$1,
-                  background: colors.$2),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '#$short · ${formatWhen(job.createdAt)}',
-            style: const TextStyle(color: AppColors.inkSoft, fontSize: 12),
-          ),
-          if (job.technicianName != null && job.technicianName!.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text('الفني: ${job.technicianName}',
-                style: const TextStyle(fontSize: 13)),
-          ],
-          if (price != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              formatIqd(price),
-              style: const TextStyle(
-                color: AppColors.emeraldDeep,
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-              ),
-            ),
-          ],
-          if (job.warranty.enabled) ...[
-            const SizedBox(height: 8),
-            StatusPill(
-              label:
-                  'ضمان ${job.warranty.days == 0 ? AppConstants.warrantyDays : job.warranty.days} يوم',
-              icon: Icons.verified_user_outlined,
-            ),
-          ],
-        ],
-      ),
-    );
   }
 }
 

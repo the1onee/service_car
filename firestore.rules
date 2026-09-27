@@ -65,11 +65,15 @@ service cloud.firestore {
           .affectedKeys().hasAny(protectedFields());
       }
 
+      // قائمة/قراءة ملفات المزودين المعتمدين فقط (تقليل تسريب بيانات غير المعتمدين).
+      function isPublicProviderProfile() {
+        return resource.data.role in ['technician', 'workshop', 'oilWorkshop', 'paintShop']
+          && resource.data.verified == true;
+      }
+
       allow read: if isAdmin()
         || isUser(uid)
-        || (signedIn() && resource.data.role == 'technician')
-        || (signedIn() && resource.data.role == 'workshop')
-        || (signedIn() && resource.data.role == 'oilWorkshop');
+        || (signedIn() && isPublicProviderProfile());
 
       // الفني يقرأ رصيد العميل عند التسوية فقط (قراءة مستند، لا قائمة).
       allow get: if isProviderRole() && resource.data.role == 'customer';
@@ -150,22 +154,49 @@ service cloud.firestore {
       }
       function isOpenForBidding() {
         return isProviderRole()
-          && resource.data.status in ['dispatching', 'offerPending', 'comparing', 'noTechnician'];
+          && resource.data.status in ['dispatching', 'offerPending', 'comparing', 'noTechnician']
+          && resource.data.technicianId == null;
+      }
+      // قبول طارئ: المزود يعيّن نفسه فقط على طلب مفتوح، وحقول محدودة.
+      function claimingOpenJob() {
+        return isProviderRole()
+          && resource.data.technicianId == null
+          && request.resource.data.technicianId == request.auth.uid
+          && resource.data.status in ['dispatching', 'offerPending', 'comparing', 'noTechnician']
+          && request.resource.data.status in ['quoted', 'enRoute', 'arrived', 'inProgress']
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['technicianId', 'technicianName', 'initialPrice', 'status']);
       }
 
       allow create: if creatingOwnJob();
       allow read: if isCustomer() || isTech() || isOpenForBidding();
-      allow update: if isCustomer() || isTech() || isOpenForBidding();
+      // لا يُسمح لأي مزود بتحديث طلب مفتوح بحرية — فقط العميل أو الفني المعيّن أو قبول طارئ ذاتي.
+      allow update: if isCustomer() || isTech() || claimingOpenJob();
     }
 
     match /jobOffers/{offerId} {
+      function offerJob() {
+        return get(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data;
+      }
+      function existingOfferJob() {
+        return get(/databases/$(database)/documents/jobs/$(resource.data.jobId)).data;
+      }
       function jobCustomerId() {
-        return get(/databases/$(database)/documents/jobs/$(resource.data.jobId))
-          .data.customerId;
+        return existingOfferJob().customerId;
       }
 
       allow read: if isOwner(resource.data.technicianId) || isOwner(jobCustomerId());
-      allow create: if signedIn();
+      // العميل ينشئ عروضاً معلّقة عند التوزيع؛ المزود ينشئ/يملك عرضه فقط.
+      allow create: if signedIn()
+        && request.resource.data.jobId is string
+        && request.resource.data.technicianId is string
+        && request.resource.data.status in ['pending', 'submitted']
+        && (
+          (isOwner(offerJob().customerId)
+            && request.resource.data.status == 'pending')
+          || (isProviderRole()
+            && isOwner(request.resource.data.technicianId))
+        );
       allow update: if isOwner(resource.data.technicianId) || isOwner(jobCustomerId());
     }
 
@@ -190,7 +221,7 @@ service cloud.firestore {
     match /vehicleTypes/{id} {
       allow read: if signedIn();
     }
-    // كتالوج الاختصاصات للقوائم المنسدلة (عميل / تسجيل ورشة) — القراءة عامة، الكتابة للأدمن فقط.
+    // كتالوج الاختصاصات للقوائم المنسدلة أثناء التسجيل (قبل تسجيل الدخول).
     match /workshopSpecialties/{id} {
       allow get, list: if true;
     }

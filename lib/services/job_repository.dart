@@ -80,7 +80,11 @@ class JobRepository {
   }
 
   Stream<List<JobOffer>> watchJobQuotes(String jobId) {
-    return _offers.where('jobId', isEqualTo: jobId).snapshots().map((s) {
+    return _offers
+        .where('jobId', isEqualTo: jobId)
+        .limit(40)
+        .snapshots()
+        .map((s) {
       final list = s.docs.map(JobOffer.fromDoc).toList();
       list.sort((a, b) => (a.initialPrice ?? 1e12).compareTo(b.initialPrice ?? 1e12));
       return list

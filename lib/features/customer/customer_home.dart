@@ -65,11 +65,8 @@ class _CustomerHomeState extends State<CustomerHome> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final scope = AppScope.of(context);
-    // ??= يتحمّل hot reload دون LateInitializationError (عكس late final + flag).
+    // الطلب النشط للرئيسية؛ الخدمات/المركبات عند الحاجة؛ الطلبات الحديثة لتبويباتها.
     _activeJobStream ??= scope.jobs.watchActiveForCustomer(widget.profile.id);
-    _recentJobsStream ??= scope.jobs.watchRecentForCustomer(widget.profile.id);
-    _servicesStream ??= scope.users.watchServices();
-    _vehicleTypesStream ??= scope.users.watchVehicleTypes();
     if (_locStarted) return;
     _locStarted = true;
     _fcm = scope.fcm;
@@ -90,6 +87,20 @@ class _CustomerHomeState extends State<CustomerHome> {
     scope.fcm.focusJobId.addListener(_fcmFocusListener!);
     _fcmFocusListener!();
     _initLocation();
+  }
+
+  Stream<List<Job>> _ensureRecentJobs() {
+    return _recentJobsStream ??=
+        AppScope.of(context).jobs.watchRecentForCustomer(widget.profile.id);
+  }
+
+  Stream<List<ServiceItem>> _ensureServices() {
+    return _servicesStream ??= AppScope.of(context).users.watchServices();
+  }
+
+  Stream<List<VehicleType>> _ensureVehicleTypes() {
+    return _vehicleTypesStream ??=
+        AppScope.of(context).users.watchVehicleTypes();
   }
 
   @override
@@ -303,11 +314,8 @@ class _CustomerHomeState extends State<CustomerHome> {
 
   @override
   Widget build(BuildContext context) {
-    final recent = _recentJobsStream;
     final active = _activeJobStream;
-    final services = _servicesStream;
-    final vehicles = _vehicleTypesStream;
-    if (recent == null || active == null || services == null || vehicles == null) {
+    if (active == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
@@ -324,27 +332,25 @@ class _CustomerHomeState extends State<CustomerHome> {
             icon: Icons.account_balance_wallet_outlined, label: 'المحفظة'),
         FieldNavItem(icon: Icons.person_outline_rounded, label: 'حسابي'),
       ],
-      body: IndexedStack(
-        index: _tab,
-        children: [
-          _homeTab(
-            active: active,
-            recent: recent,
-            services: services,
-            vehicles: vehicles,
-          ),
-          OrdersScreen(
-            stream: recent,
+      // switch بدل IndexedStack حتى لا تبقى StreamBuilders للتبويبات المخفية نشطة.
+      body: switch (_tab) {
+        1 => OrdersScreen(
+            stream: _ensureRecentJobs(),
             profile: widget.profile,
           ),
-          CustomerLedgerPage(
-            stream: recent,
+        2 => CustomerLedgerPage(
+            stream: _ensureRecentJobs(),
             profile: widget.profile,
             city: zoneName,
           ),
-          _account(zoneName, recent),
-        ],
-      ),
+        3 => _account(zoneName, _ensureRecentJobs()),
+        _ => _homeTab(
+            active: active,
+            recent: _ensureRecentJobs(),
+            services: _ensureServices(),
+            vehicles: _ensureVehicleTypes(),
+          ),
+      },
     );
   }
 

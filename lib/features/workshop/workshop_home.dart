@@ -49,8 +49,6 @@ class _WorkshopHomeState extends State<WorkshopHome> {
     super.didChangeDependencies();
     final scope = AppScope.of(context);
     _userStream ??= scope.users.watch(widget.profile.id);
-    _recentJobsStream ??=
-        scope.jobs.watchRecentForTechnician(widget.profile.id);
     if (_booted) return;
     _booted = true;
     _fcm = scope.fcm;
@@ -64,6 +62,7 @@ class _WorkshopHomeState extends State<WorkshopHome> {
       scope.fcm.focusJobId.value = null;
     };
     scope.fcm.focusJobId.addListener(_fcmFocusListener!);
+    // العروض دائماً — لا تفويت طلب تسعير وارد.
     _offersSub = scope.jobs.watchPendingOffers(widget.profile.id).listen(
       (offers) {
         if (!mounted) return;
@@ -84,6 +83,11 @@ class _WorkshopHomeState extends State<WorkshopHome> {
         setState(() => _submittedOffers = const []);
       },
     );
+  }
+
+  Stream<List<Job>> _ensureRecentJobs() {
+    return _recentJobsStream ??=
+        AppScope.of(context).jobs.watchRecentForTechnician(widget.profile.id);
   }
 
   @override
@@ -195,8 +199,7 @@ class _WorkshopHomeState extends State<WorkshopHome> {
     final online = _duty ?? widget.profile.isOnline;
     final me = widget.profile;
     final userStream = _userStream;
-    final recentJobs = _recentJobsStream;
-    if (userStream == null || recentJobs == null) {
+    if (userStream == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
@@ -214,7 +217,7 @@ class _WorkshopHomeState extends State<WorkshopHome> {
           ],
           body: switch (_tab) {
             1 => OrdersScreen(
-                stream: recentJobs,
+                stream: _ensureRecentJobs(),
                 profile: me,
               ),
             2 => const NotificationsScreen(),
@@ -222,7 +225,7 @@ class _WorkshopHomeState extends State<WorkshopHome> {
                 stream: userStream,
                 builder: (context, snap) {
                   final profile = snap.data ?? me;
-                  return _buildBoard(profile, online, recentJobs);
+                  return _buildBoard(profile, online);
                 },
               ),
           },
@@ -240,7 +243,6 @@ class _WorkshopHomeState extends State<WorkshopHome> {
   Widget _buildBoard(
     AppUser profile,
     bool online,
-    Stream<List<Job>> recentJobsStream,
   ) {
     final scope = AppScope.of(context);
     return ColoredBox(
@@ -413,73 +415,75 @@ class _WorkshopHomeState extends State<WorkshopHome> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                StreamBuilder<List<Job>>(
-                  stream: recentJobsStream,
-                  builder: (context, snap) {
-                    if (snap.connectionState == ConnectionState.waiting &&
-                        !snap.hasData &&
-                        !snap.hasError) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24),
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-                    if (snap.hasError) {
-                      return const _EmptyBox(
-                        'تعذر تحميل الطلبات. تحقق من الاتصال وأعد المحاولة.',
-                      );
-                    }
-                    final jobs = snap.data ?? const <Job>[];
-                    final accepted = jobs
-                        .where(
-                          (j) =>
-                              j.status == JobStatus.quoted ||
-                              j.status == JobStatus.enRoute ||
-                              j.status == JobStatus.arrived ||
-                              j.status == JobStatus.inProgress ||
-                              j.status == JobStatus.finalQuote,
-                        )
-                        .toList();
-                    return Column(
-                      children: [
-                        _SegmentBar(
-                          filter: _filter,
-                          incomingCount: _pendingOffers.length,
-                          waitingCount: _submittedOffers.length,
-                          onChanged: (f) => setState(() => _filter = f),
+                _SegmentBar(
+                  filter: _filter,
+                  incomingCount: _pendingOffers.length,
+                  waitingCount: _submittedOffers.length,
+                  onChanged: (f) => setState(() => _filter = f),
+                ),
+                const SizedBox(height: 12),
+                if (_filter == _BoardFilter.incoming) ...[
+                  if (_pendingOffers.isEmpty)
+                    _EmptyBox(
+                      online
+                          ? 'لا توجد طلبات واردة حالياً.'
+                          : 'فعّل التوفر لاستقبال طلبات التسعير.',
+                    )
+                  else
+                    for (final offer in _pendingOffers)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _IncomingOfferCard(
+                          offer: offer,
+                          onOpen: () => setState(() => _quoting = offer),
                         ),
-                        const SizedBox(height: 12),
-                        if (_filter == _BoardFilter.incoming) ...[
-                          if (_pendingOffers.isEmpty)
-                            _EmptyBox(
-                              online
-                                  ? 'لا توجد طلبات واردة حالياً.'
-                                  : 'فعّل التوفر لاستقبال طلبات التسعير.',
-                            )
-                          else
-                            for (final offer in _pendingOffers)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: _IncomingOfferCard(
-                                  offer: offer,
-                                  onOpen: () =>
-                                      setState(() => _quoting = offer),
-                                ),
-                              ),
-                        ] else if (_filter == _BoardFilter.waiting) ...[
-                          if (_submittedOffers.isEmpty)
-                            const _EmptyBox(
-                              'لا توجد عروض قيد الانتظار. بعد تقديم السعر تظهر هنا حتى يقبل العميل.',
-                            )
-                          else
-                            for (final offer in _submittedOffers)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: _WaitingOfferCard(offer: offer),
-                              ),
-                        ] else if (accepted.isEmpty)
-                          const _EmptyBox('لا توجد طلبات مقبولة للتجهيز.')
-                        else
+                      ),
+                ] else if (_filter == _BoardFilter.waiting) ...[
+                  if (_submittedOffers.isEmpty)
+                    const _EmptyBox(
+                      'لا توجد عروض قيد الانتظار. بعد تقديم السعر تظهر هنا حتى يقبل العميل.',
+                    )
+                  else
+                    for (final offer in _submittedOffers)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _WaitingOfferCard(offer: offer),
+                      ),
+                ] else
+                  StreamBuilder<List<Job>>(
+                    stream: _ensureRecentJobs(),
+                    builder: (context, snap) {
+                      if (snap.connectionState == ConnectionState.waiting &&
+                          !snap.hasData &&
+                          !snap.hasError) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      if (snap.hasError) {
+                        return const _EmptyBox(
+                          'تعذر تحميل الطلبات. تحقق من الاتصال وأعد المحاولة.',
+                        );
+                      }
+                      final jobs = snap.data ?? const <Job>[];
+                      final accepted = jobs
+                          .where(
+                            (j) =>
+                                j.status == JobStatus.quoted ||
+                                j.status == JobStatus.enRoute ||
+                                j.status == JobStatus.arrived ||
+                                j.status == JobStatus.inProgress ||
+                                j.status == JobStatus.finalQuote,
+                          )
+                          .toList();
+                      if (accepted.isEmpty) {
+                        return const _EmptyBox(
+                          'لا توجد طلبات مقبولة للتجهيز.',
+                        );
+                      }
+                      return Column(
+                        children: [
                           for (final job in accepted)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 10),
@@ -490,10 +494,10 @@ class _WorkshopHomeState extends State<WorkshopHome> {
                                 onCancel: () => _cancelJob(job),
                               ),
                             ),
-                      ],
-                    );
-                  },
-                ),
+                        ],
+                      );
+                    },
+                  ),
               ],
             ),
           ),
