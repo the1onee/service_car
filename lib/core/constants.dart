@@ -10,6 +10,8 @@ class AppConstants {
   static const maxQuotes = 3;
   static const maxDispatchRounds = 3;
   static const maxMatchKm = 25.0;
+  /// طلبات القطع تُوزَّع على مستوى المدينة؛ نطاق أوسع من الخدمات الميدانية.
+  static const maxPartsMatchKm = 120.0;
   static const warrantyDays = 2;
   static const approxPrecision = 100.0; // ~1km
   static const commissionRate = 0.10;

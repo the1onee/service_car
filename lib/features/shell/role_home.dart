@@ -3,6 +3,7 @@ import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/features/admin/admin_home.dart';
 import 'package:barrr/features/customer/customer_home.dart';
 import 'package:barrr/features/oil_workshop/oil_workshop_home.dart';
+import 'package:barrr/features/paint_shop/paint_shop_home.dart';
 import 'package:barrr/features/technician/technician_home.dart';
 import 'package:barrr/features/workshop/workshop_home.dart';
 import 'package:barrr/models/app_user.dart';
@@ -37,6 +38,9 @@ class _RoleHomeState extends State<RoleHome> {
     }
     if (widget.profile.isOilWorkshop) {
       return OilWorkshopHome(profile: widget.profile);
+    }
+    if (widget.profile.isPaintShop) {
+      return PaintShopHome(profile: widget.profile);
     }
     if (widget.profile.isWorkshop) {
       return WorkshopHome(profile: widget.profile);

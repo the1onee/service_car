@@ -74,6 +74,8 @@ class Job {
     this.carYear = '',
     this.customerPhone = '',
     this.providerKind = '',
+    this.specialtyId = '',
+    this.specialtyAr = '',
   });
 
   final String id;
@@ -115,14 +117,22 @@ class Job {
   final String carModel;
   final String carYear;
   final String customerPhone;
-  /// workshop | oilWorkshop | technician — لمن يُوزَّع الطلب.
+  /// workshop | oilWorkshop | paintShop | technician — لمن يُوزَّع الطلب.
   final String providerKind;
+  /// اختصاص السيارة/الورشة من كتالوج workshopSpecialties.
+  final String specialtyId;
+  final String specialtyAr;
 
   bool get isPartsOrder =>
       serviceId == 'parts' || providerKind == 'workshop';
 
   bool get isOilOrder =>
       serviceId == 'oil' || providerKind == 'oilWorkshop';
+
+  bool get isPaintOrder =>
+      serviceId == 'paint' ||
+      providerKind == 'paintShop' ||
+      providerKind == 'paint_shop';
 
   bool get isEmergency => matchingMode == MatchingMode.emergency;
 
@@ -212,6 +222,8 @@ class Job {
         'carYear': carYear,
         'customerPhone': customerPhone,
         'providerKind': providerKind,
+        'specialtyId': specialtyId,
+        'specialtyAr': specialtyAr,
         'createdAt': FieldValue.serverTimestamp(),
       };
 
@@ -254,6 +266,8 @@ class Job {
       carYear: d['carYear'] as String? ?? '',
       customerPhone: d['customerPhone'] as String? ?? '',
       providerKind: d['providerKind'] as String? ?? '',
+      specialtyId: d['specialtyId'] as String? ?? '',
+      specialtyAr: d['specialtyAr'] as String? ?? '',
     );
   }
 }

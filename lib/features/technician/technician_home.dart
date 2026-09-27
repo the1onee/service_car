@@ -54,10 +54,10 @@ class _TechnicianHomeState extends State<TechnicianHome> {
   DateTime? _lastGeoWrite;
   VoidCallback? _fcmFocusListener;
   FcmService? _fcm;
-  late final Stream<AppUser?> _userStream;
-  late final Stream<Job?> _activeJobStream;
-  late final Stream<List<JobOffer>> _offersStream;
-  late final Stream<List<Job>> _recentJobsStream;
+  Stream<AppUser?>? _userStream;
+  Stream<Job?>? _activeJobStream;
+  Stream<List<JobOffer>>? _offersStream;
+  Stream<List<Job>>? _recentJobsStream;
 
   @override
   void initState() {
@@ -70,19 +70,19 @@ class _TechnicianHomeState extends State<TechnicianHome> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_booted) return;
-    _booted = true;
     final scope = AppScope.of(context);
     final uid = widget.profile.id;
-    _userStream = scope.users.watch(uid);
-    _activeJobStream = scope.jobs.watchActiveForTechnician(uid);
-    _offersStream = scope.jobs.watchPendingOffers(uid);
-    _recentJobsStream = scope.jobs.watchRecentForTechnician(uid);
-    _activeJobSub = _activeJobStream.listen((job) {
+    _userStream ??= scope.users.watch(uid);
+    _activeJobStream ??= scope.jobs.watchActiveForTechnician(uid);
+    _offersStream ??= scope.jobs.watchPendingOffers(uid);
+    _recentJobsStream ??= scope.jobs.watchRecentForTechnician(uid);
+    if (_booted) return;
+    _booted = true;
+    _activeJobSub = _activeJobStream!.listen((job) {
       if (!mounted) return;
       setState(() => _activeJob = job);
     });
-    _offersSub = _offersStream.listen((offers) {
+    _offersSub = _offersStream!.listen((offers) {
       if (!mounted) return;
       final live = offers.where((o) => o.remainingSeconds() > 0).toList();
       if (_incoming == null && live.isNotEmpty && _activeJob == null) {
@@ -214,18 +214,28 @@ class _TechnicianHomeState extends State<TechnicianHome> {
   }
 
   Widget _buildTabBody() {
+    final userStream = _userStream;
+    final activeJobStream = _activeJobStream;
+    final offersStream = _offersStream;
+    final recentJobsStream = _recentJobsStream;
+    if (userStream == null ||
+        activeJobStream == null ||
+        offersStream == null ||
+        recentJobsStream == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
     return switch (_tab) {
-      1 => _ordersTab(),
-      2 => _walletTab(),
-      3 => _accountTab(),
+      1 => _ordersTab(userStream, recentJobsStream),
+      2 => _walletTab(userStream),
+      3 => _accountTab(userStream),
       _ => _TechnicianMapTab(
           profileId: widget.profile.id,
           fallbackProfile: widget.profile,
           zone: _zone,
           meListenable: _meNotifier,
-          userStream: _userStream,
-          activeJobStream: _activeJobStream,
-          offersStream: _offersStream,
+          userStream: userStream,
+          activeJobStream: activeJobStream,
+          offersStream: offersStream,
           dutyOverride: _duty,
           dutyBusy: _dutyBusy,
           dutyHint: _dutyHint,
@@ -241,22 +251,25 @@ class _TechnicianHomeState extends State<TechnicianHome> {
     };
   }
 
-  Widget _ordersTab() {
+  Widget _ordersTab(
+    Stream<AppUser?> userStream,
+    Stream<List<Job>> recentJobsStream,
+  ) {
     return StreamBuilder<AppUser?>(
-      stream: _userStream,
+      stream: userStream,
       builder: (context, snap) {
         final me = snap.data ?? widget.profile;
         return OrdersScreen(
-          stream: _recentJobsStream,
+          stream: recentJobsStream,
           profile: me,
         );
       },
     );
   }
 
-  Widget _walletTab() {
+  Widget _walletTab(Stream<AppUser?> userStream) {
     return StreamBuilder<AppUser?>(
-      stream: _userStream,
+      stream: userStream,
       builder: (context, snap) {
         final me = snap.data ?? widget.profile;
         final online = _duty ?? me.isOnline;
@@ -277,9 +290,9 @@ class _TechnicianHomeState extends State<TechnicianHome> {
     );
   }
 
-  Widget _accountTab() {
+  Widget _accountTab(Stream<AppUser?> userStream) {
     return StreamBuilder<AppUser?>(
-      stream: _userStream,
+      stream: userStream,
       builder: (context, snap) {
         return _AccountPage(me: snap.data ?? widget.profile);
       },
@@ -916,7 +929,7 @@ class _WalletRechargePanelState extends State<_WalletRechargePanel> {
     });
     final users = AppScope.of(context).users;
     try {
-      final url = await _uploader.toDataUrl(_receipt!);
+      final url = await _uploader.uploadReceipt(_receipt!);
       await users.createWalletTopUp(
             technicianId: widget.technicianId,
             amount: amount,

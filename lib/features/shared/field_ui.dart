@@ -11,6 +11,29 @@ class FieldNavItem {
   final String label;
 }
 
+/// انتقال خفيف (fade + slide) لشاشات العميل.
+Route<T> softPageRoute<T extends Object?>({required WidgetBuilder builder}) {
+  return PageRouteBuilder<T>(
+    pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved =
+          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.05, 0),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        ),
+      );
+    },
+    transitionDuration: const Duration(milliseconds: 280),
+    reverseTransitionDuration: const Duration(milliseconds: 220),
+  );
+}
+
 class FieldShell extends StatelessWidget {
   const FieldShell({
     super.key,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/features/customer/parts_offers_section.dart';
 import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/jobs/rating_sheet.dart';
 import 'package:barrr/features/shared/field_ui.dart';
@@ -12,7 +13,7 @@ import 'package:barrr/models/job.dart';
 
 void openJobDetail(BuildContext context, Job job, AppUser profile) {
   Navigator.of(context).push(
-    MaterialPageRoute<void>(
+    softPageRoute<void>(
       builder: (_) => JobDetailScreen(job: job, profile: profile),
     ),
   );
@@ -31,7 +32,11 @@ class JobDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
-    final stream = profile.isTechnician || profile.isOilWorkshop
+    final provider = profile.isTechnician ||
+        profile.isWorkshop ||
+        profile.isOilWorkshop ||
+        profile.isPaintShop;
+    final stream = provider
         ? scope.jobs.watchRecentForTechnician(profile.id)
         : scope.jobs.watchRecentForCustomer(profile.id);
     return StreamBuilder<List<Job>>(
@@ -61,7 +66,13 @@ class _Body extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = jobStatusColors(job.status);
     final price = job.receivedAmount ?? job.finalPrice ?? job.initialPrice;
-    final customer = !profile.isTechnician && !profile.isOilWorkshop;
+    final customer = !profile.isTechnician &&
+        !profile.isWorkshop &&
+        !profile.isOilWorkshop &&
+        !profile.isPaintShop;
+    final showWorkshopDetails = customer &&
+        (job.technicianName ?? '').isNotEmpty &&
+        job.isPartsOrder;
     return Scaffold(
       backgroundColor: AppColors.canvas,
       appBar: AppBar(title: Text(jobCode(job))),
@@ -93,6 +104,17 @@ class _Body extends StatelessWidget {
                   formatWhen(job.createdAt),
                   style: const TextStyle(color: AppColors.inkSoft, fontSize: 12),
                 ),
+                if (job.specialtyAr.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'الاختصاص: ${job.specialtyAr}',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF45464D),
+                    ),
+                  ),
+                ],
                 if (jobIsOpen(job)) ...[
                   const SizedBox(height: 14),
                   _Progress(status: job.status),
@@ -101,7 +123,43 @@ class _Body extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          if ((customer ? job.technicianName : null) != null ||
+          if (showWorkshopDetails)
+            FieldCard(
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: AppColors.recessed,
+                    child: Text(_initial(job.technicianName)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          job.technicianName ?? 'ورشة',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          job.specialtyAr.isNotEmpty
+                              ? job.specialtyAr
+                              : 'ورشة معيّنة للطلب',
+                          style: const TextStyle(
+                            color: AppColors.inkSoft,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const StatusPill(
+                    label: 'معتمد',
+                    icon: Icons.verified_outlined,
+                  ),
+                ],
+              ),
+            )
+          else if ((customer ? job.technicianName : null) != null ||
               (job.technicianName ?? '').isNotEmpty)
             FieldCard(
               child: Row(
@@ -133,6 +191,16 @@ class _Body extends StatelessWidget {
                 ],
               ),
             ),
+          if (customer && job.isPartsOrder && jobIsOpen(job)) ...[
+            const SizedBox(height: 12),
+            FieldCard(
+              child: PartsOffersSection(
+                job: job,
+                selectable: job.status == JobStatus.offerPending ||
+                    job.status == JobStatus.comparing,
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           FieldCard(
             child: Column(
@@ -179,19 +247,30 @@ class _Body extends StatelessWidget {
             const SizedBox(height: 12),
             _WarrantyCard(job: job, customer: customer, profile: profile),
           ],
+          if (customer && job.customerCanCancel) ...[
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: () => _confirmCancel(context),
+              child: const Text(AppStrings.cancelJob),
+            ),
+          ],
           if (customer &&
               (job.status == JobStatus.completed || job.status == JobStatus.rated) &&
               job.ratings.customerToTech == null) ...[
             const SizedBox(height: 16),
             FilledButton(
               onPressed: () => _rate(context),
-              child: const Text('تقييم الفني'),
+              child: Text(job.isPartsOrder ? 'تقييم الورشة' : 'تقييم الفني'),
             ),
           ],
           if (job.ratings.customerToTech != null) ...[
             const SizedBox(height: 12),
             FieldCard(
-              child: Text('تقييمك للفني: ${job.ratings.customerToTech} / 5'),
+              child: Text(
+                job.isPartsOrder
+                    ? 'تقييمك للورشة: ${job.ratings.customerToTech} / 5'
+                    : 'تقييمك للفني: ${job.ratings.customerToTech} / 5',
+              ),
             ),
           ],
         ],
@@ -199,10 +278,52 @@ class _Body extends StatelessWidget {
     );
   }
 
+  Future<void> _confirmCancel(BuildContext context) async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('إلغاء الطلب'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(
+              labelText: 'سبب الإلغاء (اختياري)',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('تراجع'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              child: const Text('تأكيد'),
+            ),
+          ],
+        );
+      },
+    ).whenComplete(controller.dispose);
+    if (reason == null || !context.mounted) return;
+    try {
+      await AppScope.of(context).jobs.customerCancelJob(job.id, reason: reason);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم إلغاء الطلب.')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
   Future<void> _rate(BuildContext context) async {
     final jobs = AppScope.of(context).jobs;
     final users = AppScope.of(context).users;
-    final stars = await showRatingSheet(context, title: 'قيّم الفني');
+    final stars = await showRatingSheet(
+      context,
+      title: job.isPartsOrder ? 'قيّم الورشة' : 'قيّم الفني',
+    );
     if (stars == null || !context.mounted) return;
     await jobs.rateAsCustomer(job.id, stars);
     if (job.technicianId != null) {

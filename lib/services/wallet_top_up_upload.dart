@@ -1,36 +1,33 @@
-import 'dart:convert';
-
-import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:barrr/core/cloudinary_config.dart';
+import 'package:barrr/services/cloudinary_upload.dart';
 
-/// رفع فاتورة الشحن بدون Firebase Storage: نضغط الصورة ونحفظها كـ data URL في Firestore.
+/// رفع فاتورة شحن المحفظة إلى Cloudinary (مضغوطة).
 class WalletTopUpUpload {
-  final _picker = ImagePicker();
+  WalletTopUpUpload({CloudinaryUpload? uploader})
+      : _uploader = uploader ?? CloudinaryUpload();
+
+  final CloudinaryUpload _uploader;
 
   Future<XFile?> pickReceipt() {
-    return _picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 55,
-      maxWidth: 900,
+    return _uploader.pickImage(imageQuality: 55, maxWidth: 900);
+  }
+
+  Future<String> uploadReceipt(XFile file) {
+    return _uploader.upload(
+      file,
+      folder: CloudinaryConfig.folderReceipts,
+      tags: const ['wallet_top_up'],
     );
   }
 
-  Future<String> toDataUrl(XFile file) async {
-    final bytes = await file.readAsBytes();
-    if (bytes.length > 700 * 1024) {
-      throw StateError('صورة الفاتورة كبيرة جداً. اختر صورة أوضح بحجم أصغر.');
-    }
-    final mime = file.mimeType ?? 'image/jpeg';
-    final b64 = base64Encode(bytes);
-    if (kDebugMode) {
-      debugPrint('Receipt data URL size=${bytes.length}');
-    }
-    return 'data:$mime;base64,$b64';
-  }
-
-  Future<String> pickAndEncode() async {
-    final file = await pickReceipt();
-    if (file == null) throw StateError('cancelled');
-    return toDataUrl(file);
+  /// يختار صورة مضغوطة ويرفعها؛ يرمي `cancelled` عند الإلغاء.
+  Future<String> pickAndUpload() {
+    return _uploader.pickAndUpload(
+      folder: CloudinaryConfig.folderReceipts,
+      tags: const ['wallet_top_up'],
+      imageQuality: 55,
+      maxWidth: 900,
+    );
   }
 }

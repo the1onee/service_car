@@ -26,6 +26,8 @@ class JobOffer {
     this.deliveryType = '',
     this.vendorNote = '',
     this.oilWorkshopTier = '',
+    this.specialtyAr = '',
+    this.partImageUrl = '',
   });
 
   final String id;
@@ -51,6 +53,8 @@ class JobOffer {
   final String vendorNote;
   /// agency | trusted — لورش الزيوت.
   final String oilWorkshopTier;
+  final String specialtyAr;
+  final String partImageUrl;
 
   bool get isAgencyOilWorkshop => oilWorkshopTier == 'agency';
   bool get isTrustedOilWorkshop => oilWorkshopTier == 'trusted';
@@ -71,7 +75,8 @@ class JobOffer {
         (e) => e.name == raw,
         orElse: () => OfferStatus.pending,
       ),
-      expiresAt: (d['expiresAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      expiresAt: (d['expiresAt'] as Timestamp?)?.toDate() ??
+          DateTime.now().add(const Duration(days: 365)),
       serviceTitle: d['serviceTitle'] as String?,
       vehicleTypeTitle: d['vehicleTypeTitle'] as String?,
       approxLocation: d['approxLocation'] as GeoPoint?,
@@ -89,6 +94,8 @@ class JobOffer {
       deliveryType: d['deliveryType'] as String? ?? '',
       vendorNote: d['vendorNote'] as String? ?? '',
       oilWorkshopTier: d['oilWorkshopTier'] as String? ?? '',
+      specialtyAr: d['specialtyAr'] as String? ?? '',
+      partImageUrl: d['partImageUrl'] as String? ?? '',
     );
   }
 }

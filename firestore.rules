@@ -31,8 +31,11 @@ service cloud.firestore {
     function isOilWorkshopRole() {
       return hasRole('oilWorkshop');
     }
+    function isPaintShopRole() {
+      return hasRole('paintShop');
+    }
     function isProviderRole() {
-      return isTechnicianRole() || isWorkshopRole() || isOilWorkshopRole();
+      return isTechnicianRole() || isWorkshopRole() || isOilWorkshopRole() || isPaintShopRole();
     }
     // مالك المستند: يُمرَّر له حقل المعرّف من المستند.
     function isOwner(uid) {
@@ -146,8 +149,8 @@ service cloud.firestore {
           && request.resource.data.status in ['dispatching', 'offerPending'];
       }
       function isOpenForBidding() {
-        return isTechnicianRole()
-          && resource.data.status in ['dispatching', 'offerPending', 'comparing'];
+        return isProviderRole()
+          && resource.data.status in ['dispatching', 'offerPending', 'comparing', 'noTechnician'];
       }
 
       allow create: if creatingOwnJob();
@@ -186,6 +189,10 @@ service cloud.firestore {
     }
     match /vehicleTypes/{id} {
       allow read: if signedIn();
+    }
+    // كتالوج الاختصاصات للقوائم المنسدلة (عميل / تسجيل ورشة) — القراءة عامة، الكتابة للأدمن فقط.
+    match /workshopSpecialties/{id} {
+      allow get, list: if true;
     }
     match /cities/{id} {
       allow read: if signedIn();

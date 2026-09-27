@@ -10,10 +10,21 @@ service firebase.storage {
     function isImage() {
       return request.resource.contentType.matches('image/.*');
     }
+    function underOneMb() {
+      return request.resource.size < 1 * 1024 * 1024;
+    }
     function underFiveMb() {
       return request.resource.size < 5 * 1024 * 1024;
     }
 
+    // مسار موحّد: uploads/{folder}/{uid}/{file}
+    match /uploads/{folder}/{uid}/{fileName} {
+      allow read: if signedIn();
+      allow create, update: if isOwner(uid) && isImage() && underOneMb();
+      allow delete: if isOwner(uid);
+    }
+
+    // توافق مع مسار قديم لفواتير المحفظة إن وُجد.
     match /walletTopUps/{uid}/{fileName} {
       allow read: if signedIn();
       allow create, update: if isOwner(uid) && isImage() && underFiveMb();

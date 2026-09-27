@@ -1,4 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:barrr/data/collections.dart';
 import 'package:barrr/models/job_offer.dart';
 import 'package:barrr/services/job_repository.dart';
 
@@ -10,9 +12,32 @@ class DispatchService {
   final FirebaseFunctions? _injected;
   FirebaseFunctions get _functions => _injected ?? FirebaseFunctions.instance;
 
+  static const _cfTimeout = Duration(seconds: 10);
+
   Future<void> dispatch(String jobId) async {
+    var isParts = false;
     try {
-      final res = await _functions.httpsCallable('dispatchJob').call({'jobId': jobId});
+      final snap = await FirebaseFirestore.instance
+          .collection(Cols.jobs)
+          .doc(jobId)
+          .get()
+          .timeout(_cfTimeout);
+      final data = snap.data();
+      isParts = data?['serviceId'] == 'parts' ||
+          data?['providerKind'] == 'workshop';
+    } catch (_) {}
+
+    // طلبات القطع: توزيع محلي فقط (اختصاص + نطاق أوسع).
+    if (isParts) {
+      await _jobs.dispatch(jobId);
+      return;
+    }
+
+    try {
+      final res = await _functions
+          .httpsCallable('dispatchJob')
+          .call({'jobId': jobId})
+          .timeout(_cfTimeout);
       final data = res.data;
       final ok = data == true || (data is Map && data['ok'] == true);
       if (ok) return;
@@ -32,15 +57,18 @@ class DispatchService {
     String vendorNote = '',
   }) async {
     try {
-      final res = await _functions.httpsCallable('acceptOffer').call({
-        'offerId': offerId,
-        'initialPrice': initialPrice,
-        if (partCondition.isNotEmpty) 'partCondition': partCondition,
-        if (warrantyDays > 0) 'warrantyDays': warrantyDays,
-        if (warrantyNote.isNotEmpty) 'warrantyNote': warrantyNote,
-        if (deliveryType.isNotEmpty) 'deliveryType': deliveryType,
-        if (vendorNote.isNotEmpty) 'vendorNote': vendorNote,
-      });
+      final res = await _functions
+          .httpsCallable('acceptOffer')
+          .call({
+            'offerId': offerId,
+            'initialPrice': initialPrice,
+            if (partCondition.isNotEmpty) 'partCondition': partCondition,
+            if (warrantyDays > 0) 'warrantyDays': warrantyDays,
+            if (warrantyNote.isNotEmpty) 'warrantyNote': warrantyNote,
+            if (deliveryType.isNotEmpty) 'deliveryType': deliveryType,
+            if (vendorNote.isNotEmpty) 'vendorNote': vendorNote,
+          })
+          .timeout(const Duration(seconds: 8));
       return res.data == true || (res.data is Map && res.data['ok'] == true);
     } catch (_) {
       return _jobs.acceptOffer(
@@ -59,7 +87,10 @@ class DispatchService {
 
   Future<void> onWindowExpired(String jobId) async {
     try {
-      await _functions.httpsCallable('onWindowExpired').call({'jobId': jobId});
+      await _functions
+          .httpsCallable('onWindowExpired')
+          .call({'jobId': jobId})
+          .timeout(_cfTimeout);
     } catch (_) {
       await _jobs.onWindowExpired(jobId);
     }
@@ -70,10 +101,13 @@ class DispatchService {
     required JobOffer offer,
   }) async {
     try {
-      final res = await _functions.httpsCallable('selectOffer').call({
-        'jobId': jobId,
-        'offerId': offer.id,
-      });
+      final res = await _functions
+          .httpsCallable('selectOffer')
+          .call({
+            'jobId': jobId,
+            'offerId': offer.id,
+          })
+          .timeout(_cfTimeout);
       return res.data == true || (res.data is Map && res.data['ok'] == true);
     } catch (_) {
       return _jobs.customerSelectOffer(jobId, offer);

@@ -2,6 +2,7 @@ class Cols {
   static const users = 'users';
   static const services = 'services';
   static const vehicleTypes = 'vehicleTypes';
+  static const workshopSpecialties = 'workshopSpecialties';
   static const jobs = 'jobs';
   static const jobOffers = 'jobOffers';
   static const appSettings = 'appSettings';

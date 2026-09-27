@@ -1,7 +1,7 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { getApps, initializeApp } = require("firebase-admin/app");
-const { getFirestore, Timestamp } = require("firebase-admin/firestore");
+const { getFirestore, Timestamp, FieldValue } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 
 if (getApps().length === 0) initializeApp();
@@ -15,6 +15,7 @@ const QUOTE_TECHS = 8;
 const MAX_QUOTES = 3;
 const MAX_ROUNDS = 3;
 const MAX_KM = 25;
+const MAX_PARTS_KM = 120;
 const walletFns = require("./wallet");
 
 function isEmergencyJob(job) {
@@ -72,9 +73,9 @@ async function notify(tokens, title, body, data) {
 function audienceRoles(audience) {
   if (audience === "customers") return ["customer"];
   if (audience === "technicians") {
-    return ["technician", "workshop", "oilWorkshop"];
+    return ["technician", "workshop", "oilWorkshop", "paintShop"];
   }
-  return ["customer", "technician", "workshop", "oilWorkshop"];
+  return ["customer", "technician", "workshop", "oilWorkshop", "paintShop"];
 }
 
 async function collectFcmTokensForRoles(roles) {
@@ -195,11 +196,17 @@ async function dispatchJobInternal(jobId) {
     job.serviceId === "parts" || job.providerKind === "workshop";
   const isOil =
     job.serviceId === "oil" || job.providerKind === "oilWorkshop";
+  const isPaint =
+    job.serviceId === "paint" ||
+    job.providerKind === "paintShop" ||
+    job.providerKind === "paint_shop";
   const providerRole = isParts
     ? "workshop"
     : isOil
       ? "oilWorkshop"
-      : "technician";
+      : isPaint
+        ? "paintShop"
+        : "technician";
   const techs = await db
     .collection("users")
     .where("role", "==", providerRole)
@@ -223,7 +230,9 @@ async function dispatchJobInternal(jobId) {
 
   const origin = job.approxLocation;
   const neededVehicle = typeof job.vehicleTypeId === "string" ? job.vehicleTypeId : "";
-  const ranked = techs.docs
+  const neededSpecialty =
+    typeof job.specialtyId === "string" ? job.specialtyId.trim() : "";
+  let ranked = techs.docs
     .map((d) => {
       const data = d.data();
       const geo = data.geo;
@@ -241,7 +250,9 @@ async function dispatchJobInternal(jobId) {
           ? "ورشة"
           : providerRole === "oilWorkshop"
             ? "ورشة زيوت"
-            : "فني";
+            : providerRole === "paintShop"
+              ? "ورشة دهان"
+              : "فني";
       return {
         id: d.id,
         online: data.isOnline === true,
@@ -253,17 +264,27 @@ async function dispatchJobInternal(jobId) {
         wallet: Number(data.walletBalance || 0),
         vehicleTypeIds,
         serviceIds,
-        isWorkshop: providerRole === "workshop",
+        isWorkshop: providerRole === "workshop" || providerRole === "paintShop",
         oilWorkshopTier:
           typeof data.oilWorkshopTier === "string" ? data.oilWorkshopTier : "",
+        specialtyId:
+          typeof data.specialtyId === "string" ? data.specialtyId : "",
+        specialtyAr:
+          typeof data.specialtyAr === "string" ? data.specialtyAr : "",
       };
     })
     .filter((t) => t.online)
     .filter((t) => !t.serviceIds.length || t.serviceIds.includes(job.serviceId))
-    .filter((t) => t.km <= MAX_KM)
+    .filter((t) => t.km <= (isParts ? MAX_PARTS_KM : MAX_KM))
     .filter((t) => t.verified)
     .filter((t) => t.isWorkshop || t.wallet >= minWallet)
     .filter((t) => !used.has(t.id))
+    .filter((t) => {
+      if (isParts && neededSpecialty) {
+        return t.specialtyId === neededSpecialty;
+      }
+      return true;
+    })
     .filter(
       (t) =>
         t.isWorkshop ||
@@ -271,23 +292,28 @@ async function dispatchJobInternal(jobId) {
         !t.vehicleTypeIds.length ||
         t.vehicleTypeIds.includes(neededVehicle),
     )
-    .sort((a, b) => a.km - b.km)
-    .slice(0, emergency ? EMERGENCY_TECHS : QUOTE_TECHS);
+    .sort((a, b) => a.km - b.km);
+
+  if (!isParts) {
+    ranked = ranked.slice(0, emergency ? EMERGENCY_TECHS : QUOTE_TECHS);
+  }
 
   if (!ranked.length) {
     await jobRef.update({ status: "noTechnician" });
     return { ok: false, reason: "none" };
   }
 
+  const noExpiry = isParts;
   const seconds = emergency ? EMERGENCY_SECONDS : QUOTE_SECONDS;
-  const expires = Timestamp.fromDate(new Date(Date.now() + seconds * 1000));
+  const expires = noExpiry
+    ? null
+    : Timestamp.fromDate(new Date(Date.now() + seconds * 1000));
   const batch = db.batch();
   for (const t of ranked) {
     const offer = {
       jobId,
       technicianId: t.id,
       status: "pending",
-      expiresAt: expires,
       serviceTitle: job.serviceTitle || job.serviceId,
       vehicleTypeTitle: job.vehicleTypeTitle || null,
       approxLocation: job.approxLocation,
@@ -297,23 +323,32 @@ async function dispatchJobInternal(jobId) {
       distanceKm: t.km,
       verified: t.verified,
       providerKind: job.providerKind || providerRole,
+      partName: job.partName || "",
+      carMake: job.carMake || "",
+      carModel: job.carModel || "",
+      specialtyAr: t.specialtyAr || job.specialtyAr || "",
     };
+    if (expires) offer.expiresAt = expires;
     if (t.oilWorkshopTier) offer.oilWorkshopTier = t.oilWorkshopTier;
     batch.set(db.collection("jobOffers").doc(), offer);
   }
-  batch.update(jobRef, {
+  const jobUpdate = {
     status: "offerPending",
-    expiresAt: expires,
     matchingMode: emergency ? "emergency" : "quotes",
     providerKind: job.providerKind || providerRole,
-  });
+  };
+  if (expires) jobUpdate.expiresAt = expires;
+  else jobUpdate.expiresAt = FieldValue.delete();
+  batch.update(jobRef, jobUpdate);
   await batch.commit();
   await notify(
     ranked.map((t) => t.token),
     "طلب جديد",
     emergency
       ? "لديك 30 ثانية لقبول الطلب وإدخال السعر المبدئي"
-      : "أرسل سعراً مبدئياً خلال دقائق ليراه العميل",
+      : isParts
+        ? "طلب قطع غيار ضمن اختصاصك — أرسل سعرك متى توفرت القطعة"
+        : "أرسل سعراً مبدئياً خلال دقائق ليراه العميل",
     { jobId, type: "offer" },
   );
   return { ok: true, count: ranked.length };
@@ -332,6 +367,10 @@ exports.onWindowExpired = onCall(async (request) => {
   if (!jobId) throw new HttpsError("invalid-argument", "jobId");
   const job = (await db.collection("jobs").doc(jobId).get()).data();
   if (!job) return { ok: false };
+  const isParts =
+    job.serviceId === "parts" || job.providerKind === "workshop";
+  // طلبات القطع تبقى مفتوحة حتى القبول أو الإلغاء.
+  if (isParts) return { ok: true, skipped: true };
   if (isEmergencyJob(job)) {
     await maybeRedispatchInternal(jobId);
     return { ok: true };
@@ -401,6 +440,10 @@ exports.onQuoteWindow = onDocumentUpdated(
     const before = event.data.before.data();
     const after = event.data.after.data();
     if (!after || after.status !== "offerPending" || isEmergencyJob(after)) return;
+    const isParts =
+      after.serviceId === "parts" || after.providerKind === "workshop";
+    // طلبات القطع بلا نافذة زمنية.
+    if (isParts || !after.expiresAt) return;
     if (before.status === "offerPending") return;
     const exp = after.expiresAt?.toDate?.() || new Date(Date.now() + QUOTE_SECONDS * 1000);
     const wait = exp.getTime() - Date.now() + 1000;

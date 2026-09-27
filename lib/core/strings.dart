@@ -23,12 +23,17 @@ class AppStrings {
       'حساب الورشة يُرسل للمراجعة، ويُفعَّل بعد موافقة الإدارة لاستقبال طلبات القطع.';
   static const oilWorkshopAccountNote =
       'حساب ورشة الزيوت يُرسل للمراجعة، ويُفعَّل بعد موافقة الإدارة لاستقبال طلبات تبديل الزيت في البيت.';
+  static const paintShopAccountNote =
+      'حساب ورشة الدهان يُرسل للمراجعة، ويُفعَّل بعد موافقة الإدارة لاستقبال طلبات الدهان.';
   static const idCard = 'رقم البطاقة';
   static const skills = 'المهارات / الخدمات';
   static const vehicleTypes = 'أنواع السيارات';
   static const workshopName = 'اسم الورشة';
   static const workshopSpecialty = 'اختصاص الورشة';
   static const workshopOps = 'العمليات المهمة';
+  static const city = 'المدينة';
+  static const selectCity = 'اختر المدينة';
+  static const selectSpecialty = 'اختر الاختصاص';
   static const oilWorkshopTier = 'تصنيف الورشة';
   static const oilWorkshopAgency = 'وكالة أصلية';
   static const oilWorkshopTrusted = 'موثوقة';
@@ -51,6 +56,7 @@ class AppStrings {
   static const technician = 'فني';
   static const workshop = 'ورشة قطع';
   static const oilWorkshop = 'ورشة زيوت';
+  static const paintShop = 'ورشة دهان';
 
   // الرحلة
   static const pickLocation = 'حدد موقعك على الخريطة';

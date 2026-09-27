@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/features/shared/app_network_or_data_image.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/models/job_offer.dart';
@@ -93,31 +93,39 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
       _error = null;
     });
     final scope = AppScope.of(context);
-    final ok = await scope.dispatch.acceptOffer(
-      offerId: widget.offer.id,
-      technicianId: widget.offer.technicianId,
-      technicianName: widget.workshopName,
-      initialPrice: parsed,
-      partCondition: _condition.name,
-      warrantyDays: days,
-      warrantyNote: _warrantyNote.text.trim().isEmpty
-          ? 'ضمان $days يوم'
-          : _warrantyNote.text.trim(),
-      deliveryType: _delivery.name,
-      vendorNote: _vendorNotes.text.trim(),
-    );
-    if (!mounted) return;
-    if (!ok) {
+    try {
+      final ok = await scope.dispatch.acceptOffer(
+        offerId: widget.offer.id,
+        technicianId: widget.offer.technicianId,
+        technicianName: widget.workshopName,
+        initialPrice: parsed,
+        partCondition: _condition.name,
+        warrantyDays: days,
+        warrantyNote: _warrantyNote.text.trim().isEmpty
+            ? 'ضمان $days يوم'
+            : _warrantyNote.text.trim(),
+        deliveryType: _delivery.name,
+        vendorNote: _vendorNotes.text.trim(),
+      );
+      if (!mounted) return;
+      if (!ok) {
+        setState(() {
+          _busy = false;
+          _error = 'فاتك الطلب أو انتهت المهلة.';
+        });
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم إرسال عرض السعر للعميل بنجاح.')),
+      );
+      widget.onDone();
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = 'فاتك الطلب أو انتهت المهلة.';
+        _error = 'تعذر إرسال العرض: $e';
       });
-      return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم إرسال عرض السعر للعميل بنجاح.')),
-    );
-    widget.onDone();
   }
 
   Future<void> _reject() async {
@@ -173,7 +181,11 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
                 job?.carModel ?? widget.offer.carModel,
               if ((job?.carYear ?? '').isNotEmpty) '(${job!.carYear})',
             ].where((e) => e != null && e.toString().isNotEmpty).join(' ');
-            final imageUrl = job?.partImageUrl ?? '';
+            final imageUrl = () {
+              final fromJob = job?.partImageUrl.trim() ?? '';
+              if (fromJob.isNotEmpty) return fromJob;
+              return widget.offer.partImageUrl.trim();
+            }();
             final note = job?.partNote ?? '';
             final address = job == null
                 ? 'موقع تقريبي'
@@ -1075,13 +1087,7 @@ class _DataUrlImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    try {
-      final comma = dataUrl.indexOf(',');
-      final b64 = comma >= 0 ? dataUrl.substring(comma + 1) : dataUrl;
-      return Image.memory(base64Decode(b64), fit: BoxFit.cover);
-    } catch (_) {
-      return const ColoredBox(color: Color(0xFFEFF4FF));
-    }
+    return AppNetworkOrDataImage(source: dataUrl);
   }
 }
 

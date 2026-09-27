@@ -266,6 +266,26 @@ class _OfferCard extends StatelessWidget {
               height: 1.35,
             ),
           ),
+          if (offer.specialtyAr.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.precision_manufacturing_outlined,
+                    size: 15, color: Color(0xFF45464D)),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    offer.specialtyAr,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF45464D),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 4),
           Row(
             children: [

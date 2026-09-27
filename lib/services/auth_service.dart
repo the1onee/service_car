@@ -110,8 +110,11 @@ class AuthService {
     String idCard = '',
     List<String> serviceIds = const [],
     List<String> vehicleTypeIds = const [],
+    String specialtyId = '',
     String specialtyAr = '',
     String workshopOps = '',
+    String cityId = '',
+    String cityNameAr = '',
     OilWorkshopTier? oilWorkshopTier,
   }) async {
     final e164 = pendingPhone;
@@ -125,7 +128,8 @@ class AuthService {
     if (role != UserRole.customer &&
         role != UserRole.technician &&
         role != UserRole.workshop &&
-        role != UserRole.oilWorkshop) {
+        role != UserRole.oilWorkshop &&
+        role != UserRole.paintShop) {
       throw FirebaseAuthException(
         code: 'invalid-argument',
         message: 'نوع الحساب غير صالح.',
@@ -134,12 +138,15 @@ class AuthService {
     final code = _requireCode(smsCode);
     final needsApproval = role == UserRole.technician ||
         role == UserRole.workshop ||
-        role == UserRole.oilWorkshop;
+        role == UserRole.oilWorkshop ||
+        role == UserRole.paintShop;
     final resolvedServices = switch (role) {
       UserRole.workshop =>
         serviceIds.isEmpty ? const ['parts'] : serviceIds,
       UserRole.oilWorkshop =>
         serviceIds.isEmpty ? const ['oil'] : serviceIds,
+      UserRole.paintShop =>
+        serviceIds.isEmpty ? const ['paint'] : serviceIds,
       _ => serviceIds,
     };
 
@@ -176,8 +183,11 @@ class AuthService {
           idCard: idCard.trim(),
           serviceIds: resolvedServices,
           vehicleTypeIds: vehicleTypeIds,
+          specialtyId: specialtyId.trim(),
           specialtyAr: specialtyAr.trim(),
           workshopOps: workshopOps.trim(),
+          cityId: cityId.trim(),
+          cityNameAr: cityNameAr.trim(),
           oilWorkshopTier: role == UserRole.oilWorkshop
               ? (oilWorkshopTier ?? OilWorkshopTier.trusted)
               : null,

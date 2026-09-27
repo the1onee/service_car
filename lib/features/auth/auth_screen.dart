@@ -9,11 +9,13 @@ import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/phone.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/data/collections.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/vehicle_type.dart';
 import 'package:barrr/services/auth_service.dart';
+import 'package:barrr/services/specialties_catalog.dart';
 
 enum _Stage { login, register, otp }
 
@@ -36,7 +38,6 @@ class _AuthScreenState extends State<AuthScreen> {
   final _confirm = TextEditingController();
   final _address = TextEditingController();
   final _idCard = TextEditingController();
-  final _specialty = TextEditingController();
   final _workshopOps = TextEditingController();
   final _otp = TextEditingController();
   GeoPoint? _registerGeo;
@@ -46,6 +47,10 @@ class _AuthScreenState extends State<AuthScreen> {
   OilWorkshopTier _oilWorkshopTier = OilWorkshopTier.trusted;
   final Set<String> _skills = {};
   final Set<String> _vehicleTypes = {};
+  String? _cityId;
+  String? _specialtyId;
+  List<({String id, String nameAr})> _cities = const [];
+  List<SpecialtyOption> _specialties = const [];
   OtpPurpose _purpose = OtpPurpose.register;
   bool _hidePassword = true;
   bool _hideConfirm = true;
@@ -67,13 +72,86 @@ class _AuthScreenState extends State<AuthScreen> {
       _confirm,
       _address,
       _idCard,
-      _specialty,
       _workshopOps,
       _otp,
     ]) {
       c.dispose();
     }
     super.dispose();
+  }
+
+  bool get _isWorkshopRole =>
+      _registerRole == UserRole.workshop ||
+      _registerRole == UserRole.oilWorkshop ||
+      _registerRole == UserRole.paintShop;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadCitiesOnce();
+  }
+
+  var _citiesLoaded = false;
+  Future<void> _loadCitiesOnce() async {
+    if (_citiesLoaded) return;
+    _citiesLoaded = true;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection(Cols.cities)
+          .where('active', isEqualTo: true)
+          .get();
+      final list = snap.docs
+          .map((d) {
+            final data = d.data();
+            return (
+              id: d.id,
+              nameAr: (data['nameAr'] as String?)?.trim().isNotEmpty == true
+                  ? data['nameAr'] as String
+                  : d.id,
+            );
+          })
+          .toList()
+        ..sort((a, b) => a.nameAr.compareTo(b.nameAr));
+      if (!mounted) return;
+      setState(() => _cities = list);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _cities = const [
+          (id: 'basra', nameAr: 'البصرة'),
+          (id: 'baghdad', nameAr: 'بغداد'),
+        ];
+      });
+    }
+  }
+
+  Future<void> _loadSpecialtiesForRole(UserRole role) async {
+    if (role != UserRole.workshop &&
+        role != UserRole.oilWorkshop &&
+        role != UserRole.paintShop) {
+      setState(() {
+        _specialties = const [];
+        _specialtyId = null;
+      });
+      return;
+    }
+    try {
+      final list = await loadWorkshopSpecialties(role: role.name);
+      if (!mounted) return;
+      setState(() {
+        _specialties = list;
+        if (_specialtyId != null &&
+            !list.any((s) => s.id == _specialtyId)) {
+          _specialtyId = null;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _specialties = const [];
+        _specialtyId = null;
+      });
+    }
   }
 
   // ---------------------------------------------------------------- الإجراءات
@@ -152,14 +230,28 @@ class _AuthScreenState extends State<AuthScreen> {
           serviceIds: switch (_registerRole) {
             UserRole.workshop => const ['parts'],
             UserRole.oilWorkshop => const ['oil'],
+            UserRole.paintShop => const ['paint'],
             _ => _skills.toList(),
           },
           vehicleTypeIds: _registerRole == UserRole.oilWorkshop ||
                   _registerRole == UserRole.technician
               ? _vehicleTypes.toList()
               : const [],
-          specialtyAr: _specialty.text,
+          specialtyId: _specialtyId ?? '',
+          specialtyAr: () {
+            for (final s in _specialties) {
+              if (s.id == _specialtyId) return s.nameAr;
+            }
+            return '';
+          }(),
           workshopOps: _workshopOps.text,
+          cityId: _cityId ?? '',
+          cityNameAr: () {
+            for (final c in _cities) {
+              if (c.id == _cityId) return c.nameAr;
+            }
+            return '';
+          }(),
           oilWorkshopTier: _registerRole == UserRole.oilWorkshop
               ? _oilWorkshopTier
               : null,
@@ -435,10 +527,14 @@ class _AuthScreenState extends State<AuthScreen> {
         const SizedBox(height: 14),
         _RolePicker(
           role: _registerRole,
-          onChanged: (role) => setState(() {
-            _registerRole = role;
-            _error = null;
-          }),
+          onChanged: (role) {
+            setState(() {
+              _registerRole = role;
+              _error = null;
+              _specialtyId = null;
+            });
+            _loadSpecialtiesForRole(role);
+          },
         ),
         const SizedBox(height: 12),
         _RoleNotice(role: _registerRole),
@@ -454,17 +550,21 @@ class _AuthScreenState extends State<AuthScreen> {
                 autofillHints: const [AutofillHints.name],
                 decoration: InputDecoration(
                   labelText: _registerRole == UserRole.workshop ||
-                          _registerRole == UserRole.oilWorkshop
+                          _registerRole == UserRole.oilWorkshop ||
+                          _registerRole == UserRole.paintShop
                       ? AppStrings.workshopName
                       : AppStrings.name,
                   hintText: _registerRole == UserRole.oilWorkshop
                       ? 'مثال: وكالة تويوتا — خدمة زيوت متنقلة'
-                      : (_registerRole == UserRole.workshop
-                          ? 'مثال: ورشة النور لقطع الغيار'
-                          : 'مثال: علي حسن الجابري'),
+                      : (_registerRole == UserRole.paintShop
+                          ? 'مثال: ورشة الألوان للدهان'
+                          : (_registerRole == UserRole.workshop
+                              ? 'مثال: ورشة النور لقطع الغيار'
+                              : 'مثال: علي حسن الجابري')),
                   prefixIcon: Icon(
                     _registerRole == UserRole.workshop ||
-                            _registerRole == UserRole.oilWorkshop
+                            _registerRole == UserRole.oilWorkshop ||
+                            _registerRole == UserRole.paintShop
                         ? Icons.storefront_outlined
                         : Icons.person_outline_rounded,
                   ),
@@ -473,7 +573,8 @@ class _AuthScreenState extends State<AuthScreen> {
                   final name = (v ?? '').trim();
                   if (name.length < 3) {
                     return _registerRole == UserRole.workshop ||
-                            _registerRole == UserRole.oilWorkshop
+                            _registerRole == UserRole.oilWorkshop ||
+                            _registerRole == UserRole.paintShop
                         ? 'أدخل اسم الورشة.'
                         : 'أدخل الاسم الكامل.';
                   }
@@ -508,7 +609,8 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               if (_registerRole == UserRole.technician ||
                   _registerRole == UserRole.workshop ||
-                  _registerRole == UserRole.oilWorkshop) ...[
+                  _registerRole == UserRole.oilWorkshop ||
+                  _registerRole == UserRole.paintShop) ...[
                 const SizedBox(height: 14),
                 TextFormField(
                   controller: _idCard,
@@ -560,16 +662,6 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 14),
                 TextFormField(
-                  controller: _specialty,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: AppStrings.workshopSpecialty,
-                    hintText: 'مثال: زيوت وكالة / فلاتر أصلية',
-                    prefixIcon: Icon(Icons.oil_barrel_outlined),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
                   controller: _workshopOps,
                   maxLines: 2,
                   textInputAction: TextInputAction.next,
@@ -581,29 +673,61 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                 ),
               ],
-              if (_registerRole == UserRole.workshop) ...[
+              if (_isWorkshopRole) ...[
                 const SizedBox(height: 14),
-                TextFormField(
-                  controller: _specialty,
-                  textInputAction: TextInputAction.next,
+                DropdownButtonFormField<String>(
+                  value: _cityId,
+                  decoration: const InputDecoration(
+                    labelText: AppStrings.city,
+                    prefixIcon: Icon(Icons.location_city_outlined),
+                  ),
+                  hint: const Text(AppStrings.selectCity),
+                  items: _cities
+                      .map(
+                        (c) => DropdownMenuItem(
+                          value: c.id,
+                          child: Text(c.nameAr),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) => setState(() => _cityId = v),
+                  validator: (v) =>
+                      v == null || v.isEmpty ? 'اختر المدينة.' : null,
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  value: _specialtyId,
                   decoration: const InputDecoration(
                     labelText: AppStrings.workshopSpecialty,
-                    hintText: 'مثال: قطع غيار ياباني / كهرباء سيارات',
                     prefixIcon: Icon(Icons.category_outlined),
                   ),
-                  validator: (v) => (v ?? '').trim().length < 2
-                      ? 'أدخل اختصاص الورشة.'
-                      : null,
+                  hint: const Text(AppStrings.selectSpecialty),
+                  items: _specialties
+                      .map(
+                        (s) => DropdownMenuItem(
+                          value: s.id,
+                          child: Text(s.nameAr),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) => setState(() => _specialtyId = v),
+                  validator: (v) =>
+                      v == null || v.isEmpty ? 'اختر اختصاص الورشة.' : null,
                 ),
+              ],
+              if (_registerRole == UserRole.workshop ||
+                  _registerRole == UserRole.paintShop) ...[
                 const SizedBox(height: 14),
                 TextFormField(
                   controller: _workshopOps,
                   maxLines: 2,
                   textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: AppStrings.workshopOps,
-                    hintText: 'مثال: توفير قطع أصلية، توصيل، فحص قبل البيع',
-                    prefixIcon: Icon(Icons.handyman_outlined),
+                    hintText: _registerRole == UserRole.paintShop
+                        ? 'مثال: دهان صدام، تلميع، معالجة صدأ'
+                        : 'مثال: توفير قطع أصلية، توصيل، فحص قبل البيع',
+                    prefixIcon: const Icon(Icons.handyman_outlined),
                     alignLabelWithHint: true,
                   ),
                 ),
@@ -616,7 +740,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 autofillHints: const [AutofillHints.fullStreetAddress],
                 decoration: InputDecoration(
                   labelText: AppStrings.address,
-                  hintText: 'المدينة، الحي، أقرب نقطة دالة — أو حدّد على الخريطة',
+                  hintText: 'الحي، أقرب نقطة دالة — أو حدّد على الخريطة',
                   prefixIcon: const Icon(Icons.location_on_outlined),
                   alignLabelWithHint: true,
                   suffixIcon: IconButton(
@@ -1134,6 +1258,19 @@ class _RolePicker extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _roleTile(
+                label: AppStrings.paintShop,
+                selected: role == UserRole.paintShop,
+                onTap: () => onChanged(UserRole.paintShop),
+              ),
+            ),
+            const Expanded(child: SizedBox()),
+          ],
+        ),
       ],
     );
   }
@@ -1181,23 +1318,26 @@ class _RoleNotice extends StatelessWidget {
     final isTech = role == UserRole.technician;
     final isWorkshop = role == UserRole.workshop;
     final isOilWorkshop = role == UserRole.oilWorkshop;
-    final tint = isOilWorkshop
+    final isPaintShop = role == UserRole.paintShop;
+    final tint = isOilWorkshop || isPaintShop
         ? AppColors.amberTint
         : (isWorkshop
             ? AppColors.recessed
             : (isTech ? AppColors.amberTint : AppColors.petrolTint));
-    final badge = isOilWorkshop
+    final badge = isOilWorkshop || isPaintShop
         ? AppColors.amber
         : (isWorkshop
             ? AppColors.slate
             : (isTech ? AppColors.amber : AppColors.petrol));
-    final note = isOilWorkshop
-        ? AppStrings.oilWorkshopAccountNote
-        : (isWorkshop
-            ? AppStrings.workshopAccountNote
-            : (isTech
-                ? AppStrings.technicianAccountNote
-                : AppStrings.customerAccountNote));
+    final note = isPaintShop
+        ? AppStrings.paintShopAccountNote
+        : (isOilWorkshop
+            ? AppStrings.oilWorkshopAccountNote
+            : (isWorkshop
+                ? AppStrings.workshopAccountNote
+                : (isTech
+                    ? AppStrings.technicianAccountNote
+                    : AppStrings.customerAccountNote)));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -1214,14 +1354,18 @@ class _RoleNotice extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             child: Icon(
-              isOilWorkshop
-                  ? Icons.oil_barrel_rounded
-                  : (isWorkshop
-                      ? Icons.storefront_rounded
-                      : (isTech
-                          ? Icons.handyman_rounded
-                          : Icons.person_rounded)),
-              color: isTech || isOilWorkshop ? AppColors.ink : Colors.white,
+              isPaintShop
+                  ? Icons.format_paint_rounded
+                  : (isOilWorkshop
+                      ? Icons.oil_barrel_rounded
+                      : (isWorkshop
+                          ? Icons.storefront_rounded
+                          : (isTech
+                              ? Icons.handyman_rounded
+                              : Icons.person_rounded))),
+              color: isTech || isOilWorkshop || isPaintShop
+                  ? AppColors.ink
+                  : Colors.white,
               size: 19,
             ),
           ),
@@ -1232,7 +1376,7 @@ class _RoleNotice extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12.5,
                 height: 1.5,
-                color: isTech || isOilWorkshop
+                color: isTech || isOilWorkshop || isPaintShop
                     ? AppColors.ink
                     : AppColors.petrolDark,
                 fontWeight: FontWeight.w600,

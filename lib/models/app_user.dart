@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:barrr/core/constants.dart';
 
-enum UserRole { customer, technician, workshop, oilWorkshop, admin }
+enum UserRole { customer, technician, workshop, oilWorkshop, paintShop, admin }
 
 enum VerificationStatus { pending, approved, rejected }
 
@@ -23,8 +23,11 @@ class AppUser {
     this.geo,
     this.serviceIds = const [],
     this.vehicleTypeIds = const [],
+    this.specialtyId = '',
     this.specialtyAr = '',
     this.workshopOps = '',
+    this.cityId = '',
+    this.cityNameAr = '',
     this.oilWorkshopTier,
     this.verified = false,
     this.verificationStatus = VerificationStatus.pending,
@@ -46,10 +49,15 @@ class AppUser {
   final List<String> serviceIds;
   /// أنواع السيارات التي يستطيع الفني العمل عليها (صالون، باص…).
   final List<String> vehicleTypeIds;
-  /// اختصاص الورشة (نص حر).
+  /// معرّف الاختصاص من كتالوج الأدمن.
+  final String specialtyId;
+  /// اختصاص الورشة (نص معروض).
   final String specialtyAr;
   /// عمليات مهمة تقدّمها الورشة.
   final String workshopOps;
+  /// مدينة الورشة (basra, baghdad…).
+  final String cityId;
+  final String cityNameAr;
   /// وكالة أصلية أو موثوقة — لورش الزيوت فقط.
   final OilWorkshopTier? oilWorkshopTier;
   final bool verified;
@@ -59,15 +67,16 @@ class AppUser {
   bool get isTechnician => role == UserRole.technician;
   bool get isWorkshop => role == UserRole.workshop;
   bool get isOilWorkshop => role == UserRole.oilWorkshop;
+  bool get isPaintShop => role == UserRole.paintShop;
   bool get isAdmin => role == UserRole.admin;
   bool get isApproved =>
       verificationStatus == VerificationStatus.approved ||
       (verified && verificationStatus != VerificationStatus.rejected);
 
   bool get canReceiveJobs =>
-      (isTechnician || isWorkshop || isOilWorkshop) &&
+      (isTechnician || isWorkshop || isOilWorkshop || isPaintShop) &&
       isApproved &&
-      (isWorkshop || walletBalance >= AppConstants.minWalletBalance);
+      (isWorkshop || isPaintShop || walletBalance >= AppConstants.minWalletBalance);
 
   String get oilWorkshopTierLabel {
     return switch (oilWorkshopTier) {
@@ -90,8 +99,11 @@ class AppUser {
         'geo': geo,
         'serviceIds': serviceIds,
         'vehicleTypeIds': vehicleTypeIds,
+        'specialtyId': specialtyId,
         'specialtyAr': specialtyAr,
         'workshopOps': workshopOps,
+        'cityId': cityId,
+        'cityNameAr': cityNameAr,
         if (oilWorkshopTier != null) 'oilWorkshopTier': oilWorkshopTier!.name,
         'verified': verified,
         'verificationStatus': verificationStatus.name,
@@ -121,8 +133,11 @@ class AppUser {
       serviceIds: List<String>.from(d['serviceIds'] as List? ?? const []),
       vehicleTypeIds:
           List<String>.from(d['vehicleTypeIds'] as List? ?? const []),
+      specialtyId: d['specialtyId'] as String? ?? '',
       specialtyAr: d['specialtyAr'] as String? ?? '',
       workshopOps: d['workshopOps'] as String? ?? '',
+      cityId: d['cityId'] as String? ?? '',
+      cityNameAr: d['cityNameAr'] as String? ?? '',
       oilWorkshopTier: () {
         if (tierRaw == null || tierRaw.isEmpty) return null;
         for (final t in OilWorkshopTier.values) {
@@ -154,8 +169,11 @@ class AppUser {
     String? fcmToken,
     List<String>? serviceIds,
     List<String>? vehicleTypeIds,
+    String? specialtyId,
     String? specialtyAr,
     String? workshopOps,
+    String? cityId,
+    String? cityNameAr,
     OilWorkshopTier? oilWorkshopTier,
     bool? verified,
     VerificationStatus? verificationStatus,
@@ -175,8 +193,11 @@ class AppUser {
       geo: geo ?? this.geo,
       serviceIds: serviceIds ?? this.serviceIds,
       vehicleTypeIds: vehicleTypeIds ?? this.vehicleTypeIds,
+      specialtyId: specialtyId ?? this.specialtyId,
       specialtyAr: specialtyAr ?? this.specialtyAr,
       workshopOps: workshopOps ?? this.workshopOps,
+      cityId: cityId ?? this.cityId,
+      cityNameAr: cityNameAr ?? this.cityNameAr,
       oilWorkshopTier: oilWorkshopTier ?? this.oilWorkshopTier,
       verified: verified ?? this.verified,
       verificationStatus: verificationStatus ?? this.verificationStatus,

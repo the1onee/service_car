@@ -44,14 +44,15 @@ class LocationService {
     final def = fallback ??
         const LatLng(AppConstants.defaultLat, AppConstants.defaultLng);
     try {
-      final outcome = await checkPermissionOutcome();
+      final outcome = await checkPermissionOutcome()
+          .timeout(const Duration(seconds: 5), onTimeout: () => LocationOutcome.error);
       if (outcome != LocationOutcome.ok) {
         return LocationResult(latLng: def, outcome: outcome);
       }
       final p = await Geolocator.getCurrentPosition(
         locationSettings:
             const LocationSettings(accuracy: LocationAccuracy.high),
-      );
+      ).timeout(const Duration(seconds: 8));
       return LocationResult(
         latLng: LatLng(p.latitude, p.longitude),
         outcome: LocationOutcome.ok,

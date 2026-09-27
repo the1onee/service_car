@@ -54,24 +54,25 @@ class _CustomerHomeState extends State<CustomerHome> {
   String? _entryId;
   VehicleType? _vehicleType;
   StreamSubscription<CityZone?>? _citySub;
-  late final Stream<Job?> _activeJobStream;
-  late final Stream<List<Job>> _recentJobsStream;
-  late final Stream<List<ServiceItem>> _servicesStream;
-  late final Stream<List<VehicleType>> _vehicleTypesStream;
+  Stream<Job?>? _activeJobStream;
+  Stream<List<Job>>? _recentJobsStream;
+  Stream<List<ServiceItem>>? _servicesStream;
+  Stream<List<VehicleType>>? _vehicleTypesStream;
   VoidCallback? _fcmFocusListener;
   FcmService? _fcm;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final scope = AppScope.of(context);
+    // ??= يتحمّل hot reload دون LateInitializationError (عكس late final + flag).
+    _activeJobStream ??= scope.jobs.watchActiveForCustomer(widget.profile.id);
+    _recentJobsStream ??= scope.jobs.watchRecentForCustomer(widget.profile.id);
+    _servicesStream ??= scope.users.watchServices();
+    _vehicleTypesStream ??= scope.users.watchVehicleTypes();
     if (_locStarted) return;
     _locStarted = true;
-    final scope = AppScope.of(context);
     _fcm = scope.fcm;
-    _activeJobStream = scope.jobs.watchActiveForCustomer(widget.profile.id);
-    _recentJobsStream = scope.jobs.watchRecentForCustomer(widget.profile.id);
-    _servicesStream = scope.users.watchServices();
-    _vehicleTypesStream = scope.users.watchVehicleTypes();
     _citySub = scope.settings.watchActiveCity().listen((zone) {
       if (!mounted) return;
       if (zone?.nameAr == _zone?.nameAr &&
@@ -103,25 +104,44 @@ class _CustomerHomeState extends State<CustomerHome> {
 
   Future<void> _initLocation() async {
     final scope = AppScope.of(context);
-    final settings = await scope.settings.getSettings();
-    final zone = await scope.settings.getActiveCity();
-    final saved = widget.profile.geo;
-    final fallback = saved != null
-        ? LatLng(saved.latitude, saved.longitude)
-        : zone != null
-            ? LatLng(zone.centerLat, zone.centerLng)
-            : const LatLng(AppConstants.defaultLat, AppConstants.defaultLng);
-    final loc = await scope.location.currentOrDefault(fallback: fallback);
-    if (!mounted) return;
-    setState(() {
-      _zone = zone;
-      _zoom = settings.defaultZoom;
-      _pin = loc;
-      _ready = true;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _map.move(loc, settings.defaultZoom);
-    });
+    try {
+      final settings = await scope.settings.getSettings();
+      final zone = await scope.settings.getActiveCity();
+      final saved = widget.profile.geo;
+      final fallback = saved != null
+          ? LatLng(saved.latitude, saved.longitude)
+          : zone != null
+              ? LatLng(zone.centerLat, zone.centerLng)
+              : const LatLng(AppConstants.defaultLat, AppConstants.defaultLng);
+      if (!mounted) return;
+      setState(() {
+        _zone = zone;
+        _zoom = settings.defaultZoom;
+        _pin = fallback;
+        _ready = true;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        try {
+          _map.move(fallback, settings.defaultZoom);
+        } catch (_) {}
+      });
+      final loc = await scope.location.currentOrDefault(fallback: fallback);
+      if (!mounted) return;
+      if (loc.latitude == _pin.latitude && loc.longitude == _pin.longitude) {
+        return;
+      }
+      setState(() => _pin = loc);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        try {
+          _map.move(loc, settings.defaultZoom);
+        } catch (_) {}
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _ready = true);
+    }
   }
 
   bool _pinInZone() {
@@ -183,13 +203,25 @@ class _CustomerHomeState extends State<CustomerHome> {
         isEmergency: service.isEmergency,
         commissionRate: service.commissionRate,
       );
-      await scope.dispatch.dispatch(jobId);
+      // توزيع بمهلة قصيرة حتى لا تُبتلع الأخطاء وتبقى الواجهة معلّقة.
+      try {
+        await scope.dispatch
+            .dispatch(jobId)
+            .timeout(const Duration(seconds: 12));
+      } catch (_) {}
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _composing = false;
+        _selected = null;
+        _entryId = null;
+        _vehicleType = null;
+      });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('تعذر إرسال الطلب: $e')),
       );
-    } finally {
       if (mounted) setState(() => _submitting = false);
     }
   }
@@ -271,10 +303,19 @@ class _CustomerHomeState extends State<CustomerHome> {
 
   @override
   Widget build(BuildContext context) {
+    final recent = _recentJobsStream;
+    final active = _activeJobStream;
+    final services = _servicesStream;
+    final vehicles = _vehicleTypesStream;
+    if (recent == null || active == null || services == null || vehicles == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
     final zoneName = _zone?.nameAr;
     return FieldShell(
       tab: _tab,
-      onTab: (i) => setState(() => _tab = i),
+      onTab: _onTab,
       items: const [
         FieldNavItem(
             icon: Icons.home_repair_service_outlined, label: 'الرئيسية'),
@@ -286,30 +327,59 @@ class _CustomerHomeState extends State<CustomerHome> {
       body: IndexedStack(
         index: _tab,
         children: [
-          _homeTab(),
+          _homeTab(
+            active: active,
+            recent: recent,
+            services: services,
+            vehicles: vehicles,
+          ),
           OrdersScreen(
-            stream: _recentJobsStream,
+            stream: recent,
             profile: widget.profile,
           ),
           CustomerLedgerPage(
-            stream: _recentJobsStream,
+            stream: recent,
             profile: widget.profile,
             city: zoneName,
           ),
-          _account(zoneName),
+          _account(zoneName, recent),
         ],
       ),
     );
   }
 
+  void _onTab(int i) {
+    if (i == 0) {
+      final nav = Navigator.of(context);
+      if (nav.canPop()) {
+        nav.popUntil((route) => route.isFirst);
+      }
+      setState(() {
+        _tab = 0;
+        _composing = false;
+        _selected = null;
+        _entryId = null;
+        _vehicleType = null;
+      });
+      return;
+    }
+    setState(() => _tab = i);
+  }
+
   /// تبويب الخريطة فقط يستمع للطلب النشط — لا يعيد بناء باقي التبويبات.
-  Widget _homeTab() {
+  Widget _homeTab({
+    required Stream<Job?> active,
+    required Stream<List<Job>> recent,
+    required Stream<List<ServiceItem>> services,
+    required Stream<List<VehicleType>> vehicles,
+  }) {
     return StreamBuilder<Job?>(
-      stream: _activeJobStream,
+      stream: active,
       builder: (context, snap) {
         final job = snap.data;
-        _watchTimeout(job, context);
-        if (job != null) {
+        // طلبات القطع بلا نافذة زمنية؛ لا تُحبَس الواجهة على لوحة الطلب.
+        if (job != null && !job.isPartsOrder) {
+          _watchTimeout(job, context);
           if (_composing) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted && _composing) {
@@ -317,30 +387,76 @@ class _CustomerHomeState extends State<CustomerHome> {
               }
             });
           }
-          return _mapBody(job, _zone);
+          return _mapBody(
+            job,
+            _zone,
+            services: services,
+            vehicles: vehicles,
+          );
         }
         if (_composing) {
-          return _mapBody(null, _zone, showBack: true);
+          return _mapBody(
+            null,
+            _zone,
+            services: services,
+            vehicles: vehicles,
+            showBack: true,
+          );
         }
-        return CustomerLanding(
-          profile: widget.profile,
-          city: _zone?.nameAr,
-          addressLabel: _addressLabel,
-          services: _servicesStream,
-          recentJobs: _recentJobsStream,
-          onServiceTap: _onLandingService,
-          onEmergencyTap: _onEmergency,
-          onOpenWarranties: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => WarrantiesScreen(
-                  stream: _recentJobsStream,
-                  profile: widget.profile,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (job != null && job.isPartsOrder)
+              Material(
+                color: AppColors.azureTint,
+                child: InkWell(
+                  onTap: () => setState(() => _tab = 1),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.local_offer_outlined, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            job.partName.isNotEmpty
+                                ? 'طلب قطع قيد العروض: ${job.partName}'
+                                : 'لديك طلب قطع قيد العروض — تابع من الطلبات',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const Icon(Icons.chevron_left, size: 20),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            );
-          },
-          onOpenAccount: () => setState(() => _tab = 3),
+            Expanded(
+              child: CustomerLanding(
+                profile: widget.profile,
+                city: _zone?.nameAr,
+                addressLabel: _addressLabel,
+                services: services,
+                recentJobs: recent,
+                onServiceTap: _onLandingService,
+                onEmergencyTap: () => _onEmergency(services),
+                onOpenWarranties: () {
+                  Navigator.of(context).push(
+                    softPageRoute<void>(
+                      builder: (_) => WarrantiesScreen(
+                        stream: recent,
+                        profile: widget.profile,
+                      ),
+                    ),
+                  );
+                },
+                onOpenAccount: () => setState(() => _tab = 3),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -348,14 +464,18 @@ class _CustomerHomeState extends State<CustomerHome> {
 
   Future<void> _onLandingService(ServiceItem s) async {
     if (s.id == 'parts') {
-      await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
+      final result = await Navigator.of(context).push<PartsOrderResult>(
+        softPageRoute(
           builder: (_) => PartsOrderScreen(
             profile: widget.profile,
             service: s,
           ),
         ),
       );
+      if (!mounted) return;
+      if (result?.goOrders == true) {
+        setState(() => _tab = 1);
+      }
       return;
     }
     setState(() {
@@ -366,8 +486,8 @@ class _CustomerHomeState extends State<CustomerHome> {
     });
   }
 
-  Future<void> _onEmergency() async {
-    final list = await _servicesStream.first;
+  Future<void> _onEmergency(Stream<List<ServiceItem>> servicesStream) async {
+    final list = await servicesStream.first;
     final items = list.isEmpty ? seedServices : list;
     ServiceItem? emergency;
     for (final s in items) {
@@ -388,7 +508,13 @@ class _CustomerHomeState extends State<CustomerHome> {
     });
   }
 
-  Widget _mapBody(Job? job, CityZone? zone, {bool showBack = false}) {
+  Widget _mapBody(
+    Job? job,
+    CityZone? zone, {
+    required Stream<List<ServiceItem>> services,
+    required Stream<List<VehicleType>> vehicles,
+    bool showBack = false,
+  }) {
     final markers = <Marker>[
       if (job != null)
         pinMarker(
@@ -496,8 +622,8 @@ class _CustomerHomeState extends State<CustomerHome> {
                 selected: _selected,
                 entryId: _entryId,
                 vehicleType: _vehicleType,
-                services: _servicesStream,
-                vehicleTypes: _vehicleTypesStream,
+                services: services,
+                vehicleTypes: vehicles,
                 busy: _submitting,
                 onSelect: (s) {
                   setState(() => _selected = s);
@@ -513,9 +639,8 @@ class _CustomerHomeState extends State<CustomerHome> {
     );
   }
 
-  Widget _account(String? city) {
+  Widget _account(String? city, Stream<List<Job>> jobs) {
     final me = widget.profile;
-    final jobs = _recentJobsStream;
     return Column(
       children: [
         FieldTopBar(

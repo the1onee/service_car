@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
@@ -7,6 +6,7 @@ import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/jobs/orders_screen.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
+import 'package:barrr/features/shared/app_network_or_data_image.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/workshop/workshop_quote_sheet.dart';
 import 'package:barrr/models/app_user.dart';
@@ -38,18 +38,21 @@ class _WorkshopHomeState extends State<WorkshopHome> {
   VoidCallback? _fcmFocusListener;
   FcmService? _fcm;
   List<JobOffer> _pendingOffers = const [];
+  List<JobOffer> _submittedOffers = const [];
   StreamSubscription? _offersSub;
-  late final Stream<AppUser?> _userStream;
-  late final Stream<List<Job>> _recentJobsStream;
+  StreamSubscription? _submittedSub;
+  Stream<AppUser?>? _userStream;
+  Stream<List<Job>>? _recentJobsStream;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final scope = AppScope.of(context);
+    _userStream ??= scope.users.watch(widget.profile.id);
+    _recentJobsStream ??=
+        scope.jobs.watchRecentForTechnician(widget.profile.id);
     if (_booted) return;
     _booted = true;
-    final scope = AppScope.of(context);
-    _userStream = scope.users.watch(widget.profile.id);
-    _recentJobsStream = scope.jobs.watchRecentForTechnician(widget.profile.id);
     _fcm = scope.fcm;
     _fcmFocusListener = () {
       final id = scope.fcm.focusJobId.value;
@@ -61,17 +64,32 @@ class _WorkshopHomeState extends State<WorkshopHome> {
       scope.fcm.focusJobId.value = null;
     };
     scope.fcm.focusJobId.addListener(_fcmFocusListener!);
-    _offersSub = scope.jobs.watchPendingOffers(widget.profile.id).listen((
-      offers,
-    ) {
-      if (!mounted) return;
-      setState(() => _pendingOffers = offers);
-    });
+    _offersSub = scope.jobs.watchPendingOffers(widget.profile.id).listen(
+      (offers) {
+        if (!mounted) return;
+        setState(() => _pendingOffers = offers);
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() => _pendingOffers = const []);
+      },
+    );
+    _submittedSub = scope.jobs.watchSubmittedOffers(widget.profile.id).listen(
+      (offers) {
+        if (!mounted) return;
+        setState(() => _submittedOffers = offers);
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() => _submittedOffers = const []);
+      },
+    );
   }
 
   @override
   void dispose() {
     _offersSub?.cancel();
+    _submittedSub?.cancel();
     if (_fcmFocusListener != null) {
       _fcm?.focusJobId.removeListener(_fcmFocusListener!);
     }
@@ -128,10 +146,61 @@ class _WorkshopHomeState extends State<WorkshopHome> {
     );
   }
 
+  Future<void> _cancelJob(Job job) async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('إلغاء الطلب'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(
+              labelText: 'سبب الإلغاء (اختياري)',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('تراجع'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              child: const Text('تأكيد الإلغاء'),
+            ),
+          ],
+        );
+      },
+    ).whenComplete(controller.dispose);
+    if (reason == null || !mounted) return;
+    try {
+      await AppScope.of(context).jobs.workshopCancelJob(
+            job.id,
+            reason: reason,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم إلغاء الطلب.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final online = _duty ?? widget.profile.isOnline;
     final me = widget.profile;
+    final userStream = _userStream;
+    final recentJobs = _recentJobsStream;
+    if (userStream == null || recentJobs == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Stack(
       children: [
@@ -145,15 +214,15 @@ class _WorkshopHomeState extends State<WorkshopHome> {
           ],
           body: switch (_tab) {
             1 => OrdersScreen(
-                stream: _recentJobsStream,
+                stream: recentJobs,
                 profile: me,
               ),
             2 => const NotificationsScreen(),
             _ => StreamBuilder<AppUser?>(
-                stream: _userStream,
+                stream: userStream,
                 builder: (context, snap) {
                   final profile = snap.data ?? me;
-                  return _buildBoard(profile, online);
+                  return _buildBoard(profile, online, recentJobs);
                 },
               ),
           },
@@ -168,7 +237,11 @@ class _WorkshopHomeState extends State<WorkshopHome> {
     );
   }
 
-  Widget _buildBoard(AppUser profile, bool online) {
+  Widget _buildBoard(
+    AppUser profile,
+    bool online,
+    Stream<List<Job>> recentJobsStream,
+  ) {
     final scope = AppScope.of(context);
     return ColoredBox(
       color: AppColors.canvas,
@@ -341,8 +414,21 @@ class _WorkshopHomeState extends State<WorkshopHome> {
                 ),
                 const SizedBox(height: 12),
                 StreamBuilder<List<Job>>(
-                  stream: scope.jobs.watchRecentForTechnician(profile.id),
+                  stream: recentJobsStream,
                   builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting &&
+                        !snap.hasData &&
+                        !snap.hasError) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    if (snap.hasError) {
+                      return const _EmptyBox(
+                        'تعذر تحميل الطلبات. تحقق من الاتصال وأعد المحاولة.',
+                      );
+                    }
                     final jobs = snap.data ?? const <Job>[];
                     final accepted = jobs
                         .where(
@@ -354,13 +440,12 @@ class _WorkshopHomeState extends State<WorkshopHome> {
                               j.status == JobStatus.finalQuote,
                         )
                         .toList();
-                    // عروض قيد الانتظار: نعرضها ضمن الفلتر عبر Stream منفصل إن لزم
                     return Column(
                       children: [
                         _SegmentBar(
                           filter: _filter,
                           incomingCount: _pendingOffers.length,
-                          waitingCount: 0,
+                          waitingCount: _submittedOffers.length,
                           onChanged: (f) => setState(() => _filter = f),
                         ),
                         const SizedBox(height: 12),
@@ -381,11 +466,18 @@ class _WorkshopHomeState extends State<WorkshopHome> {
                                       setState(() => _quoting = offer),
                                 ),
                               ),
-                        ] else if (_filter == _BoardFilter.waiting)
-                          const _EmptyBox(
-                            'عروضك المرسلة تظهر للعميل حتى يقبل أحدها.',
-                          )
-                        else if (accepted.isEmpty)
+                        ] else if (_filter == _BoardFilter.waiting) ...[
+                          if (_submittedOffers.isEmpty)
+                            const _EmptyBox(
+                              'لا توجد عروض قيد الانتظار. بعد تقديم السعر تظهر هنا حتى يقبل العميل.',
+                            )
+                          else
+                            for (final offer in _submittedOffers)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _WaitingOfferCard(offer: offer),
+                              ),
+                        ] else if (accepted.isEmpty)
                           const _EmptyBox('لا توجد طلبات مقبولة للتجهيز.')
                         else
                           for (final job in accepted)
@@ -395,6 +487,7 @@ class _WorkshopHomeState extends State<WorkshopHome> {
                                 job: job,
                                 onShip: () => _markShipped(job),
                                 onDeliver: () => _markDelivered(job),
+                                onCancel: () => _cancelJob(job),
                               ),
                             ),
                       ],
@@ -649,16 +742,125 @@ class _IncomingOfferCard extends StatelessWidget {
   }
 }
 
+class _WaitingOfferCard extends StatelessWidget {
+  const _WaitingOfferCard({required this.offer});
+
+  final JobOffer offer;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = offer.partName.isNotEmpty
+        ? offer.partName
+        : (offer.serviceTitle ?? 'طلب قطع غيار');
+    final car = [
+      if (offer.carMake.isNotEmpty) offer.carMake,
+      if (offer.carModel.isNotEmpty) offer.carModel,
+    ].join(' ');
+    final price = offer.initialPrice;
+    final warranty = offer.warrantyDays > 0
+        ? (offer.warrantyNote.isNotEmpty
+            ? offer.warrantyNote
+            : '${offer.warrantyDays} يوم')
+        : null;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.amberTint,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  'بانتظار قبول العميل',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.amberDeep,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (car.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(car, style: const TextStyle(color: Color(0xFF45464D))),
+          ],
+          if (price != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              formatIqd(price),
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+              ),
+            ),
+          ],
+          if (offer.partCondition.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'الحالة: ${offer.partCondition}',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF45464D)),
+            ),
+          ],
+          if (warranty != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'الضمان: $warranty',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF45464D)),
+            ),
+          ],
+          if (offer.deliveryType.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'التوصيل: ${offer.deliveryType}',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF45464D)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _AcceptedJobCard extends StatelessWidget {
   const _AcceptedJobCard({
     required this.job,
     required this.onShip,
     required this.onDeliver,
+    required this.onCancel,
   });
 
   final Job job;
   final VoidCallback onShip;
   final VoidCallback onDeliver;
+  final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -694,6 +896,17 @@ class _AcceptedJobCard extends StatelessWidget {
           Text(title,
               style:
                   const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+          if (job.specialtyAr.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'الاختصاص: ${job.specialtyAr}',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF45464D),
+              ),
+            ),
+          ],
           if (car.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(car, style: const TextStyle(color: Color(0xFF45464D))),
@@ -713,9 +926,9 @@ class _AcceptedJobCard extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: SizedBox(
-                height: 100,
+                height: 140,
                 width: double.infinity,
-                child: _Thumb(dataUrl: job.partImageUrl),
+                child: AppNetworkOrDataImage(source: job.partImageUrl),
               ),
             ),
           ],
@@ -741,6 +954,13 @@ class _AcceptedJobCard extends StatelessWidget {
               style: FilledButton.styleFrom(backgroundColor: Colors.black),
               child: const Text('تم التسليم للعميل'),
             ),
+          if (job.technicianCanWithdraw) ...[
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: onCancel,
+              child: const Text('إلغاء الطلب'),
+            ),
+          ],
         ],
       ),
     );
@@ -773,22 +993,5 @@ class _EmptyBox extends StatelessWidget {
         style: const TextStyle(color: Color(0xFF45464D)),
       ),
     );
-  }
-}
-
-class _Thumb extends StatelessWidget {
-  const _Thumb({required this.dataUrl});
-
-  final String dataUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    try {
-      final comma = dataUrl.indexOf(',');
-      final b64 = comma >= 0 ? dataUrl.substring(comma + 1) : dataUrl;
-      return Image.memory(base64Decode(b64), fit: BoxFit.cover);
-    } catch (_) {
-      return const ColoredBox(color: Color(0xFFEFF4FF));
-    }
   }
 }

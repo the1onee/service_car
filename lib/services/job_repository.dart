@@ -18,6 +18,7 @@ class JobRepository {
   final _recentCustomer = <String, Stream<List<Job>>>{};
   final _recentTech = <String, Stream<List<Job>>>{};
   final _pendingOffers = <String, Stream<List<JobOffer>>>{};
+  final _submittedOffers = <String, Stream<List<JobOffer>>>{};
 
   CollectionReference<Map<String, dynamic>> get _jobs => _db.collection(Cols.jobs);
   CollectionReference<Map<String, dynamic>> get _offers => _db.collection(Cols.jobOffers);
@@ -34,7 +35,8 @@ class JobRepository {
           .orderBy('createdAt', descending: true)
           .limit(8)
           .snapshots()
-          .map(_firstActive),
+          .map(_firstActive)
+          .asBroadcastStream(),
     );
   }
 
@@ -46,7 +48,8 @@ class JobRepository {
           .orderBy('createdAt', descending: true)
           .limit(8)
           .snapshots()
-          .map(_firstActive),
+          .map(_firstActive)
+          .asBroadcastStream(),
     );
   }
 
@@ -58,7 +61,8 @@ class JobRepository {
           .orderBy('createdAt', descending: true)
           .limit(20)
           .snapshots()
-          .map((s) => s.docs.map(Job.fromDoc).toList()),
+          .map((s) => s.docs.map(Job.fromDoc).toList())
+          .asBroadcastStream(),
     );
   }
 
@@ -70,7 +74,8 @@ class JobRepository {
           .orderBy('createdAt', descending: true)
           .limit(20)
           .snapshots()
-          .map((s) => s.docs.map(Job.fromDoc).toList()),
+          .map((s) => s.docs.map(Job.fromDoc).toList())
+          .asBroadcastStream(),
     );
   }
 
@@ -110,7 +115,21 @@ class JobRepository {
           .where('status', isEqualTo: 'pending')
           .limit(20)
           .snapshots()
-          .map((s) => s.docs.map(JobOffer.fromDoc).toList()),
+          .map((s) => s.docs.map(JobOffer.fromDoc).toList())
+          .asBroadcastStream(),
+    );
+  }
+
+  Stream<List<JobOffer>> watchSubmittedOffers(String technicianId) {
+    return _submittedOffers.putIfAbsent(
+      technicianId,
+      () => _offers
+          .where('technicianId', isEqualTo: technicianId)
+          .where('status', isEqualTo: 'submitted')
+          .limit(20)
+          .snapshots()
+          .map((s) => s.docs.map(JobOffer.fromDoc).toList())
+          .asBroadcastStream(),
     );
   }
 
@@ -131,19 +150,26 @@ class JobRepository {
     String carYear = '',
     String customerPhone = '',
     String providerKind = '',
+    String specialtyId = '',
+    String specialtyAr = '',
   }) async {
     final ref = _jobs.doc();
     final toWorkshops =
         providerKind == 'workshop' || serviceId == 'parts';
     final toOilWorkshops =
         providerKind == 'oilWorkshop' || serviceId == 'oil';
-    final emergency = (toWorkshops || toOilWorkshops)
+    final toPaintShops = providerKind == 'paintShop' ||
+        providerKind == 'paint_shop' ||
+        serviceId == 'paint';
+    final emergency = (toWorkshops || toOilWorkshops || toPaintShops)
         ? false
         : (isEmergency ?? isEmergencyService(serviceId));
     final rate = (commissionRate ?? AppConstants.commissionRate).clamp(0.0, 1.0);
     final resolvedKind = toWorkshops
         ? 'workshop'
-        : (toOilWorkshops ? 'oilWorkshop' : providerKind);
+        : (toOilWorkshops
+            ? 'oilWorkshop'
+            : (toPaintShops ? 'paintShop' : providerKind));
     final job = Job(
       id: ref.id,
       customerId: customerId,
@@ -164,6 +190,8 @@ class JobRepository {
       carYear: carYear,
       customerPhone: customerPhone,
       providerKind: resolvedKind,
+      specialtyId: specialtyId.trim(),
+      specialtyAr: specialtyAr.trim(),
     );
     final batch = _db.batch();
     batch.set(ref, job.toCreateMap());
@@ -188,7 +216,9 @@ class JobRepository {
 
     final providerRole = job.isPartsOrder
         ? 'workshop'
-        : (job.isOilOrder ? 'oilWorkshop' : 'technician');
+        : (job.isOilOrder
+            ? 'oilWorkshop'
+            : (job.isPaintOrder ? 'paintShop' : 'technician'));
     final techs = await _db
         .collection(Cols.users)
         .where('role', isEqualTo: providerRole)
@@ -214,12 +244,12 @@ class JobRepository {
         (settingsSnap.data()?['minWalletBalance'] as num?)?.toDouble() ??
             AppConstants.minWalletBalance;
 
-    final ranked = techs.docs
+    final candidates = techs.docs
         .map((d) {
           final data = d.data();
           final geo = data['geo'] as GeoPoint?;
           final km = geo == null
-              ? AppConstants.maxMatchKm
+              ? 0.0 // بلا موقع: لا نستبعد ورش القطع بسبب المسافة
               : haversineKm(
                   job.approxLocation.latitude,
                   job.approxLocation.longitude,
@@ -236,6 +266,7 @@ class JobRepository {
           final defaultName = switch (role) {
             'workshop' => 'ورشة',
             'oilWorkshop' => 'ورشة زيوت',
+            'paintShop' => 'ورشة دهان',
             _ => 'فني',
           };
           return (
@@ -249,17 +280,27 @@ class JobRepository {
             wallet: (data['walletBalance'] as num?)?.toDouble() ?? 0,
             serviceIds: serviceIds,
             vehicleTypeIds: vehicleTypeIds,
-            isWorkshop: role == 'workshop',
+            isWorkshop: role == 'workshop' || role == 'paintShop',
             oilWorkshopTier: data['oilWorkshopTier'] as String? ?? '',
+            specialtyId: data['specialtyId'] as String? ?? '',
+            specialtyAr: data['specialtyAr'] as String? ?? '',
           );
         })
         .where((t) => t.online)
-        .where((t) =>
-            t.serviceIds.isEmpty || t.serviceIds.contains(job.serviceId))
-        .where((t) => t.km <= AppConstants.maxMatchKm)
         .where((t) => t.verified)
         .where((t) => t.isWorkshop || t.wallet >= minWallet)
         .where((t) => !used.contains(t.id))
+        .where((t) {
+          // ورش القطع لا تُفلتر بـ serviceIds (غالباً غير مضبوطة).
+          if (t.isWorkshop && job.isPartsOrder) return true;
+          return t.serviceIds.isEmpty || t.serviceIds.contains(job.serviceId);
+        })
+        .where((t) {
+          final maxKm = job.isPartsOrder
+              ? AppConstants.maxPartsMatchKm
+              : AppConstants.maxMatchKm;
+          return t.km <= maxKm;
+        })
         .where((t) {
           if (t.isWorkshop) return true;
           final needed = job.vehicleTypeId;
@@ -267,22 +308,38 @@ class JobRepository {
           if (t.vehicleTypeIds.isEmpty) return true;
           return t.vehicleTypeIds.contains(needed);
         })
-        .toList()
+        .toList();
+
+    // أولاً: مطابقة الاختصاص؛ إن لم يبقَ أحد نوسّع لكل الورش المتاحة.
+    var ranked = candidates.where((t) {
+      if (job.isPartsOrder && job.specialtyId.isNotEmpty) {
+        return t.specialtyId.isEmpty || t.specialtyId == job.specialtyId;
+      }
+      return true;
+    }).toList()
       ..sort((a, b) => a.km.compareTo(b.km));
 
-    final take = job.isEmergency
-        ? AppConstants.emergencyTechsPerRound
-        : AppConstants.quoteTechsPerRound;
+    if (ranked.isEmpty && job.isPartsOrder && job.specialtyId.isNotEmpty) {
+      ranked = List.of(candidates)..sort((a, b) => a.km.compareTo(b.km));
+    }
+
+    final take = job.isPartsOrder
+        ? ranked.length
+        : (job.isEmergency
+            ? AppConstants.emergencyTechsPerRound
+            : AppConstants.quoteTechsPerRound);
     final chosen = ranked.take(take).toList();
     if (chosen.isEmpty) {
       await _jobs.doc(jobId).update({'status': JobStatus.noTechnician.name});
       return;
     }
 
+    final noExpiry = job.isPartsOrder;
     final seconds = job.isEmergency
         ? AppConstants.emergencyOfferSeconds
         : AppConstants.quoteWindowSeconds;
-    final expires = DateTime.now().add(Duration(seconds: seconds));
+    final expires =
+        noExpiry ? null : DateTime.now().add(Duration(seconds: seconds));
     final batch = _db.batch();
     for (final t in chosen) {
       final offer = _offers.doc();
@@ -290,7 +347,7 @@ class JobRepository {
         'jobId': jobId,
         'technicianId': t.id,
         'status': 'pending',
-        'expiresAt': Timestamp.fromDate(expires),
+        if (expires != null) 'expiresAt': Timestamp.fromDate(expires),
         'serviceTitle': job.serviceTitle,
         'vehicleTypeTitle': job.vehicleTypeTitle,
         'approxLocation': job.approxLocation,
@@ -303,13 +360,17 @@ class JobRepository {
         'carMake': job.carMake,
         'carModel': job.carModel,
         'providerKind': job.providerKind,
+        'specialtyAr':
+            t.specialtyAr.isNotEmpty ? t.specialtyAr : job.specialtyAr,
+        if (job.partImageUrl.isNotEmpty) 'partImageUrl': job.partImageUrl,
         if (t.oilWorkshopTier.isNotEmpty)
           'oilWorkshopTier': t.oilWorkshopTier,
       });
     }
     batch.update(_jobs.doc(jobId), {
       'status': JobStatus.offerPending.name,
-      'expiresAt': Timestamp.fromDate(expires),
+      if (expires != null) 'expiresAt': Timestamp.fromDate(expires),
+      if (noExpiry) 'expiresAt': FieldValue.delete(),
     });
     await batch.commit();
   }
@@ -556,6 +617,8 @@ class JobRepository {
     if (!snap.exists) return;
     final job = Job.fromDoc(snap);
     if (job.status != JobStatus.offerPending) return;
+    // طلبات القطع تبقى مفتوحة حتى القبول أو الإلغاء — بلا نافذة زمنية.
+    if (job.isPartsOrder) return;
     if (job.isEmergency) {
       await maybeRedispatch(jobId);
       return;
@@ -643,6 +706,28 @@ class JobRepository {
       'technicianId': null,
       'technicianName': null,
       'cancelledBy': 'technician',
+      'cancelReason': reason.trim(),
+      'exactLocation': null,
+    });
+  }
+
+  /// إلغاء نهائي لطلب قطع من الورشة المعيّنة.
+  Future<void> workshopCancelJob(String jobId, {String reason = ''}) async {
+    final snap = await _jobs.doc(jobId).get();
+    if (!snap.exists) return;
+    final job = Job.fromDoc(snap);
+    if (!job.isPartsOrder) {
+      throw StateError('الإلغاء متاح لطلبات القطع فقط');
+    }
+    if (!job.technicianCanWithdraw) {
+      throw StateError('لا يمكن إلغاء الطلب بعد بدء التنفيذ');
+    }
+    await expireOpenOffers(jobId);
+    await _jobs.doc(jobId).update({
+      'status': JobStatus.cancelled.name,
+      'technicianId': null,
+      'technicianName': null,
+      'cancelledBy': 'workshop',
       'cancelReason': reason.trim(),
       'exactLocation': null,
     });
