@@ -227,6 +227,15 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                 StreamBuilder<List<Job>>(
                   stream: widget.jobs,
                   builder: (context, snap) {
+                    if (snap.hasError) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          'تعذر تحميل إحصائيات الطلبات',
+                          style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
+                        ),
+                      );
+                    }
                     final rows = snap.data ?? const <Job>[];
                     final done = rows.where(jobIsDone).length;
                     final covered =
@@ -628,7 +637,10 @@ class _MenuCard extends StatelessWidget {
         boxShadow: AppTheme.cardShadow(),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(children: children),
+      child: Material(
+        color: Colors.white,
+        child: Column(children: children),
+      ),
     );
   }
 }

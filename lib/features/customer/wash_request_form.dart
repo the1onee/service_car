@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/geo.dart';
+import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
@@ -233,12 +234,22 @@ class _WashRequestFormState extends State<WashRequestForm> {
         customerPhone: phone,
         providerKind: washService.providerKind.firestoreValue,
       );
+      var dispatchFailed = false;
       try {
         await scope.dispatch
             .dispatch(jobId)
             .timeout(const Duration(seconds: 12));
-      } catch (_) {}
+      } catch (_) {
+        dispatchFailed = true;
+      }
       if (!mounted) return;
+      if (dispatchFailed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(AppStrings.jobCreatedDispatchFailed),
+          ),
+        );
+      }
       widget.onSubmitted();
     } catch (e) {
       if (!mounted) return;

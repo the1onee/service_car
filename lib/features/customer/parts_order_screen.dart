@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/cloudinary_config.dart';
+import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
@@ -198,17 +199,22 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
         specialtyAr: _specialtyAr,
       );
       // انتظر التوزيع بمهلة حتى تصل العروض للورش قبل مغادرة الشاشة.
+      var dispatchFailed = false;
       try {
         await scope.dispatch
             .dispatch(jobId)
             .timeout(const Duration(seconds: 15));
       } catch (_) {
-        // الطلب محفوظ؛ التوزيع قد يكتمل لاحقاً أو عبر إعادة الإرسال.
+        dispatchFailed = true;
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تم إرسال الطلب للورش المختصة. تابع العروض من الطلبات.'),
+        SnackBar(
+          content: Text(
+            dispatchFailed
+                ? AppStrings.jobCreatedDispatchFailed
+                : 'تم إرسال الطلب للورش المختصة. تابع العروض من الطلبات.',
+          ),
         ),
       );
       Navigator.of(context).pop(

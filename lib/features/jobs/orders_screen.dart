@@ -48,9 +48,20 @@ class _OrdersScreenState extends State<OrdersScreen> {
             child: StreamBuilder<List<Job>>(
               stream: _stream,
               builder: (context, snap) {
+                if (snap.hasError) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: _Empty(
+                        icon: Icons.error_outline,
+                        title: 'تعذر تحميل الطلبات',
+                        text: 'تحقق من الاتصال ثم أعد المحاولة.',
+                      ),
+                    ),
+                  );
+                }
                 final rows = snap.data ?? const <Job>[];
                 if (snap.connectionState == ConnectionState.waiting &&
-                    !snap.hasError &&
                     !snap.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }

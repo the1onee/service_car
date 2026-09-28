@@ -283,12 +283,22 @@ class _CustomerHomeState extends State<CustomerHome> {
         commissionRate: service.commissionRate,
       );
       // توزيع بمهلة قصيرة حتى لا تُبتلع الأخطاء وتبقى الواجهة معلّقة.
+      var dispatchFailed = false;
       try {
         await scope.dispatch
             .dispatch(jobId)
             .timeout(const Duration(seconds: 12));
-      } catch (_) {}
+      } catch (_) {
+        dispatchFailed = true;
+      }
       if (!mounted) return;
+      if (dispatchFailed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(AppStrings.jobCreatedDispatchFailed),
+          ),
+        );
+      }
       setState(() {
         _submitting = false;
         _composing = false;
@@ -315,11 +325,14 @@ class _CustomerHomeState extends State<CustomerHome> {
     final wait =
         job.expiresAt!.difference(DateTime.now()) + const Duration(seconds: 2);
     if (wait.isNegative) {
+      if (!mounted) return;
       AppScope.of(context).dispatch.onWindowExpired(job.id);
       return;
     }
+    final jobId = job.id;
     _timeoutWatch = Timer(wait, () {
-      AppScope.of(context).dispatch.onWindowExpired(job.id);
+      if (!mounted) return;
+      AppScope.of(this.context).dispatch.onWindowExpired(jobId);
     });
   }
 

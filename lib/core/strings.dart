@@ -94,6 +94,8 @@ class AppStrings {
   static const initialPrice = 'السعر المبدئي';
   static const finalPrice = 'السعر النهائي';
   static const receivedAmount = 'المبلغ المستلم';
+  static const jobCreatedDispatchFailed =
+      'تم إنشاء الطلب وتعذر بدء المطابقة. تابع من الطلبات.';
   static const arrived = 'وصلت إلى الموقع';
   static const startWork = 'بدء العمل';
   static const endJob = 'إنهاء المهمة';

@@ -138,16 +138,23 @@ class _WorkshopHomeState extends State<WorkshopHome> {
   }
 
   Future<void> _markDelivered(Job job) async {
-    final amount = job.billAmount;
-    await AppScope.of(context).jobs.completeJob(
-      jobId: job.id,
-      receivedAmount: amount > 0 ? amount : 0,
-      warrantyEnabled: job.warranty.enabled,
-    );
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم إكمال الطلب وتسليمه للعميل.')),
-    );
+    try {
+      final amount = job.billAmount;
+      await AppScope.of(context).jobs.completeJob(
+        jobId: job.id,
+        receivedAmount: amount > 0 ? amount : 0,
+        warrantyEnabled: job.warranty.enabled,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم إكمال الطلب وتسليمه للعميل.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذّر إنهاء الطلب: $e')),
+      );
+    }
   }
 
   Future<void> _cancelJob(Job job) async {

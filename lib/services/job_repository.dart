@@ -854,15 +854,13 @@ class JobRepository {
       });
     });
     if (customerId.isEmpty || (!useWallet && receivedAmount <= bill)) return;
-    try {
-      await _settleCustomerChange(
-        jobId: jobId,
-        customerId: customerId,
-        bill: bill,
-        receivedAmount: receivedAmount,
-        useWallet: useWallet,
-      );
-    } catch (_) {}
+    await _settleCustomerChange(
+      jobId: jobId,
+      customerId: customerId,
+      bill: bill,
+      receivedAmount: receivedAmount,
+      useWallet: useWallet,
+    );
   }
 
   Future<void> _settleCustomerChange({

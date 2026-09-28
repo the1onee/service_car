@@ -4,6 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/geo.dart';
+import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
@@ -87,18 +88,36 @@ class _OilRequestFormState extends State<OilRequestForm> {
 
   void _ensureVehicle(List<VehicleType> vehicles) {
     if (_seededVehicle) return;
+    if (vehicles.isEmpty) return;
     _seededVehicle = true;
-    if (_vehicleType == null && vehicles.isNotEmpty) {
-      _vehicleType = vehicles.first;
-    }
+    final next = _vehicleType ?? vehicles.first;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _vehicleType != null) return;
+      setState(() => _vehicleType = next);
+    });
   }
 
   void _ensureOil(List<OilType> oils) {
     if (_seededOil) return;
+    if (oils.isEmpty) return;
     _seededOil = true;
-    if (_oil == null && oils.isNotEmpty) {
-      _oil = oils.first;
-    }
+    final next = _oil ?? oils.first;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _oil != null) return;
+      setState(() => _oil = next);
+    });
+  }
+
+  void _syncSelectedOil(List<OilType> oils) {
+    if (oils.isEmpty) return;
+    final current = _oil;
+    if (current != null && oils.any((o) => o.id == current.id)) return;
+    final next = oils.first;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_oil != null && oils.any((o) => o.id == _oil!.id)) return;
+      setState(() => _oil = next);
+    });
   }
 
   void _setCylinders(int n) {
@@ -243,12 +262,22 @@ class _OilRequestFormState extends State<OilRequestForm> {
         customerPhone: phone,
         providerKind: 'oilWorkshop',
       );
+      var dispatchFailed = false;
       try {
         await scope.dispatch
             .dispatch(jobId)
             .timeout(const Duration(seconds: 12));
-      } catch (_) {}
+      } catch (_) {
+        dispatchFailed = true;
+      }
       if (!mounted) return;
+      if (dispatchFailed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(AppStrings.jobCreatedDispatchFailed),
+          ),
+        );
+      }
       widget.onSubmitted();
     } catch (e) {
       if (!mounted) return;
@@ -290,13 +319,11 @@ class _OilRequestFormState extends State<OilRequestForm> {
                     final oils = oilSnap.data ?? const <OilType>[];
                     _ensureVehicle(vehicles);
                     _ensureOil(oils);
+                    _syncSelectedOil(oils);
                     final selectedOil = _oil != null &&
                             oils.any((o) => o.id == _oil!.id)
                         ? _oil
                         : (oils.isNotEmpty ? oils.first : null);
-                    if (selectedOil != null && selectedOil != _oil) {
-                      _oil = selectedOil;
-                    }
 
                     return ListView(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),

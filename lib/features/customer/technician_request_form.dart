@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/cloudinary_config.dart';
 import 'package:barrr/core/geo.dart';
+import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
@@ -94,13 +95,18 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
 
   void _ensureDefaults(List<ServiceItem> services, List<VehicleType> vehicles) {
     if (_seededSelection) return;
+    if (services.isEmpty && vehicles.isEmpty) return;
     _seededSelection = true;
-    if (_selected == null && services.isNotEmpty) {
-      _selected = services.first;
-    }
-    if (_vehicleType == null && vehicles.isNotEmpty) {
-      _vehicleType = vehicles.first;
-    }
+    final nextService = _selected ?? (services.isNotEmpty ? services.first : null);
+    final nextVehicle =
+        _vehicleType ?? (vehicles.isNotEmpty ? vehicles.first : null);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _selected ??= nextService;
+        _vehicleType ??= nextVehicle;
+      });
+    });
   }
 
   bool _pointInZone(LatLng p) {
@@ -238,12 +244,22 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
         customerPhone: phone,
         providerKind: service.providerKind.firestoreValue,
       );
+      var dispatchFailed = false;
       try {
         await scope.dispatch
             .dispatch(jobId)
             .timeout(const Duration(seconds: 12));
-      } catch (_) {}
+      } catch (_) {
+        dispatchFailed = true;
+      }
       if (!mounted) return;
+      if (dispatchFailed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(AppStrings.jobCreatedDispatchFailed),
+          ),
+        );
+      }
       widget.onSubmitted();
     } catch (e) {
       if (!mounted) return;
