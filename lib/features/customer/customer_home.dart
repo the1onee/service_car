@@ -13,14 +13,13 @@ import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/customer/customer_landing.dart';
 import 'package:barrr/features/customer/customer_request_map.dart';
 import 'package:barrr/features/customer/customer_ledger_page.dart';
+import 'package:barrr/features/customer/customer_account_page.dart';
 import 'package:barrr/features/customer/parts_order_screen.dart';
 import 'package:barrr/features/customer/technician_request_form.dart';
 import 'package:barrr/features/customer/oil_request_form.dart';
 import 'package:barrr/features/customer/tow_request_form.dart';
 import 'package:barrr/features/customer/wash_request_form.dart';
-import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/jobs/orders_screen.dart';
-import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/warranty/warranties_screen.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
@@ -427,7 +426,13 @@ class _CustomerHomeState extends State<CustomerHome> {
             profile: widget.profile,
             city: zoneName,
           ),
-        3 => _account(zoneName, _ensureRecentJobs()),
+        3 => CustomerAccountPage(
+            profile: widget.profile,
+            jobs: _ensureRecentJobs(),
+            city: zoneName,
+            onOpenOrders: () => _onTab(1),
+            onOpenWallet: () => _onTab(2),
+          ),
         _ => _homeTab(
             active: _ensureActiveJob(),
             recent: _ensureRecentJobs(),
@@ -725,142 +730,6 @@ class _CustomerHomeState extends State<CustomerHome> {
       },
       onRecenter: _recenter,
       onShown: _ensureGps,
-    );
-  }
-
-  Widget _account(String? city, Stream<List<Job>> jobs) {
-    final me = widget.profile;
-    return Column(
-      children: [
-        FieldTopBar(
-          city: city,
-          caption: 'حسابي',
-          trailing: NotificationsBellButton(uid: me.id),
-        ),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            children: [
-              AccountHeader(
-                name: me.name,
-                subtitle: me.phone,
-                trailing: const StatusPill(
-                    label: 'عميل',
-                    color: AppColors.ink,
-                    background: AppColors.recessed),
-              ),
-              const SizedBox(height: 12),
-              StreamBuilder<List<Job>>(
-                stream: jobs,
-                builder: (context, snap) {
-                  final rows = snap.data ?? const <Job>[];
-                  final done = rows.where(jobIsDone).length;
-                  final covered =
-                      rows.where((j) => j.warranty.enabled).length;
-                  return Row(
-                    children: [
-                      Expanded(child: _MiniStat(title: 'طلبات مكتملة', value: '$done')),
-                      const SizedBox(width: 8),
-                      Expanded(child: _MiniStat(title: 'وثائق ضمان', value: '$covered')),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              const SectionLabel('الحساب'),
-              FieldCard(
-                padding: EdgeInsets.zero,
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.verified_user_outlined),
-                      title: const Text('سجل الضمانات'),
-                      subtitle: const Text('المطالبات والتغطية السارية'),
-                      trailing: const Icon(Icons.chevron_left),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => WarrantiesScreen(
-                              stream: AppScope.of(context)
-                                  .jobs
-                                  .watchRecentForCustomer(me.id),
-                              profile: me,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.assignment_outlined),
-                      title: const Text('الطلبات'),
-                      trailing: const Icon(Icons.chevron_left),
-                      onTap: () => _onTab(1),
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.account_balance_wallet_outlined),
-                      title: const Text('المدفوعات النقدية'),
-                      trailing: const Icon(Icons.chevron_left),
-                      onTap: () => _onTab(2),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              FieldCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('العنوان',
-                        style:
-                            TextStyle(color: AppColors.inkSoft, fontSize: 12)),
-                    const SizedBox(height: 4),
-                    Text(me.address.trim().isEmpty
-                        ? 'يُحدَّد من الخريطة عند الطلب'
-                        : me.address),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                onPressed: () => signOutFrom(context),
-                icon: const Icon(Icons.logout, color: AppColors.danger),
-                label: const Text('تسجيل الخروج',
-                    style: TextStyle(color: AppColors.danger)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppColors.danger),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MiniStat extends StatelessWidget {
-  const _MiniStat({required this.title, required this.value});
-
-  final String title;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return FieldCard(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(value,
-              style:
-                  const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
-          const SizedBox(height: 4),
-          Text(title,
-              style: const TextStyle(color: AppColors.inkSoft, fontSize: 12)),
-        ],
-      ),
     );
   }
 }

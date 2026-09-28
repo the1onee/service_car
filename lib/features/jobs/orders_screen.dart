@@ -35,65 +35,89 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        FieldTopBar(
-          caption: 'الطلبات',
-          trailing: NotificationsBellButton(uid: widget.profile.id),
-        ),
-        Expanded(
-          child: StreamBuilder<List<Job>>(
-            stream: _stream,
-            builder: (context, snap) {
-              final rows = snap.data ?? const <Job>[];
-              if (snap.connectionState == ConnectionState.waiting &&
-                  !snap.hasError &&
-                  !snap.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              final shown = rows.where((j) => _matches(_filter, j)).toList();
-              return ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                children: [
-                  _Filters(
-                    filter: _filter,
-                    counts: (
-                      rows.length,
-                      rows.where((j) => jobIsOpen(j)).length,
-                      rows.where((j) => jobIsDone(j)).length,
-                      rows.where((j) => jobIsClosed(j)).length,
+    return ColoredBox(
+      color: const Color(0xFFF8F9FF),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FieldTopBar(
+            caption: 'الطلبات',
+            trailing: NotificationsBellButton(uid: widget.profile.id),
+          ),
+          Expanded(
+            child: StreamBuilder<List<Job>>(
+              stream: _stream,
+              builder: (context, snap) {
+                final rows = snap.data ?? const <Job>[];
+                if (snap.connectionState == ConnectionState.waiting &&
+                    !snap.hasError &&
+                    !snap.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final open = rows.where(jobIsOpen).length;
+                final done = rows.where(jobIsDone).length;
+                final closed = rows.where(jobIsClosed).length;
+                final shown = rows.where((j) => _matches(_filter, j)).toList();
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+                  children: [
+                    _OrdersHero(
+                      total: rows.length,
+                      open: open,
+                      done: done,
                     ),
-                    onChanged: (f) => setState(() => _filter = f),
-                  ),
-                  const SizedBox(height: 16),
-                  if (rows.isEmpty)
-                    const _Empty(text: 'لا توجد طلبات بعد. ابدأ من الرئيسية.')
-                  else if (shown.isEmpty)
-                    const _Empty(text: 'لا توجد طلبات في هذا التصنيف.')
-                  else ...[
-                    _FeaturedJob(
-                      job: shown.first,
-                      onOpen: () => openJobDetail(context, shown.first, widget.profile),
+                    const SizedBox(height: 14),
+                    _Filters(
+                      filter: _filter,
+                      counts: (rows.length, open, done, closed),
+                      onChanged: (f) => setState(() => _filter = f),
                     ),
-                    if (shown.length > 1) ...[
-                      const SizedBox(height: 18),
-                      const SectionLabel('الطلبات السابقة'),
-                      for (final job in shown.skip(1)) ...[
-                        _OrderTile(
-                          job: job,
-                          onOpen: () => openJobDetail(context, job, widget.profile),
+                    const SizedBox(height: 16),
+                    if (rows.isEmpty)
+                      const _Empty(
+                        icon: Icons.assignment_outlined,
+                        title: 'لا توجد طلبات بعد',
+                        text: 'ابدأ من الرئيسية واختر الخدمة المناسبة.',
+                      )
+                    else if (shown.isEmpty)
+                      const _Empty(
+                        icon: Icons.filter_alt_outlined,
+                        title: 'لا نتائج في هذا التصنيف',
+                        text: 'جرّب تصنيفاً آخر أو أنشئ طلباً جديداً.',
+                      )
+                    else ...[
+                      _FeaturedJob(
+                        job: shown.first,
+                        onOpen: () => openJobDetail(
+                            context, shown.first, widget.profile),
+                      ),
+                      if (shown.length > 1) ...[
+                        const SizedBox(height: 18),
+                        const Text(
+                          'الطلبات السابقة',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         const SizedBox(height: 10),
+                        for (final job in shown.skip(1)) ...[
+                          _OrderTile(
+                            job: job,
+                            onOpen: () =>
+                                openJobDetail(context, job, widget.profile),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
                       ],
                     ],
                   ],
-                ],
-              );
-            },
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -108,6 +132,147 @@ bool _matches(OrdersFilter filter, Job job) {
       return jobIsDone(job);
     case OrdersFilter.cancelled:
       return jobIsClosed(job);
+  }
+}
+
+IconData _serviceIcon(Job job) {
+  final id = job.serviceId;
+  return switch (id) {
+    'towing' => Icons.local_shipping_outlined,
+    'oil' => Icons.oil_barrel_outlined,
+    'wash' => Icons.local_car_wash_outlined,
+    'parts' => Icons.build_circle_outlined,
+    'locks' => Icons.lock_outline,
+    'fuel' => Icons.local_gas_station_outlined,
+    _ => Icons.handyman_outlined,
+  };
+}
+
+class _OrdersHero extends StatelessWidget {
+  const _OrdersHero({
+    required this.total,
+    required this.open,
+    required this.done,
+  });
+
+  final int total;
+  final int open;
+  final int done;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.slate,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppTheme.softShadow(opacity: 0.16),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            left: -18,
+            bottom: -28,
+            child: Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                color: AppColors.amber.withValues(alpha: 0.14),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.assignment,
+                        color: AppColors.amber),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'طلباتي',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 17,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'تابع حالة طلباتك وعروض الأسعار',
+                          style: TextStyle(
+                            color: Color(0xFFBEC6E0),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(child: _HeroStat(label: 'الكل', value: '$total')),
+                  const SizedBox(width: 8),
+                  Expanded(child: _HeroStat(label: 'جارية', value: '$open')),
+                  const SizedBox(width: 8),
+                  Expanded(child: _HeroStat(label: 'مكتملة', value: '$done')),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroStat extends StatelessWidget {
+  const _HeroStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(color: Color(0xFFBEC6E0), fontSize: 11),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -131,7 +296,7 @@ class _Filters extends StatelessWidget {
       (OrdersFilter.cancelled, 'ملغاة', counts.$4),
     ];
     return SizedBox(
-      height: 40,
+      height: 42,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: items.length,
@@ -139,23 +304,28 @@ class _Filters extends StatelessWidget {
         itemBuilder: (context, i) {
           final item = items[i];
           final on = filter == item.$1;
-          return InkWell(
-            onTap: () => onChanged(item.$1),
+          return Material(
+            color: on ? AppColors.slate : Colors.white,
             borderRadius: BorderRadius.circular(999),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: on ? AppColors.slate : AppColors.surface,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: on ? AppColors.slate : AppColors.outline),
-              ),
-              child: Text(
-                '${item.$2} ${item.$3}',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                  color: on ? Colors.white : AppColors.ink,
+            child: InkWell(
+              onTap: () => onChanged(item.$1),
+              borderRadius: BorderRadius.circular(999),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: on ? AppColors.slate : const Color(0xFFC6C6CD),
+                  ),
+                ),
+                child: Text(
+                  '${item.$2} · ${item.$3}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: on ? Colors.white : AppColors.ink,
+                  ),
                 ),
               ),
             ),
@@ -176,16 +346,48 @@ class _FeaturedJob extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = jobStatusColors(job.status);
     final price = job.finalPrice ?? job.receivedAmount ?? job.initialPrice;
-    return FieldCard(
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppTheme.cardShadow(),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: AppColors.recessed,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(_serviceIcon(job), color: AppColors.amberDeep),
+              ),
+              const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  jobCode(job),
-                  style: const TextStyle(color: AppColors.inkSoft, fontSize: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      job.serviceTitle ?? 'طلب خدمة',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${jobCode(job)} · ${formatWhen(job.createdAt)}',
+                      style: const TextStyle(
+                        color: AppColors.inkSoft,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               StatusPill(
@@ -195,27 +397,36 @@ class _FeaturedJob extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            job.serviceTitle ?? 'طلب خدمة',
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
-          ),
           if (job.vehicleTypeTitle != null &&
               job.vehicleTypeTitle!.trim().isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              'نوع السيارة: ${job.vehicleTypeTitle}',
-              style: const TextStyle(color: AppColors.inkSoft, fontSize: 13),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF4FF),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.directions_car_outlined,
+                      size: 16, color: AppColors.amberDeep),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      job.vehicleTypeTitle!,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
-          const SizedBox(height: 4),
-          Text(
-            formatWhen(job.createdAt),
-            style: const TextStyle(color: AppColors.inkSoft, fontSize: 12),
-          ),
           if (job.technicianName != null && job.technicianName!.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text('الفني: ${job.technicianName}'),
+            const SizedBox(height: 8),
+            Text(
+              'الفني: ${job.technicianName}',
+              style: const TextStyle(fontSize: 13, color: AppColors.inkSoft),
+            ),
           ],
           if (price != null) ...[
             const SizedBox(height: 10),
@@ -223,15 +434,28 @@ class _FeaturedJob extends StatelessWidget {
               formatIqd(price),
               style: const TextStyle(
                 color: AppColors.emeraldDeep,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
                 fontSize: 22,
               ),
             ),
           ],
           const SizedBox(height: 12),
-          FilledButton(
-            onPressed: onOpen,
-            child: const Text('عرض التفاصيل'),
+          SizedBox(
+            height: 46,
+            child: FilledButton(
+              onPressed: onOpen,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.slate,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'عرض التفاصيل',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
           ),
         ],
       ),
@@ -249,57 +473,72 @@ class _OrderTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = jobStatusColors(job.status);
     final price = job.finalPrice ?? job.receivedAmount ?? job.initialPrice;
-    return InkWell(
-      onTap: onOpen,
-      borderRadius: BorderRadius.circular(16),
-      child: FieldCard(
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    job.serviceTitle ?? 'طلب خدمة',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  if (job.vehicleTypeTitle != null &&
-                      job.vehicleTypeTitle!.trim().isNotEmpty)
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: AppTheme.cardShadow(),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.recessed,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(_serviceIcon(job),
+                    size: 22, color: AppColors.slate),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      job.vehicleTypeTitle!,
+                      job.serviceTitle ?? 'طلب خدمة',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${jobCode(job)} · ${formatWhen(job.createdAt)}',
                       style: const TextStyle(
                           color: AppColors.inkSoft, fontSize: 12),
                     ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${jobCode(job)} · ${formatWhen(job.createdAt)}',
-                    style: const TextStyle(color: AppColors.inkSoft, fontSize: 12),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  StatusPill(
+                    label: jobStatusLabel(job.status),
+                    color: colors.$1,
+                    background: colors.$2,
                   ),
+                  if (price != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      formatIqd(price),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.emeraldDeep,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                StatusPill(
-                  label: jobStatusLabel(job.status),
-                  color: colors.$1,
-                  background: colors.$2,
-                ),
-                if (price != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    formatIqd(price),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.emeraldDeep,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -307,14 +546,49 @@ class _OrderTile extends StatelessWidget {
 }
 
 class _Empty extends StatelessWidget {
-  const _Empty({required this.text});
+  const _Empty({
+    required this.icon,
+    required this.title,
+    required this.text,
+  });
 
+  final IconData icon;
+  final String title;
   final String text;
 
   @override
   Widget build(BuildContext context) {
-    return FieldCard(
-      child: Text(text, style: const TextStyle(color: AppColors.inkSoft)),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 28, 18, 28),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppTheme.cardShadow(),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: AppColors.recessed,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: AppColors.amberDeep),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.inkSoft, fontSize: 13),
+          ),
+        ],
+      ),
     );
   }
 }

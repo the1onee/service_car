@@ -140,6 +140,23 @@ class UserRepository {
     }, SetOptions(merge: true));
   }
 
+  Future<void> updateProfile(
+    String uid, {
+    String? name,
+    String? photoUrl,
+  }) {
+    final patch = <String, dynamic>{};
+    if (name != null) {
+      final trimmed = name.trim();
+      if (trimmed.isNotEmpty) patch['name'] = trimmed;
+    }
+    if (photoUrl != null) {
+      patch['photoUrl'] = photoUrl.trim();
+    }
+    if (patch.isEmpty) return Future.value();
+    return _userRef(uid).set(patch, SetOptions(merge: true));
+  }
+
   Future<void> setServiceIds(String uid, List<String> ids) {
     return _userRef(uid).set({'serviceIds': ids}, SetOptions(merge: true));
   }

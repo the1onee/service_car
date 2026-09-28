@@ -15,6 +15,7 @@ class AppUser {
     required this.name,
     required this.phone,
     this.address = '',
+    this.photoUrl = '',
     this.idCard = '',
     this.ratingAvg = 5,
     this.ratingCount = 0,
@@ -39,6 +40,8 @@ class AppUser {
   final String name;
   final String phone;
   final String address;
+  /// رابط صورة الملف الشخصي (Cloudinary).
+  final String photoUrl;
   /// رقم البطاقة الوطنية / هوية — اختياري.
   final String idCard;
   final double ratingAvg;
@@ -91,6 +94,7 @@ class AppUser {
         'name': name,
         'phone': phone,
         'address': address,
+        'photoUrl': photoUrl,
         'idCard': idCard,
         'ratingAvg': ratingAvg,
         'ratingCount': ratingCount,
@@ -138,6 +142,7 @@ class AppUser {
       name: d['name'] as String? ?? '',
       phone: d['phone'] as String? ?? '',
       address: d['address'] as String? ?? '',
+      photoUrl: d['photoUrl'] as String? ?? '',
       idCard: d['idCard'] as String? ?? '',
       ratingAvg: (d['ratingAvg'] as num?)?.toDouble() ?? 5,
       ratingCount: (d['ratingCount'] as num?)?.toInt() ?? 0,
@@ -178,6 +183,10 @@ class AppUser {
   }
 
   AppUser copyWith({
+    String? name,
+    String? phone,
+    String? address,
+    String? photoUrl,
     bool? isOnline,
     GeoPoint? geo,
     String? fcmToken,
@@ -196,9 +205,10 @@ class AppUser {
     return AppUser(
       id: id,
       role: role,
-      name: name,
-      phone: phone,
-      address: address,
+      name: name ?? this.name,
+      phone: phone ?? this.phone,
+      address: address ?? this.address,
+      photoUrl: photoUrl ?? this.photoUrl,
       idCard: idCard,
       ratingAvg: ratingAvg,
       ratingCount: ratingCount,
