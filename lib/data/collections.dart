@@ -3,6 +3,7 @@ class Cols {
   static const services = 'services';
   static const vehicleTypes = 'vehicleTypes';
   static const workshopSpecialties = 'workshopSpecialties';
+  static const oilTypes = 'oilTypes';
   static const jobs = 'jobs';
   static const jobOffers = 'jobOffers';
   static const appSettings = 'appSettings';

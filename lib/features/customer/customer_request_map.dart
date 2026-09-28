@@ -3,7 +3,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
-import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/customer/job_status_panel.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/field_ui.dart';
@@ -173,12 +172,9 @@ class CustomerRequestMap extends StatelessWidget {
                 inZone: inZone,
                 addressLabel: addressLabel,
                 selected: selected,
-                entryId: entryId,
                 vehicleType: vehicleType,
-                services: services,
                 vehicleTypes: vehicleTypes,
                 busy: busy,
-                onSelect: onSelect,
                 onSelectVehicle: onSelectVehicle,
                 onPickLocation: onPickLocation,
                 onSubmit: onSubmit,
@@ -218,12 +214,9 @@ class _RequestComposer extends StatelessWidget {
     required this.inZone,
     required this.addressLabel,
     required this.selected,
-    required this.entryId,
     required this.vehicleType,
-    required this.services,
     required this.vehicleTypes,
     required this.busy,
-    required this.onSelect,
     required this.onSelectVehicle,
     required this.onPickLocation,
     required this.onSubmit,
@@ -233,12 +226,9 @@ class _RequestComposer extends StatelessWidget {
   final bool inZone;
   final String addressLabel;
   final ServiceItem? selected;
-  final String? entryId;
   final VehicleType? vehicleType;
-  final Stream<List<ServiceItem>> services;
   final Stream<List<VehicleType>> vehicleTypes;
   final bool busy;
-  final ValueChanged<ServiceItem> onSelect;
   final ValueChanged<VehicleType> onSelectVehicle;
   final VoidCallback onPickLocation;
   final VoidCallback onSubmit;
@@ -361,91 +351,7 @@ class _RequestComposer extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            if (entryId == 'technician' ||
-                (entryId != null && selected == null)) ...[
-              const SectionLabel('حدد نوع الخدمة'),
-              StreamBuilder<List<ServiceItem>>(
-                stream: services,
-                builder: (context, snap) {
-                  final loaded = snap.data;
-                  final raw = (loaded == null || loaded.isEmpty)
-                      ? seedServices
-                      : loaded;
-                  final items = filterServicesForEntry(entryId, raw);
-                  if (items.isEmpty) {
-                    return const Text(
-                      'لا توجد خدمات متاحة حالياً.',
-                      style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
-                    );
-                  }
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: items.length,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisExtent: 88,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                    ),
-                    itemBuilder: (context, i) {
-                      final s = items[i];
-                      final on = selected?.id == s.id;
-                      return InkWell(
-                        onTap: () => onSelect(s),
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: on
-                                ? (s.isEmergency
-                                    ? AppColors.slate
-                                    : AppColors.recessed)
-                                : AppColors.surface,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: on
-                                  ? (s.isEmergency
-                                      ? AppColors.slate
-                                      : AppColors.amber)
-                                  : AppColors.outline,
-                              width: on ? 1.5 : 1,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(
-                                _serviceIcon(s.id),
-                                size: 20,
-                                color: on && s.isEmergency
-                                    ? AppColors.amber
-                                    : AppColors.ink,
-                              ),
-                              const Spacer(),
-                              Text(
-                                s.titleAr,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                  color: on && s.isEmergency
-                                      ? Colors.white
-                                      : AppColors.ink,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-              const SizedBox(height: 14),
-            ] else if (selected != null) ...[
+            if (selected != null) ...[
               FieldCard(
                 child: Row(
                   children: [

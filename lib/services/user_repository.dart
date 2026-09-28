@@ -7,6 +7,7 @@ import 'package:barrr/data/collections.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/service_item.dart';
+import 'package:barrr/models/oil_type.dart';
 import 'package:barrr/models/vehicle_type.dart';
 import 'package:barrr/models/wallet_entry.dart';
 import 'package:barrr/models/wallet_top_up.dart';
@@ -38,8 +39,6 @@ class UserRepository {
   final FirebaseFirestore? _injected;
   FirebaseFirestore get _db => _injected ?? FirebaseFirestore.instance;
   final _userStreams = <String, Stream<AppUser?>>{};
-  Stream<List<ServiceItem>>? _servicesStream;
-  Stream<List<VehicleType>>? _vehicleTypesStream;
   final _walletStreams = <String, Stream<List<WalletEntry>>>{};
   final _topUpStreams = <String, Stream<List<WalletTopUp>>>{};
 
@@ -292,8 +291,10 @@ class UserRepository {
     await batch.commit();
   }
 
+  /// ستريم جديد في كل استدعاء — الستريمات بعد `.map` أحادية الاستماع
+  /// ولا تُعاد إعادة استخدامها بأمان بعد إلغاء الاشتراك (تبديل التبويبات).
   Stream<List<ServiceItem>> watchServices() {
-    return _servicesStream ??= _db
+    return _db
         .collection(Cols.services)
         .where('active', isEqualTo: true)
         .limit(100)
@@ -312,7 +313,7 @@ class UserRepository {
   }
 
   Stream<List<VehicleType>> watchVehicleTypes() {
-    return _vehicleTypesStream ??= _db
+    return _db
         .collection(Cols.vehicleTypes)
         .where('active', isEqualTo: true)
         .limit(100)
@@ -329,6 +330,24 @@ class UserRepository {
         return a.nameAr.compareTo(b.nameAr);
       });
       return list.isEmpty ? seedVehicleTypes : list;
+    });
+  }
+
+  Stream<List<OilType>> watchOilTypes() {
+    return _db
+        .collection(Cols.oilTypes)
+        .where('active', isEqualTo: true)
+        .limit(100)
+        .snapshots()
+        .map((s) {
+      final list =
+          s.docs.map((d) => OilType.fromMap(d.id, d.data())).toList();
+      list.sort((a, b) {
+        final byOrder = a.sortOrder.compareTo(b.sortOrder);
+        if (byOrder != 0) return byOrder;
+        return a.nameAr.compareTo(b.nameAr);
+      });
+      return list;
     });
   }
 }

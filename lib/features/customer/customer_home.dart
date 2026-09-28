@@ -14,6 +14,10 @@ import 'package:barrr/features/customer/customer_landing.dart';
 import 'package:barrr/features/customer/customer_request_map.dart';
 import 'package:barrr/features/customer/customer_ledger_page.dart';
 import 'package:barrr/features/customer/parts_order_screen.dart';
+import 'package:barrr/features/customer/technician_request_form.dart';
+import 'package:barrr/features/customer/oil_request_form.dart';
+import 'package:barrr/features/customer/tow_request_form.dart';
+import 'package:barrr/features/customer/wash_request_form.dart';
 import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/jobs/orders_screen.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
@@ -23,6 +27,7 @@ import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
+import 'package:barrr/models/oil_type.dart';
 import 'package:barrr/models/service_item.dart';
 import 'package:barrr/models/vehicle_type.dart';
 import 'package:barrr/services/fcm_service.dart';
@@ -58,11 +63,10 @@ class _CustomerHomeState extends State<CustomerHome> {
   Stream<List<Job>>? _recentJobsStream;
   Stream<List<ServiceItem>>? _servicesStream;
   var _deferredStarted = false;
-  late final Stream<List<ServiceItem>> _seedServicesStream = Stream.value(
-    seedServices.where((e) => e.active).toList(),
-  );
-  late final Stream<List<Job>> _emptyJobsStream = Stream.value(const []);
   Stream<List<VehicleType>>? _vehicleTypesStream;
+  Stream<List<OilType>>? _oilTypesStream;
+  /// 0 = هبوط، 1 = خريطة الطلب — لتجديد الستريمات عند التبديل.
+  var _homeSurface = 0;
   VoidCallback? _fcmFocusListener;
   FcmService? _fcm;
 
@@ -77,7 +81,7 @@ class _CustomerHomeState extends State<CustomerHome> {
       final id = scope.fcm.focusJobId.value;
       if (id == null || id.isEmpty || !mounted) return;
       setState(() {
-        if (_tab != 0) _dropJobStreams();
+        if (_tab != 0) _dropTabStreams();
         _tab = 0;
         _composing = false;
         _selected = null;
@@ -111,25 +115,43 @@ class _CustomerHomeState extends State<CustomerHome> {
     _initLocation();
   }
 
-  Stream<List<ServiceItem>> get _landingServices =>
-      _servicesStream ?? _seedServicesStream;
-
-  Stream<List<Job>> get _landingRecent => _recentJobsStream ?? _emptyJobsStream;
+  Stream<List<ServiceItem>> _ensureServices() {
+    return _servicesStream ??= AppScope.of(context).users.watchServices();
+  }
 
   Stream<List<Job>> _ensureRecentJobs() {
     return _recentJobsStream ??=
         AppScope.of(context).jobs.watchRecentForCustomer(widget.profile.id);
   }
 
-  /// البث أحادي الاستماع؛ بعد إغلاق التبويب لا يُعاد استخدامه.
-  void _dropJobStreams() {
+  Stream<Job?> _ensureActiveJob() {
+    return _activeJobStream ??=
+        AppScope.of(context).jobs.watchActiveForCustomer(widget.profile.id);
+  }
+
+  /// الستريمات أحادية الاستماع: بعد تبديل التبويب نُنشئ ستريماً جديداً
+  /// بدل إعادة الاستماع لنفس المثيل (خطأ Stream has already been listened to).
+  void _dropTabStreams() {
     _activeJobStream = null;
     _recentJobsStream = null;
+    _servicesStream = null;
+    _vehicleTypesStream = null;
+    _oilTypesStream = null;
+  }
+
+  void _dropCatalogStreams() {
+    _servicesStream = null;
+    _vehicleTypesStream = null;
+    _oilTypesStream = null;
   }
 
   Stream<List<VehicleType>> _ensureVehicleTypes() {
     return _vehicleTypesStream ??=
         AppScope.of(context).users.watchVehicleTypes();
+  }
+
+  Stream<List<OilType>> _ensureOilTypes() {
+    return _oilTypesStream ??= AppScope.of(context).users.watchOilTypes();
   }
 
   @override
@@ -361,16 +383,6 @@ class _CustomerHomeState extends State<CustomerHome> {
 
   @override
   Widget build(BuildContext context) {
-    if (_tab == 0) {
-      _activeJobStream ??=
-          AppScope.of(context).jobs.watchActiveForCustomer(widget.profile.id);
-    }
-    final active = _activeJobStream;
-    if (_tab == 0 && active == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
     final zoneName = _zone?.nameAr;
     final stayInApp = _composing || _tab != 0;
     return PopScope(
@@ -388,7 +400,7 @@ class _CustomerHomeState extends State<CustomerHome> {
         }
         if (_tab != 0) {
           setState(() {
-            _dropJobStreams();
+            _dropTabStreams();
             _tab = 0;
           });
         }
@@ -417,9 +429,8 @@ class _CustomerHomeState extends State<CustomerHome> {
           ),
         3 => _account(zoneName, _ensureRecentJobs()),
         _ => _homeTab(
-            active: active!,
-            recent: _landingRecent,
-            services: _landingServices,
+            active: _ensureActiveJob(),
+            recent: _ensureRecentJobs(),
           ),
       },
     ),
@@ -433,7 +444,7 @@ class _CustomerHomeState extends State<CustomerHome> {
         nav.popUntil((route) => route.isFirst);
       }
       setState(() {
-        if (_tab != 0) _dropJobStreams();
+        if (_tab != 0) _dropTabStreams();
         _tab = 0;
         _composing = false;
         _selected = null;
@@ -443,7 +454,7 @@ class _CustomerHomeState extends State<CustomerHome> {
       return;
     }
     setState(() {
-      if (i != _tab) _dropJobStreams();
+      if (i != _tab) _dropTabStreams();
       _tab = i;
     });
   }
@@ -452,12 +463,28 @@ class _CustomerHomeState extends State<CustomerHome> {
   Widget _homeTab({
     required Stream<Job?> active,
     required Stream<List<Job>> recent,
-    required Stream<List<ServiceItem>> services,
   }) {
     return StreamBuilder<Job?>(
       stream: active,
       builder: (context, snap) {
         final job = snap.data;
+        final techForm = _composing && _entryId == 'technician';
+        final oilForm = _composing && _entryId == 'oil';
+        final towForm = _composing && _entryId == 'towing';
+        final washForm = _composing && _entryId == 'wash';
+        final dedicatedForm = techForm || oilForm || towForm || washForm;
+        final showMap =
+            (job != null && !job.isPartsOrder) || (_composing && !dedicatedForm);
+        if (showMap && _homeSurface != 1) {
+          _homeSurface = 1;
+          _dropCatalogStreams();
+        } else if (!showMap && _homeSurface != 0) {
+          _homeSurface = 0;
+          _dropCatalogStreams();
+        }
+        final catalog = _ensureServices();
+        final vehicles = _ensureVehicleTypes();
+        final oils = _ensureOilTypes();
         // طلبات القطع بلا نافذة زمنية؛ لا تُحبَس الواجهة على لوحة الطلب.
         if (job != null && !job.isPartsOrder) {
           _watchTimeout(job, context);
@@ -471,16 +498,74 @@ class _CustomerHomeState extends State<CustomerHome> {
           return _mapBody(
             job,
             _zone,
-            services: services,
-            vehicles: _ensureVehicleTypes(),
+            services: catalog,
+            vehicles: vehicles,
+          );
+        }
+        void clearCompose() => setState(() {
+              _dropCatalogStreams();
+              _composing = false;
+              _selected = null;
+              _entryId = null;
+              _vehicleType = null;
+            });
+        if (techForm) {
+          return TechnicianRequestForm(
+            profile: widget.profile,
+            zone: _zone,
+            initialPin: _pin,
+            addressLabel: _addressLabel,
+            inZone: _pinInZone(),
+            services: catalog,
+            vehicleTypes: vehicles,
+            onBack: clearCompose,
+            onSubmitted: clearCompose,
+          );
+        }
+        if (oilForm) {
+          return OilRequestForm(
+            profile: widget.profile,
+            zone: _zone,
+            initialPin: _pin,
+            addressLabel: _addressLabel,
+            inZone: _pinInZone(),
+            services: catalog,
+            vehicleTypes: vehicles,
+            oilTypes: oils,
+            onBack: clearCompose,
+            onSubmitted: clearCompose,
+          );
+        }
+        if (towForm) {
+          return TowRequestForm(
+            profile: widget.profile,
+            zone: _zone,
+            initialPin: _pin,
+            addressLabel: _addressLabel,
+            inZone: _pinInZone(),
+            services: catalog,
+            onBack: clearCompose,
+            onSubmitted: clearCompose,
+          );
+        }
+        if (washForm) {
+          return WashRequestForm(
+            profile: widget.profile,
+            zone: _zone,
+            initialPin: _pin,
+            addressLabel: _addressLabel,
+            inZone: _pinInZone(),
+            services: catalog,
+            onBack: clearCompose,
+            onSubmitted: clearCompose,
           );
         }
         if (_composing) {
           return _mapBody(
             null,
             _zone,
-            services: services,
-            vehicles: _ensureVehicleTypes(),
+            services: catalog,
+            vehicles: vehicles,
             showBack: true,
           );
         }
@@ -491,7 +576,7 @@ class _CustomerHomeState extends State<CustomerHome> {
               Material(
                 color: AppColors.azureTint,
                 child: InkWell(
-                  onTap: () => setState(() => _tab = 1),
+                  onTap: () => _onTab(1),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
                     child: Row(
@@ -520,21 +605,23 @@ class _CustomerHomeState extends State<CustomerHome> {
                 profile: widget.profile,
                 city: _zone?.nameAr,
                 addressLabel: _addressLabel,
-                services: services,
+                services: catalog,
                 recentJobs: recent,
                 onServiceTap: _onLandingService,
-                onEmergencyTap: () => _onEmergency(services),
+                onEmergencyTap: _onEmergency,
                 onOpenWarranties: () {
                   Navigator.of(context).push(
                     softPageRoute<void>(
                       builder: (_) => WarrantiesScreen(
-                        stream: recent,
+                        stream: AppScope.of(context)
+                            .jobs
+                            .watchRecentForCustomer(widget.profile.id),
                         profile: widget.profile,
                       ),
                     ),
                   );
                 },
-                onOpenAccount: () => setState(() => _tab = 3),
+                onOpenAccount: () => _onTab(3),
               ),
             ),
           ],
@@ -555,11 +642,12 @@ class _CustomerHomeState extends State<CustomerHome> {
       );
       if (!mounted) return;
       if (result?.goOrders == true) {
-        setState(() => _tab = 1);
+        _onTab(1);
       }
       return;
     }
     setState(() {
+      _dropCatalogStreams();
       _entryId = s.id;
       // للفني نفتح الشبكة المفلترة دون اختيار مسبق؛ لبقية البلاطات نثبت الخدمة.
       _selected = s.id == 'technician' ? null : s;
@@ -567,9 +655,15 @@ class _CustomerHomeState extends State<CustomerHome> {
     });
   }
 
-  Future<void> _onEmergency(Stream<List<ServiceItem>> servicesStream) async {
-    final list = await servicesStream.first;
-    final items = list.isEmpty ? seedServices : list;
+  Future<void> _onEmergency() async {
+    // لا نستمع لنفس ستريم الـ StreamBuilder (أحادي الاستماع).
+    List<ServiceItem> items;
+    try {
+      items = await AppScope.of(context).users.watchServices().first;
+    } catch (_) {
+      items = seedServices.where((e) => e.active).toList();
+    }
+    if (items.isEmpty) items = seedServices.where((e) => e.active).toList();
     ServiceItem? emergency;
     for (final s in items) {
       if (s.isEmergency || s.id == 'towing') {
@@ -583,6 +677,7 @@ class _CustomerHomeState extends State<CustomerHome> {
     );
     if (!mounted) return;
     setState(() {
+      _dropCatalogStreams();
       _entryId = emergency!.id;
       _selected = emergency;
       _composing = true;
@@ -686,7 +781,9 @@ class _CustomerHomeState extends State<CustomerHome> {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => WarrantiesScreen(
-                              stream: jobs,
+                              stream: AppScope.of(context)
+                                  .jobs
+                                  .watchRecentForCustomer(me.id),
                               profile: me,
                             ),
                           ),
@@ -698,14 +795,14 @@ class _CustomerHomeState extends State<CustomerHome> {
                       leading: const Icon(Icons.assignment_outlined),
                       title: const Text('الطلبات'),
                       trailing: const Icon(Icons.chevron_left),
-                      onTap: () => setState(() => _tab = 1),
+                      onTap: () => _onTab(1),
                     ),
                     const Divider(height: 1),
                     ListTile(
                       leading: const Icon(Icons.account_balance_wallet_outlined),
                       title: const Text('المدفوعات النقدية'),
                       trailing: const Icon(Icons.chevron_left),
-                      onTap: () => setState(() => _tab = 2),
+                      onTap: () => _onTab(2),
                     ),
                   ],
                 ),

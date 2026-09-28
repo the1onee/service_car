@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/jobs/job_detail_screen.dart';
 import 'package:barrr/features/jobs/job_present.dart';
@@ -41,7 +40,7 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
       children: [
         FieldTopBar(
           city: city,
-          caption: 'المحفظة',
+          caption: 'المحفظة والمدفوعات',
           trailing: NotificationsBellButton(uid: profile.id),
         ),
         Expanded(
@@ -63,88 +62,56 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
                 return const Center(child: CircularProgressIndicator());
               }
               return ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF131B2E),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'رصيد المحفظة',
+                  _WalletBalanceCard(balance: profile.walletBalance),
+                  const SizedBox(height: 12),
+                  _CashPaidCard(total: total, count: jobs.length),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'الحركات الأخيرة',
                           style: TextStyle(
-                            color: Color(0xFF7C839B),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          formatIqd(profile.walletBalance),
-                          style: const TextStyle(
-                            color: Colors.white,
+                            fontSize: 16,
                             fontWeight: FontWeight.w700,
-                            fontSize: 28,
+                            color: AppColors.ink,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'الباقي من أي دفعة يبقى هنا وتستطيع استخدامه في طلب آخر',
-                          style: TextStyle(color: Color(0xFFBEC6E0), fontSize: 12),
+                      ),
+                      Text(
+                        '${jobs.length} عمليات',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.inkSoft,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF131B2E),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'ما دفعته نقداً للفنيين',
-                          style: TextStyle(
-                            color: Color(0xFF7C839B),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          formatIqd(total),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 28,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '${jobs.length} عملية مكتملة',
-                          style: const TextStyle(
-                              color: Color(0xFFBEC6E0), fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const FieldCard(
-                    child: Text(
-                      AppStrings.cashNote,
-                      style: TextStyle(fontSize: 13),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const SectionLabel('الحركات الأخيرة'),
                   if (jobs.isEmpty)
-                    const FieldCard(
-                      child: Text('لا توجد مدفوعات مكتملة بعد.'),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 28),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: AppColors.outline.withValues(alpha: 0.7),
+                        ),
+                        boxShadow: AppTheme.cardShadow(),
+                      ),
+                      child: const Text(
+                        'لا توجد مدفوعات مكتملة بعد.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppColors.inkSoft,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     )
                   else
                     for (final job in jobs) ...[
@@ -152,7 +119,7 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
                         job: job,
                         onOpen: () => openJobDetail(context, job, profile),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                     ],
                 ],
               );
@@ -160,6 +127,208 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _WalletBalanceCard extends StatelessWidget {
+  const _WalletBalanceCard({required this.balance});
+
+  final double balance;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+      decoration: BoxDecoration(
+        color: AppColors.slate,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFF1E293B)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.slate.withValues(alpha: 0.28),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: -48,
+            left: -40,
+            child: IgnorePointer(
+              child: Container(
+                width: 140,
+                height: 140,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.azure.withValues(alpha: 0.12),
+                ),
+              ),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'رصيد المحفظة المتاح',
+                style: TextStyle(
+                  color: Color(0xFF94A3B8),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(
+                    formatIqd(balance, withUnit: false),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 36,
+                      height: 1.05,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'د.ع',
+                    style: TextStyle(
+                      color: Color(0xFFCBD5E1),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 20,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.only(top: 10),
+                decoration: const BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: Color(0xFF1E293B)),
+                  ),
+                ),
+                child: const Text(
+                  'الباقي من أي دفعة يبقى هنا وتستطيع استخدامه في طلب آخر',
+                  style: TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 11.5,
+                    height: 1.45,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CashPaidCard extends StatelessWidget {
+  const _CashPaidCard({required this.total, required this.count});
+
+  final double total;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.outline.withValues(alpha: 0.7),
+        ),
+        boxShadow: AppTheme.cardShadow(),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'ما دفعته نقداً للفنيين',
+                  style: TextStyle(
+                    color: AppColors.inkSoft,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$count عمليات مكتملة • سجل معتمد',
+                  style: const TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontWeight: FontWeight.w500,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(
+                    formatIqd(total, withUnit: false),
+                    style: const TextStyle(
+                      color: AppColors.ink,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Text(
+                    'د.ع',
+                    style: TextStyle(
+                      color: AppColors.inkSoft,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.emerald.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: AppColors.emerald.withValues(alpha: 0.22),
+                  ),
+                ),
+                child: const Text(
+                  'كاش مباشر',
+                  style: TextStyle(
+                    color: AppColors.emeraldDeep,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -173,39 +342,124 @@ class _PayRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final amount = job.receivedAmount ?? job.finalPrice ?? 0;
-    return InkWell(
-      onTap: onOpen,
-      borderRadius: BorderRadius.circular(16),
-      child: FieldCard(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.outline.withValues(alpha: 0.7),
+            ),
+            boxShadow: AppTheme.cardShadow(),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      job.serviceTitle?.trim().isNotEmpty == true
+                          ? job.serviceTitle!
+                          : 'خدمة',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _txMeta(job),
+                      style: const TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    job.serviceTitle ?? 'خدمة',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: formatIqd(amount, withUnit: false),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            color: AppColors.emeraldDeep,
+                          ),
+                        ),
+                        const TextSpan(
+                          text: ' د.ع',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                            color: AppColors.emeraldDeep,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${jobCode(job)} · ${formatWhen(job.createdAt)}',
-                    style: const TextStyle(color: AppColors.inkSoft, fontSize: 12),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'نقداً للفني',
+                    style: TextStyle(
+                      color: Color(0xFF94A3B8),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
-            ),
-            Text(
-              formatIqd(amount),
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                color: AppColors.emeraldDeep,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+String _txMeta(Job job) {
+  final parts = <String>[];
+  final when = _formatLedgerWhen(job.createdAt);
+  if (when.isNotEmpty) parts.add(when);
+  parts.add(jobCode(job));
+  return parts.join(' • ');
+}
+
+String _formatLedgerWhen(DateTime? date) {
+  if (date == null) return '';
+  const months = [
+    'يناير',
+    'فبراير',
+    'مارس',
+    'أبريل',
+    'مايو',
+    'يونيو',
+    'يوليو',
+    'أغسطس',
+    'سبتمبر',
+    'أكتوبر',
+    'نوفمبر',
+    'ديسمبر',
+  ];
+  final local = date.toLocal();
+  final hour24 = local.hour;
+  final isAm = hour24 < 12;
+  var hour12 = hour24 % 12;
+  if (hour12 == 0) hour12 = 12;
+  final minute = local.minute.toString().padLeft(2, '0');
+  final period = isAm ? 'ص' : 'م';
+  return '${local.day} ${months[local.month - 1]} • $hour12:$minute $period';
 }

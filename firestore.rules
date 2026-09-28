@@ -221,6 +221,9 @@ service cloud.firestore {
     match /vehicleTypes/{id} {
       allow read: if signedIn();
     }
+    match /oilTypes/{id} {
+      allow read: if signedIn();
+    }
     // كتالوج الاختصاصات للقوائم المنسدلة أثناء التسجيل (قبل تسجيل الدخول).
     match /workshopSpecialties/{id} {
       allow get, list: if true;

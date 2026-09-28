@@ -125,6 +125,8 @@ class JobRepository {
     String providerKind = '',
     String specialtyId = '',
     String specialtyAr = '',
+    GeoPoint? dropoff,
+    String dropoffLabel = '',
   }) async {
     final ref = _jobs.doc();
     final toWorkshops =
@@ -168,10 +170,17 @@ class JobRepository {
     );
     final batch = _db.batch();
     batch.set(ref, job.toCreateMap());
-    batch.set(_db.collection('jobLocations').doc(ref.id), {
+    final locPayload = <String, dynamic>{
       'customerId': customerId,
       'exact': exact,
-    });
+    };
+    if (dropoff != null) {
+      locPayload['dropoff'] = dropoff;
+      if (dropoffLabel.trim().isNotEmpty) {
+        locPayload['dropoffLabel'] = dropoffLabel.trim();
+      }
+    }
+    batch.set(_db.collection('jobLocations').doc(ref.id), locPayload);
     await batch.commit();
     return ref.id;
   }
