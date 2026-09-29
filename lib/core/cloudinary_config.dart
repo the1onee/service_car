@@ -8,16 +8,16 @@
 class CloudinaryConfig {
   CloudinaryConfig._();
 
-  /// من Cloudinary Dashboard → Cloud name (عبر --dart-define فقط).
+  /// Cloud name من لوحة Cloudinary. ليس سراً؛ يظهر في روابط الصور.
   static const cloudName = String.fromEnvironment(
     'CLOUDINARY_CLOUD_NAME',
-    defaultValue: '',
+    defaultValue: 'lzkmqtqp',
   );
 
-  /// Upload preset بوضع Unsigned (مثال الاسم: barrr_unsigned) عبر --dart-define فقط.
+  /// Upload preset بوضع Unsigned. الافتراضي هو الإعداد المفعّل في لوحة Cloudinary.
   static const uploadPreset = String.fromEnvironment(
     'CLOUDINARY_UPLOAD_PRESET',
-    defaultValue: '',
+    defaultValue: 'barrr_unsigned',
   );
 
   static bool get isUnsignedConfigured =>

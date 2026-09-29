@@ -310,15 +310,14 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                     return ListView(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                       children: [
-                        _LiveHeader(city: city),
+                        const _LiveHeader(),
                         const SizedBox(height: 20),
-                        _sectionTitle(1, 'نوع الخدمة أو العطل',
-                            trailing: 'مطلوب'),
+                        _sectionTitle(1, 'نوع الخدمة'),
                         const SizedBox(height: 10),
                         if (services.isEmpty)
                           const _Card(
                             child: Text(
-                              'لا توجد خدمات فني مفعّلة في لوحة التحكم حالياً.',
+                              'لا توجد خدمات فني.',
                               style: TextStyle(color: AppColors.inkSoft),
                             ),
                           )
@@ -335,7 +334,7 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              const _FieldLabel('نوع المركبة (من لوحة التحكم)'),
+                              const _FieldLabel('نوع المركبة'),
                               const SizedBox(height: 8),
                               Wrap(
                                 spacing: 8,
@@ -343,8 +342,19 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                                 children: [
                                   for (final t in vehicles)
                                     FilterChip(
-                                      label: Text(t.nameAr),
+                                      label: Text(
+                                        t.nameAr,
+                                        style: const TextStyle(
+                                          color: AppColors.ink,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                        ),
+                                      ),
                                       selected: _vehicleType?.id == t.id,
+                                      showCheckmark: true,
+                                      checkmarkColor: AppColors.ink,
+                                      backgroundColor: AppColors.recessed,
+                                      selectedColor: AppColors.amber,
                                       onSelected: (_) =>
                                           setState(() => _vehicleType = t),
                                     ),
@@ -356,7 +366,7 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                               _IconField(
                                 controller: _vehicle,
                                 icon: Icons.directions_car_outlined,
-                                hint: 'مثال: تويوتا كامري، كيا سورينتو',
+                                hint: 'الموديل',
                               ),
                               const SizedBox(height: 12),
                               const _FieldLabel('سنة الصنع'),
@@ -377,32 +387,28 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              const _FieldLabel('ملاحظات العطل للفني'),
-                              const SizedBox(height: 6),
                               TextField(
                                 controller: _note,
                                 maxLines: 3,
                                 style: const TextStyle(fontSize: 14),
                                 decoration: _inputDecoration(
-                                  hint:
-                                      'صف العطل أو الصوت الغريب بالتفصيل لمساعدة الفني…',
+                                  hint: 'وصف مختصر',
                                 ),
                               ),
                               const SizedBox(height: 14),
-                              const _FieldLabel(
-                                  'مرفقات مساعدة (صورة العطل أو القطعة)'),
+                              const _FieldLabel('الصورة'),
                               const SizedBox(height: 8),
                               Row(
                                 children: [
                                   Expanded(
                                     child: _AttachTile(
-                                      icon: Icons.add_a_photo_outlined,
+                                      icon: _imageUrl == null
+                                          ? Icons.add_a_photo_outlined
+                                          : Icons.check_circle,
                                       title: _imageUrl == null
                                           ? 'إرفاق صورة'
-                                          : 'تم إرفاق صورة',
-                                      subtitle: _imageUrl == null
-                                          ? 'صورة العداد أو القطعة'
-                                          : 'اضغط لتغيير الصورة',
+                                          : 'تم الرفع',
+                                      subtitle: '',
                                       busy: _pickingImage,
                                       onTap: _pickImage,
                                       accent: _imageUrl != null,
@@ -413,7 +419,7 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                                     child: _AttachTile(
                                       icon: Icons.mic_none_rounded,
                                       title: 'تسجيل صوتي',
-                                      subtitle: 'قريباً',
+                                      subtitle: '',
                                       onTap: () {
                                         ScaffoldMessenger.of(context)
                                             .showSnackBar(
@@ -432,35 +438,7 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                           ),
                         ),
                         const SizedBox(height: 22),
-                        _sectionTitle(
-                          4,
-                          'العنوان والموقع الميداني',
-                          trailingWidget: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF4EDEA3)
-                                  .withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.my_location,
-                                    size: 14, color: Color(0xFF009668)),
-                                SizedBox(width: 4),
-                                Text(
-                                  'GPS نشط',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF009668),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                        _sectionTitle(4, 'الموقع'),
                         const SizedBox(height: 10),
                         _Card(
                           child: Column(
@@ -592,13 +570,13 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                                 controller: _landmark,
                                 icon: Icons.storefront_outlined,
                                 hint:
-                                    'علامة دالة قريبة (مثال: مقابل صيدلية النقاء)',
+                                    'علامة دالة',
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(height: 22),
-                        _sectionTitle(5, 'رقم الاتصال المباشر'),
+                        _sectionTitle(5, 'الهاتف'),
                         const SizedBox(height: 10),
                         _Card(
                           child: Row(
@@ -630,13 +608,6 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                                         isDense: true,
                                         border: InputBorder.none,
                                         contentPadding: EdgeInsets.zero,
-                                      ),
-                                    ),
-                                    const Text(
-                                      'الرقم المعتمد بحسابك للتواصل السريع',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.inkSoft,
                                       ),
                                     ),
                                   ],
@@ -844,11 +815,6 @@ class _FormTopBar extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const Text(
-                        'طلب صيانة ميداني',
-                        style:
-                            TextStyle(fontSize: 11, color: AppColors.inkSoft),
-                      ),
                     ],
                   ),
                 ),
@@ -863,58 +829,18 @@ class _FormTopBar extends StatelessWidget {
 }
 
 class _LiveHeader extends StatelessWidget {
-  const _LiveHeader({required this.city});
-
-  final String city;
+  const _LiveHeader();
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 10,
-              height: 10,
-              decoration: const BoxDecoration(
-                color: AppColors.amber,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                'تغطية نشطة الآن في $city',
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.amberDeep,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        const Text(
-          'طلب فني صيانة ميداني',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            color: AppColors.ink,
-            height: 1.25,
-          ),
-        ),
-        const SizedBox(height: 6),
-        const Text(
-          'حدد مشكلة سيارتك وموقعك ليصلك أقرب فني محترف ومجهز بالعدة المناسبة في محافظتك.',
-          style: TextStyle(
-            fontSize: 14,
-            height: 1.45,
-            color: AppColors.inkSoft,
-          ),
-        ),
-      ],
+    return const Text(
+      'طلب فني',
+      style: TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.w800,
+        color: AppColors.ink,
+        height: 1.2,
+      ),
     );
   }
 }
@@ -945,11 +871,6 @@ class _CategoryGrid extends StatelessWidget {
       itemBuilder: (context, i) {
         final s = items[i];
         final on = selectedId == s.id;
-        final subtitle = s.category.isNotEmpty
-            ? s.category
-            : (s.descriptionAr.trim().isEmpty
-                ? 'خدمة معتمدة'
-                : s.descriptionAr);
         return Material(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
@@ -991,21 +912,11 @@ class _CategoryGrid extends StatelessWidget {
                           children: [
                             Text(
                               s.titleAr,
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              subtitle,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.inkSoft,
                               ),
                             ),
                           ],
@@ -1149,11 +1060,13 @@ class _AttachTile extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 10, color: AppColors.inkSoft),
-              ),
+              if (subtitle.isNotEmpty)
+                Text(
+                  subtitle,
+                  textAlign: TextAlign.center,
+                  style:
+                      const TextStyle(fontSize: 10, color: AppColors.inkSoft),
+                ),
             ],
           ),
         ),

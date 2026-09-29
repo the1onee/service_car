@@ -69,6 +69,12 @@ class CloudinaryUpload {
 
     final filename = file.name.trim().isEmpty ? 'upload.jpg' : file.name;
     final signed = await _trySignedParams(folder);
+    if (signed == null && !CloudinaryConfig.isUnsignedConfigured) {
+      throw StateError(
+        'ارفع الصور يحتاج Cloud name من لوحة Cloudinary مع preset barrr_unsigned.',
+      );
+    }
+
     final request = http.MultipartRequest(
       'POST',
       CloudinaryConfig.uploadUri(signed?['cloudName'] as String?),
@@ -85,18 +91,11 @@ class CloudinaryUpload {
       request.fields['timestamp'] = '${signed['timestamp']}';
       request.fields['signature'] = '${signed['signature']}';
       request.fields['folder'] = '${signed['folder']}';
-    } else if (CloudinaryConfig.isUnsignedConfigured) {
-      request.fields['upload_preset'] = CloudinaryConfig.uploadPreset.trim();
-      request.fields['folder'] = folder;
+      if (tags.isNotEmpty) {
+        request.fields['tags'] = tags.join(',');
+      }
     } else {
-      throw StateError(
-        'Cloudinary غير مضبوط. انشر getCloudinaryUploadSign مع CLOUDINARY_* '
-        'أو مرّر CLOUDINARY_CLOUD_NAME و CLOUDINARY_UPLOAD_PRESET عبر --dart-define.',
-      );
-    }
-
-    if (tags.isNotEmpty) {
-      request.fields['tags'] = tags.join(',');
+      request.fields['upload_preset'] = CloudinaryConfig.uploadPreset.trim();
     }
 
     final streamed = await request.send().timeout(const Duration(seconds: 60));

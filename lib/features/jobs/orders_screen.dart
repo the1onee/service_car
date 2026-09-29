@@ -87,14 +87,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     if (rows.isEmpty)
                       const _Empty(
                         icon: Icons.assignment_outlined,
-                        title: 'لا توجد طلبات بعد',
-                        text: 'ابدأ من الرئيسية واختر الخدمة المناسبة.',
+                        title: 'لا توجد طلبات',
                       )
                     else if (shown.isEmpty)
                       const _Empty(
                         icon: Icons.filter_alt_outlined,
-                        title: 'لا نتائج في هذا التصنيف',
-                        text: 'جرّب تصنيفاً آخر أو أنشئ طلباً جديداً.',
+                        title: 'لا نتائج',
                       )
                     else ...[
                       _FeaturedJob(
@@ -560,12 +558,12 @@ class _Empty extends StatelessWidget {
   const _Empty({
     required this.icon,
     required this.title,
-    required this.text,
+    this.text,
   });
 
   final IconData icon;
   final String title;
-  final String text;
+  final String? text;
 
   @override
   Widget build(BuildContext context) {
@@ -592,12 +590,14 @@ class _Empty extends StatelessWidget {
             title,
             style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
           ),
-          const SizedBox(height: 4),
-          Text(
-            text,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.inkSoft, fontSize: 13),
-          ),
+          if (text != null && text!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              text!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.inkSoft, fontSize: 13),
+            ),
+          ],
         ],
       ),
     );

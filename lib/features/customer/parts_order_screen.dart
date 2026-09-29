@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/cloudinary_config.dart';
@@ -80,7 +79,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
         _specialties = list;
         _loadingSpecialties = false;
         _specialtiesError = list.isEmpty
-            ? 'لا توجد اختصاصات مفعّلة لورش القطع. أضفها من لوحة الأدمن.'
+            ? 'لا توجد اختصاصات'
             : null;
         if (_specialtyId != null &&
             !list.any((s) => s.id == _specialtyId)) {
@@ -213,7 +212,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
           content: Text(
             dispatchFailed
                 ? AppStrings.jobCreatedDispatchFailed
-                : 'تم إرسال الطلب للورش المختصة. تابع العروض من الطلبات.',
+                : 'تم الإرسال',
           ),
         ),
       );
@@ -316,13 +315,6 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                                 ],
                               ],
                             ),
-                            const Text(
-                              'يُرسل مباشرة للورش المختصة',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF45464D),
-                              ),
-                            ),
                           ],
                         ),
                       ),
@@ -342,80 +334,15 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                   Container(
                     width: double.infinity,
                     color: AppColors.petrolTint,
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.amber,
-                                borderRadius: BorderRadius.circular(999),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.06),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 1),
-                                  ),
-                                ],
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.storefront, size: 16, color: AppColors.ink),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'ورش ومحلات البصرة',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.ink,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Spacer(),
-                            const Row(
-                              children: [
-                                _PulseDot(),
-                                SizedBox(width: 6),
-                                Text(
-                                  'ورش نشطة الآن',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFF45464D),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'طلب تسعير قطع الغيار',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            height: 1.25,
-                            color: AppColors.ink,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'اختر اختصاص سيارتك ليصل الطلب فوراً للورش المختصة فقط.',
-                          style: TextStyle(
-                            fontSize: 14,
-                            height: 1.55,
-                            color: Color(0xFF45464D),
-                          ),
-                        ),
-                      ],
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                    child: const Text(
+                      'قطع غيار',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
+                        color: AppColors.ink,
+                      ),
                     ),
                   ),
                   Padding(
@@ -442,18 +369,11 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                               SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'بيانات الطلب',
+                                  'الطلب',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w700,
                                     fontSize: 16,
                                   ),
-                                ),
-                              ),
-                              Text(
-                                'طلب سريع ومباشر',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF45464D),
                                 ),
                               ),
                             ],
@@ -533,7 +453,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                               ),
                             ),
                           const SizedBox(height: 12),
-                          const _Label('نوع وصانع المركبة والموديل'),
+                          const _Label('المركبة'),
                           TextFormField(
                             controller: _vehicle,
                             textInputAction: TextInputAction.next,
@@ -553,7 +473,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                             decoration: _fieldDeco(hint: 'مثال: 2021'),
                           ),
                           const SizedBox(height: 12),
-                          const _Label('اسم القطعة المطلوبة ووصفها البسيط'),
+                          const _Label('القطعة'),
                           TextFormField(
                             controller: _partDetails,
                             textInputAction: TextInputAction.next,
@@ -565,45 +485,33 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                                 : null,
                           ),
                           const SizedBox(height: 12),
-                          const _Label('إرفاق صورة للقطعة (اختياري)'),
+                          const _Label('الصورة'),
                           if (_partImageUrl != null) ...[
                             Container(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               decoration: BoxDecoration(
-                                color: AppColors.petrolTint,
+                                color: AppColors.emeraldTint,
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Row(
                                 children: [
                                   const Icon(
-                                    Icons.link_rounded,
-                                    size: 18,
-                                    color: AppColors.amberDeep,
+                                    Icons.check_circle,
+                                    size: 22,
+                                    color: AppColors.emerald,
                                   ),
                                   const SizedBox(width: 8),
-                                  Expanded(
-                                    child: SelectableText(
-                                      _partImageUrl!,
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Color(0xFF45464D),
+                                  const Expanded(
+                                    child: Text(
+                                      'تم رفع الصورة',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
                                       ),
                                     ),
-                                  ),
-                                  IconButton(
-                                    tooltip: 'نسخ الرابط',
-                                    onPressed: () async {
-                                      await Clipboard.setData(
-                                        ClipboardData(text: _partImageUrl!),
-                                      );
-                                      if (!context.mounted) return;
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('تم نسخ رابط الصورة.'),
-                                        ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.copy_rounded, size: 18),
                                   ),
                                   IconButton(
                                     tooltip: 'إزالة',
@@ -648,7 +556,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                                         ),
                                         const SizedBox(width: 8),
                                         const Text(
-                                          'التقاط صورة للقطعة أو رفعها من المعرض',
+                                          'صورة',
                                           style: TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w600,
@@ -662,7 +570,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                               ),
                             ),
                           const SizedBox(height: 12),
-                          const _Label('العنوان وموقع التوصيل بالبصرة'),
+                          const _Label('العنوان'),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -670,7 +578,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                                 child: TextFormField(
                                   controller: _address,
                                   decoration: _fieldDeco(
-                                    hint: 'مثال: البصرة، العشار، قرب جسر كنعان',
+                                    hint: 'العنوان',
                                     suffix: const Icon(
                                       Icons.location_on,
                                       color: AppColors.amberDeep,
@@ -727,7 +635,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                               ),
                             ),
                           const SizedBox(height: 12),
-                          const _Label('رقم هاتف التواصل'),
+                          const _Label('الهاتف'),
                           TextFormField(
                             controller: _phone,
                             keyboardType: TextInputType.phone,
@@ -829,44 +737,3 @@ class _Label extends StatelessWidget {
   }
 }
 
-class _PulseDot extends StatefulWidget {
-  const _PulseDot();
-
-  @override
-  State<_PulseDot> createState() => _PulseDotState();
-}
-
-class _PulseDotState extends State<_PulseDot>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c;
-
-  @override
-  void initState() {
-    super.initState();
-    _c = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1100),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: Tween(begin: 0.35, end: 1.0).animate(_c),
-      child: Container(
-        width: 8,
-        height: 8,
-        decoration: const BoxDecoration(
-          color: Color(0xFF009668),
-          shape: BoxShape.circle,
-        ),
-      ),
-    );
-  }
-}

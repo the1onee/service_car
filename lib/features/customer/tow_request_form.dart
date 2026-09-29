@@ -294,8 +294,8 @@ class _TowRequestFormState extends State<TowRequestForm> {
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                   children: [
-                    _BannerCard(city: city),
-                    const SizedBox(height: 12),
+                    const _BannerCard(),
+                    const SizedBox(height: 18),
                     _RouteCard(
                       pickupLabel:
                           _pickupInZone ? _pickupLabel : 'خارج التغطية',
@@ -305,13 +305,13 @@ class _TowRequestFormState extends State<TowRequestForm> {
                       onEditPickup: _pickPickup,
                       onPickDropoff: _pickDropoff,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 18),
                     _VehicleCard(
                       selectedId: _vehicleKind.id,
                       nameController: _vehicleName,
                       onSelect: (k) => setState(() => _vehicleKind = k),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 18),
                     _PhoneCard(
                       controller: _phone,
                       editing: _phoneEditing,
@@ -358,26 +358,6 @@ class _TowRequestFormState extends State<TowRequestForm> {
                                 ],
                               ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.info_outline,
-                            size: 16, color: AppColors.inkSoft),
-                        SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            'سيصلك إشعار فوري بعروض أسعار السطحات القريبة',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: AppColors.inkSoft,
-                              height: 1.35,
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 );
@@ -450,11 +430,6 @@ class _TopBar extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const Text(
-                        'طلب سطحة',
-                        style:
-                            TextStyle(fontSize: 11, color: AppColors.inkSoft),
-                      ),
                     ],
                   ),
                 ),
@@ -469,102 +444,17 @@ class _TopBar extends StatelessWidget {
 }
 
 class _BannerCard extends StatelessWidget {
-  const _BannerCard({required this.city});
-
-  final String city;
+  const _BannerCard();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.recessed,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: AppTheme.cardShadow(),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            left: -18,
-            bottom: -22,
-            child: Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
-                color: AppColors.amber.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppColors.slate,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.local_shipping, color: Colors.white),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'طلب سطحة ونقل مركبة',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.amber,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.bolt, size: 13, color: AppColors.ink),
-                              SizedBox(width: 2),
-                              Text(
-                                '24/7 سريعة',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.ink,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'سطحات معتمدة ومجهزة لنقل آمن لجميع المركبات داخل وخارج $city',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        height: 1.4,
-                        color: AppColors.inkSoft,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
+    return const Text(
+      'سطحة',
+      style: TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.w800,
+        color: AppColors.ink,
+        height: 1.2,
       ),
     );
   }
@@ -606,20 +496,8 @@ class _RouteCard extends StatelessWidget {
               const SizedBox(width: 6),
               const Expanded(
                 child: Text(
-                  'مسار النقل (من وإلى)',
+                  'المسار',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.recessed,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: const Text(
-                  'تحديد تلقائي دقيق',
-                  style: TextStyle(fontSize: 10, color: AppColors.inkSoft),
                 ),
               ),
             ],
@@ -642,7 +520,7 @@ class _RouteCard extends StatelessWidget {
                     icon: Icons.car_crash,
                     iconBg: AppColors.amber,
                     iconFg: AppColors.ink,
-                    title: 'مكان التحميل (موقع المركبة الحالي)',
+                    title: 'التحميل',
                     trailing: TextButton.icon(
                       onPressed: onEditPickup,
                       icon: const Icon(Icons.edit_location_alt, size: 14),
@@ -682,8 +560,7 @@ class _RouteCard extends StatelessWidget {
                           controller: landmark,
                           style: const TextStyle(fontSize: 13),
                           decoration: InputDecoration(
-                            hintText:
-                                'علامة دالة (مثال: الشارع الرئيسي، أمام محطة وقود)',
+                            hintText: 'علامة دالة',
                             hintStyle: const TextStyle(
                               color: AppColors.inkSoft,
                               fontSize: 12,
@@ -708,7 +585,7 @@ class _RouteCard extends StatelessWidget {
                     icon: Icons.flag_circle,
                     iconBg: AppColors.slate,
                     iconFg: Colors.white,
-                    title: 'مكان التنزيل (الوجهة)',
+                    title: 'التنزيل',
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -907,7 +784,7 @@ class _VehicleCard extends StatelessWidget {
             controller: nameController,
             style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
-              hintText: 'حدد فئة أو اسم السيارة (مثال: كورولا، لاندكروزر...)',
+              hintText: 'الموديل',
               hintStyle:
                   const TextStyle(color: AppColors.inkSoft, fontSize: 12),
               filled: true,
@@ -1028,7 +905,7 @@ class _PhoneCard extends StatelessWidget {
               const SizedBox(width: 6),
               const Expanded(
                 child: Text(
-                  'رقم الهاتف',
+                  'الهاتف',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
               ),
@@ -1038,7 +915,7 @@ class _PhoneCard extends StatelessWidget {
                   foregroundColor: AppColors.amberDeep,
                   visualDensity: VisualDensity.compact,
                 ),
-                child: Text(editing ? 'تم' : 'تعديل الرقم'),
+                child: Text(editing ? 'تم' : 'تعديل'),
               ),
             ],
           ),
@@ -1093,19 +970,6 @@ class _PhoneCard extends StatelessWidget {
                           ),
                         ),
                 ),
-                if (!editing)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Text(
-                      'الرقم المعتمد',
-                      style: TextStyle(fontSize: 10, color: AppColors.inkSoft),
-                    ),
-                  ),
               ],
             ),
           ),

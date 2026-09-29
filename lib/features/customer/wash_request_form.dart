@@ -282,12 +282,11 @@ class _WashRequestFormState extends State<WashRequestForm> {
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                   children: [
-                    _BannerCard(city: city),
-                    const SizedBox(height: 16),
+                    const _BannerCard(),
+                    const SizedBox(height: 18),
                     _SectionHeader(
                       icon: Icons.directions_car,
-                      title: 'نوع المركبة',
-                      step: 'خطوة 1 من 3',
+                      title: 'المركبة',
                     ),
                     const SizedBox(height: 10),
                     Row(
@@ -313,7 +312,7 @@ class _WashRequestFormState extends State<WashRequestForm> {
                         controller: _otherKind,
                         style: const TextStyle(fontSize: 14),
                         decoration: _fieldDecoration(
-                          hint: 'اكتب نوع أو فئة المركبة هنا...',
+                          hint: 'النوع',
                         ),
                       ),
                     ],
@@ -322,16 +321,14 @@ class _WashRequestFormState extends State<WashRequestForm> {
                       controller: _vehicleName,
                       style: const TextStyle(fontSize: 14),
                       decoration: _fieldDecoration(
-                        hint:
-                            'موديل أو نوع السيارة (مثال: كيا سبورتاج، كامري 2022)',
+                        hint: 'الموديل',
                         icon: Icons.commute,
                       ),
                     ),
                     const SizedBox(height: 18),
                     _SectionHeader(
                       icon: Icons.location_on,
-                      title: 'موقع غسيل السيارة',
-                      step: 'خطوة 2 من 3',
+                      title: 'الموقع',
                     ),
                     const SizedBox(height: 10),
                     _LocationCard(
@@ -346,8 +343,7 @@ class _WashRequestFormState extends State<WashRequestForm> {
                     const SizedBox(height: 18),
                     _SectionHeader(
                       icon: Icons.call,
-                      title: 'رقم الهاتف للتنسيق',
-                      step: 'خطوة 3 من 3',
+                      title: 'الهاتف',
                     ),
                     const SizedBox(height: 10),
                     _PhoneCard(
@@ -396,26 +392,6 @@ class _WashRequestFormState extends State<WashRequestForm> {
                                 ],
                               ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.payments_outlined,
-                            size: 16, color: AppColors.amberDeep),
-                        SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            'الدفع كاش بعد إتمام الغسيل • يصلك إشعار فوري بأقرب فني متاح',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: AppColors.inkSoft,
-                              height: 1.35,
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 );
@@ -506,11 +482,6 @@ class _TopBar extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const Text(
-                        'غسيل متنقل',
-                        style:
-                            TextStyle(fontSize: 11, color: AppColors.inkSoft),
-                      ),
                     ],
                   ),
                 ),
@@ -525,105 +496,17 @@ class _TopBar extends StatelessWidget {
 }
 
 class _BannerCard extends StatelessWidget {
-  const _BannerCard({required this.city});
-
-  final String city;
+  const _BannerCard();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.slate,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: AppTheme.softShadow(opacity: 0.18),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            left: -20,
-            bottom: -24,
-            child: Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                color: AppColors.amber.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.local_car_wash,
-                    color: AppColors.amber, size: 28),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'غسيل سيارات متنقل',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.amber.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.circle,
-                                  size: 7, color: AppColors.amber),
-                              SizedBox(width: 4),
-                              Text(
-                                'خدمة ميدانية عند بابك',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFFFFDDB8),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'فنيو غسيل وتلميع متنقلون مع معدات ضغط ومواد معتمدة تصلك أينما كنت في $city.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        height: 1.4,
-                        color: Colors.white.withValues(alpha: 0.72),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
+    return const Text(
+      'غسيل',
+      style: TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.w800,
+        color: AppColors.ink,
+        height: 1.2,
       ),
     );
   }
@@ -633,12 +516,10 @@ class _SectionHeader extends StatelessWidget {
   const _SectionHeader({
     required this.icon,
     required this.title,
-    required this.step,
   });
 
   final IconData icon;
   final String title;
-  final String step;
 
   @override
   Widget build(BuildContext context) {
@@ -651,10 +532,6 @@ class _SectionHeader extends StatelessWidget {
             title,
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
           ),
-        ),
-        Text(
-          step,
-          style: const TextStyle(fontSize: 11, color: AppColors.inkSoft),
         ),
       ],
     );
@@ -765,7 +642,7 @@ class _LocationCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '$city — تحديد تلقائي',
+                        city,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -832,33 +709,6 @@ class _LocationCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Positioned(
-                    right: 8,
-                    bottom: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.92),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.my_location,
-                              size: 14, color: AppColors.amberDeep),
-                          SizedBox(width: 4),
-                          Text(
-                            'نطاق وصول الفنيين: 10–25 دقيقة',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -868,7 +718,7 @@ class _LocationCard extends StatelessWidget {
             controller: landmark,
             style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
-              hintText: 'علامة دالة (مثال: كراج البيت، مقابل مدرسة الفراهيدي)',
+              hintText: 'علامة دالة',
               hintStyle:
                   const TextStyle(color: AppColors.inkSoft, fontSize: 12),
               filled: true,
@@ -953,20 +803,6 @@ class _PhoneCard extends StatelessWidget {
                           fontSize: 16,
                           letterSpacing: 0.4,
                         ),
-                      ),
-                      const Row(
-                        children: [
-                          Icon(Icons.check_circle,
-                              size: 14, color: AppColors.emeraldDeep),
-                          SizedBox(width: 4),
-                          Text(
-                            'الرقم المعتمد بحسابك',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: AppColors.emeraldDeep,
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),

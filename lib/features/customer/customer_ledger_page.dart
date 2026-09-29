@@ -40,7 +40,7 @@ class _CustomerLedgerPageState extends State<CustomerLedgerPage> {
       children: [
         FieldTopBar(
           city: city,
-          caption: 'المحفظة والمدفوعات',
+          caption: 'المحفظة',
           trailing: NotificationsBellButton(uid: profile.id),
         ),
         Expanded(
@@ -174,7 +174,7 @@ class _WalletBalanceCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'رصيد المحفظة المتاح',
+                'الرصيد',
                 style: TextStyle(
                   color: Color(0xFF94A3B8),
                   fontWeight: FontWeight.w600,
@@ -206,25 +206,6 @@ class _WalletBalanceCard extends StatelessWidget {
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.only(top: 10),
-                decoration: const BoxDecoration(
-                  border: Border(
-                    top: BorderSide(color: Color(0xFF1E293B)),
-                  ),
-                ),
-                child: const Text(
-                  'الباقي من أي دفعة يبقى هنا وتستطيع استخدامه في طلب آخر',
-                  style: TextStyle(
-                    color: Color(0xFF94A3B8),
-                    fontSize: 11.5,
-                    height: 1.45,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
               ),
             ],
           ),
@@ -260,7 +241,7 @@ class _CashPaidCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'ما دفعته نقداً للفنيين',
+                  'المدفوعات',
                   style: TextStyle(
                     color: AppColors.inkSoft,
                     fontWeight: FontWeight.w600,
@@ -269,7 +250,7 @@ class _CashPaidCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '$count عمليات مكتملة • سجل معتمد',
+                  '$count',
                   style: const TextStyle(
                     color: Color(0xFF94A3B8),
                     fontWeight: FontWeight.w500,
@@ -304,26 +285,6 @@ class _CashPaidCard extends StatelessWidget {
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 4),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.emerald.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: AppColors.emerald.withValues(alpha: 0.22),
-                  ),
-                ),
-                child: const Text(
-                  'كاش مباشر',
-                  style: TextStyle(
-                    color: AppColors.emeraldDeep,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 10,
-                  ),
-                ),
               ),
             ],
           ),
@@ -409,15 +370,6 @@ class _PayRow extends StatelessWidget {
                           ),
                         ),
                       ],
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    'نقداً للفني',
-                    style: TextStyle(
-                      color: Color(0xFF94A3B8),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],

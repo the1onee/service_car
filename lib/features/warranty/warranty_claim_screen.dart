@@ -115,7 +115,7 @@ class _WarrantyClaimScreenState extends State<WarrantyClaimScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'مطالبة ضمان صيانة سارية',
+            'الضمان',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 6),
@@ -124,7 +124,7 @@ class _WarrantyClaimScreenState extends State<WarrantyClaimScreen> {
             style: const TextStyle(color: AppColors.inkSoft),
           ),
           const SizedBox(height: 16),
-          const SectionLabel('ما هو الخلل الذي طرأ على المركبة؟'),
+          const SectionLabel('الخلل'),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -143,20 +143,14 @@ class _WarrantyClaimScreenState extends State<WarrantyClaimScreen> {
             minLines: 3,
             maxLines: 5,
             decoration: const InputDecoration(
-              labelText: 'تفاصيل إضافية للفني',
+              labelText: 'تفاصيل',
               alignLabelWithHint: true,
-            ),
-          ),
-          const SizedBox(height: 12),
-          const FieldCard(
-            child: Text(
-              'زيارة الضمان مجانية. يُعاد توجيه فني مناسب لنفس الخدمة دون عمولة جديدة.',
             ),
           ),
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _busy ? null : _submit,
-            child: Text(_busy ? 'جارٍ التوجيه...' : 'تأكيد طلب فني الضمان'),
+            child: Text(_busy ? 'جارٍ الإرسال' : 'تأكيد'),
           ),
         ],
       ),

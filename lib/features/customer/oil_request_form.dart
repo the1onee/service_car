@@ -328,18 +328,15 @@ class _OilRequestFormState extends State<OilRequestForm> {
                     return ListView(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                       children: [
-                        _BannerCard(city: city),
-                        const SizedBox(height: 12),
-                        const _WorkflowCard(),
-                        const SizedBox(height: 12),
+                        const _BannerCard(),
+                        const SizedBox(height: 18),
                         _Card(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              _stepHeader(1, 'معلومات المركبة',
-                                  trailing: 'مركبتك الحالية'),
+                              _stepHeader(1, 'المركبة'),
                               const SizedBox(height: 10),
-                              const _Label('نوع المركبة (من لوحة التحكم)'),
+                              const _Label('نوع المركبة'),
                               const SizedBox(height: 8),
                               Wrap(
                                 spacing: 8,
@@ -347,8 +344,19 @@ class _OilRequestFormState extends State<OilRequestForm> {
                                 children: [
                                   for (final t in vehicles)
                                     FilterChip(
-                                      label: Text(t.nameAr),
+                                      label: Text(
+                                        t.nameAr,
+                                        style: const TextStyle(
+                                          color: AppColors.ink,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                        ),
+                                      ),
                                       selected: _vehicleType?.id == t.id,
+                                      showCheckmark: true,
+                                      checkmarkColor: AppColors.ink,
+                                      backgroundColor: AppColors.recessed,
+                                      selectedColor: AppColors.amber,
                                       onSelected: (_) =>
                                           setState(() => _vehicleType = t),
                                     ),
@@ -367,7 +375,7 @@ class _OilRequestFormState extends State<OilRequestForm> {
                                         _IconField(
                                           controller: _vehicle,
                                           icon: Icons.directions_car_outlined,
-                                          hint: 'مثال: هيونداي سنتافي',
+                                          hint: 'الموديل',
                                         ),
                                       ],
                                     ),
@@ -392,7 +400,7 @@ class _OilRequestFormState extends State<OilRequestForm> {
                                 ],
                               ),
                               const SizedBox(height: 14),
-                              const _Label('سعة المحرك وحجم الزيت المتوقع'),
+                              const _Label('سعة المحرك'),
                               const SizedBox(height: 8),
                               Row(
                                 children: [
@@ -401,11 +409,7 @@ class _OilRequestFormState extends State<OilRequestForm> {
                                     Expanded(
                                       child: _CylinderBtn(
                                         cylinders: n,
-                                        litersHint: switch (n) {
-                                          6 => '~ 5.5 إلى 6.5 لتر',
-                                          8 => '~ 7 إلى 8.5 لتر',
-                                          _ => '~ 4 إلى 4.5 لتر',
-                                        },
+                                        litersHint: '',
                                         selected: _cylinders == n,
                                         onTap: () => _setCylinders(n),
                                       ),
@@ -416,18 +420,17 @@ class _OilRequestFormState extends State<OilRequestForm> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 18),
                         _Card(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               _stepHeader(
                                 2,
-                                'نوع الدهن والفلتر',
-                                badge: 'أصلي ومضمون',
+                                'الزيت',
                               ),
                               const SizedBox(height: 10),
-                              const _Label('الزيت المطلوب (من لوحة التحكم)'),
+                              const _Label('نوع الزيت'),
                               const SizedBox(height: 6),
                               if (oils.isEmpty)
                                 Container(
@@ -437,7 +440,7 @@ class _OilRequestFormState extends State<OilRequestForm> {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: const Text(
-                                    'لا توجد أنواع زيوت بعد — أضفها من الأدمن: الورش ← أنواع الزيوت',
+                                    'لا توجد أنواع زيوت',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: AppColors.inkSoft,
@@ -482,28 +485,6 @@ class _OilRequestFormState extends State<OilRequestForm> {
                                     ),
                                   ),
                                 ),
-                              if (selectedOil != null &&
-                                  selectedOil.noteAr.isNotEmpty) ...[
-                                const SizedBox(height: 6),
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Icon(Icons.info_outline,
-                                        size: 16, color: AppColors.amberDeep),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        selectedOil.noteAr,
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.inkSoft,
-                                          height: 1.35,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
                               const SizedBox(height: 12),
                               Container(
                                 padding: const EdgeInsets.all(12),
@@ -529,18 +510,10 @@ class _OilRequestFormState extends State<OilRequestForm> {
                                             CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            'تبديل فلتر الزيت (السيفون)',
+                                            'فلتر الزيت',
                                             style: TextStyle(
                                               fontWeight: FontWeight.w700,
                                               fontSize: 13,
-                                            ),
-                                          ),
-                                          SizedBox(height: 2),
-                                          Text(
-                                            'توفير الفلتر الأصلي حسب رقم الشاصي',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: AppColors.inkSoft,
                                             ),
                                           ),
                                         ],
@@ -567,7 +540,7 @@ class _OilRequestFormState extends State<OilRequestForm> {
                                   children: [
                                     const Expanded(
                                       child: Text(
-                                        'عدد العلب / اللترات المتوقعة:',
+                                        'اللترات',
                                         style: TextStyle(fontSize: 13),
                                       ),
                                     ),
@@ -610,7 +583,7 @@ class _OilRequestFormState extends State<OilRequestForm> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 18),
                         _Card(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -618,7 +591,7 @@ class _OilRequestFormState extends State<OilRequestForm> {
                               Row(
                                 children: [
                                   Expanded(
-                                    child: _stepHeader(3, 'موقع تقديم الخدمة'),
+                                    child: _stepHeader(3, 'الموقع'),
                                   ),
                                   TextButton.icon(
                                     onPressed: _pickLocation,
@@ -704,24 +677,6 @@ class _OilRequestFormState extends State<OilRequestForm> {
                                                   ),
                                                 ),
                                               ),
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 8,
-                                                        vertical: 3),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white,
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                ),
-                                                child: const Text(
-                                                  'دقيق GPS',
-                                                  style: TextStyle(
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                                ),
-                                              ),
                                             ],
                                           ),
                                         ),
@@ -731,24 +686,22 @@ class _OilRequestFormState extends State<OilRequestForm> {
                                 ),
                               ),
                               const SizedBox(height: 10),
-                              const _Label(
-                                  'علامة دالة أو تفاصيل وقوف السيارة'),
+                              const _Label('علامة دالة'),
                               const SizedBox(height: 6),
                               _IconField(
                                 controller: _landmark,
                                 icon: Icons.pin_drop_outlined,
-                                hint: 'مثال: ركن العمارة قرب مدرسة الفيحاء',
+                                hint: 'علامة دالة',
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 18),
                         _Card(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              _stepHeader(4, 'رقم الاتصال المباشر',
-                                  trailing: 'للتنسيق قبل الانطلاق'),
+                              _stepHeader(4, 'الهاتف'),
                               const SizedBox(height: 10),
                               TextField(
                                 controller: _phone,
@@ -773,48 +726,7 @@ class _OilRequestFormState extends State<OilRequestForm> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.recessed.withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: const Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 16,
-                                backgroundColor: Colors.white,
-                                child: Icon(Icons.verified_user_outlined,
-                                    size: 18, color: AppColors.amberDeep),
-                              ),
-                              SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'ضمان الورشة المعتمدة',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                    SizedBox(height: 2),
-                                    Text(
-                                      'سحب الزيت بأجهزة تفريغ هوائي — لا تلوث للأرضيات.',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: AppColors.inkSoft,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 18),
                         SizedBox(
                           height: 54,
                           child: FilledButton(
@@ -857,32 +769,6 @@ class _OilRequestFormState extends State<OilRequestForm> {
                                       ),
                                     ],
                                   ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppColors.recessed,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(Icons.payments_outlined,
-                                  size: 18, color: AppColors.amberDeep),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'سيصلك إشعار بسعر الورشة للموافقة أو الرفض • الدفع كاش عند إتمام الخدمة',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.inkSoft,
-                                    height: 1.35,
-                                  ),
-                                ),
-                              ),
-                            ],
                           ),
                         ),
                       ],
@@ -1022,11 +908,6 @@ class _TopBar extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const Text(
-                        'تبديل زيت متنقل',
-                        style:
-                            TextStyle(fontSize: 11, color: AppColors.inkSoft),
-                      ),
                     ],
                   ),
                 ),
@@ -1041,189 +922,17 @@ class _TopBar extends StatelessWidget {
 }
 
 class _BannerCard extends StatelessWidget {
-  const _BannerCard({required this.city});
-
-  final String city;
+  const _BannerCard();
 
   @override
   Widget build(BuildContext context) {
-    return _Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.amber.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.oil_barrel, color: AppColors.amberDeep),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'طلب تبديل زيت متنقل',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                      ),
-                    ),
-                    Text(
-                      'ورشة الزيوت تصلك أينما كنت',
-                      style: TextStyle(fontSize: 12, color: AppColors.inkSoft),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.recessed,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: const BoxDecoration(
-                        color: AppColors.amber,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    const Text(
-                      'خدمة منزلية',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.recessed,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.home_repair_service,
-                    size: 18, color: AppColors.amberDeep),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'أمام المنزل أو مقر عملك في $city. فنيون معتمدون ومعدات شفط حديثة بدون ترك أثر.',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      height: 1.4,
-                      color: AppColors.inkSoft,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WorkflowCard extends StatelessWidget {
-  const _WorkflowCard();
-
-  @override
-  Widget build(BuildContext context) {
-    const steps = [
-      'بيانات المركبة',
-      'إرسال للورش',
-      'عروض الأسعار',
-      'وصول الفني',
-    ];
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.slate,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: AppTheme.softShadow(opacity: 0.18),
-      ),
-      child: Column(
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.timeline, size: 16, color: AppColors.amber),
-              SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'آلية الخدمة والطلب',
-                  style: TextStyle(
-                    color: Color(0xFFFFDDB8),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-              Text(
-                '4 خطوات بسيطة',
-                style: TextStyle(color: Color(0xFF7C839B), fontSize: 11),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              for (var i = 0; i < steps.length; i++) ...[
-                if (i > 0) const SizedBox(width: 6),
-                Expanded(
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 30,
-                        height: 30,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: i == 0 ? AppColors.amber : Colors.white24,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          '${i + 1}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            color: i == 0 ? AppColors.ink : Colors.white,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        steps[i],
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 10,
-                          height: 1.2,
-                          color: i == 0 ? Colors.white : const Color(0xFFBEC6E0),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
+    return const Text(
+      'تبديل زيت',
+      style: TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.w800,
+        color: AppColors.ink,
+        height: 1.2,
       ),
     );
   }
@@ -1262,15 +971,17 @@ class _CylinderBtn extends StatelessWidget {
                   color: selected ? Colors.white : AppColors.ink,
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                litersHint,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 9,
-                  color: selected ? Colors.white70 : AppColors.inkSoft,
+              if (litersHint.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  litersHint,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: selected ? Colors.white70 : AppColors.inkSoft,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),

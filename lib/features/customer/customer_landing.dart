@@ -21,6 +21,7 @@ class CustomerLanding extends StatefulWidget {
     required this.onEmergencyTap,
     required this.onOpenWarranties,
     required this.onOpenAccount,
+    required this.onRefresh,
   });
 
   final AppUser profile;
@@ -32,6 +33,7 @@ class CustomerLanding extends StatefulWidget {
   final VoidCallback onEmergencyTap;
   final VoidCallback onOpenWarranties;
   final VoidCallback onOpenAccount;
+  final Future<void> Function() onRefresh;
 
   @override
   State<CustomerLanding> createState() => _CustomerLandingState();
@@ -97,15 +99,6 @@ class _CustomerLandingState extends State<CustomerLanding> {
         'wash' => Icons.shower_outlined,
         'paint' => Icons.format_paint_outlined,
         _ => Icons.handyman_outlined,
-      };
-
-  String _subtitleFor(ServiceItem s) => switch (s.id) {
-        'technician' => 'فحص، كهرباء، ميكانيك',
-        'parts' => 'طلب تسعير ومطابقة فورية',
-        'oil' => 'خدمة سريعة أمام البيت',
-        'towing' => 'هيدروليك ونقل آمن',
-        'wash' => 'تنظيف داخلي وخارجي وتلميع بالموقع',
-        _ => s.category.isEmpty ? 'خدمة معتمدة' : s.category,
       };
 
   @override
@@ -212,7 +205,16 @@ class _CustomerLandingState extends State<CustomerLanding> {
                     : loaded;
                 final core = _filtered(_coreServices(all));
 
-                return ListView(
+                return RefreshIndicator(
+                  color: AppColors.amberDeep,
+                  backgroundColor: Colors.white,
+                  displacement: 36,
+                  strokeWidth: 2.6,
+                  onRefresh: widget.onRefresh,
+                  child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
                   children: [
                     Row(
@@ -360,45 +362,12 @@ class _CustomerLandingState extends State<CustomerLanding> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          Row(
-                                            children: [
-                                              Container(
-                                                width: 8,
-                                                height: 8,
-                                                decoration: const BoxDecoration(
-                                                  color: AppColors.amber,
-                                                  shape: BoxShape.circle,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                'استجابة ميدانية فورية',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: Color(0xFFFFDDB8)
-                                                      .withValues(alpha: 0.95),
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 6),
                                           const Text(
-                                            'سيارتك عاطلة الآن؟',
+                                            'تحتاج قطعة غيار؟',
                                             style: TextStyle(
                                               color: Colors.white,
                                               fontWeight: FontWeight.w700,
                                               fontSize: 17,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            'فني معتمد أو سطحة تصلك لأي مكان في ${widget.city ?? 'البصرة'}',
-                                            style: TextStyle(
-                                              color: Colors.white
-                                                  .withValues(alpha: 0.72),
-                                              fontSize: 12,
-                                              height: 1.4,
                                             ),
                                           ),
                                         ],
@@ -413,7 +382,7 @@ class _CustomerLandingState extends State<CustomerLanding> {
                                         shape: BoxShape.circle,
                                       ),
                                       child: const Icon(
-                                        Icons.car_crash_outlined,
+                                        Icons.settings_outlined,
                                         color: AppColors.amber,
                                         size: 26,
                                       ),
@@ -436,10 +405,10 @@ class _CustomerLandingState extends State<CustomerLanding> {
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
                                       children: [
-                                        Icon(Icons.bolt, size: 20),
+                                        Icon(Icons.settings_outlined, size: 20),
                                         SizedBox(width: 6),
                                         Text(
-                                          'طلب نجدة طوارئ',
+                                          'طلب قطع غيار',
                                           style: TextStyle(
                                             fontWeight: FontWeight.w800,
                                             fontSize: 15,
@@ -456,27 +425,14 @@ class _CustomerLandingState extends State<CustomerLanding> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    const Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'الخدمات الأساسية',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 17,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          'معتمدة مع ضمان 48 ساعة',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF45464D),
-                          ),
-                        ),
-                      ],
+                    const Text(
+                      'الخدمات',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 17,
+                      ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 16),
                     if (core.isEmpty)
                       const Padding(
                         padding: EdgeInsets.all(24),
@@ -491,7 +447,6 @@ class _CustomerLandingState extends State<CustomerLanding> {
                       _ServicesGrid(
                         items: core,
                         iconFor: _iconFor,
-                        subtitleFor: _subtitleFor,
                         onTap: widget.onServiceTap,
                       ),
                     const SizedBox(height: 16),
@@ -592,6 +547,7 @@ class _CustomerLandingState extends State<CustomerLanding> {
                       },
                     ),
                   ],
+                  ),
                 );
               },
             ),
@@ -606,13 +562,11 @@ class _ServicesGrid extends StatelessWidget {
   const _ServicesGrid({
     required this.items,
     required this.iconFor,
-    required this.subtitleFor,
     required this.onTap,
   });
 
   final List<ServiceItem> items;
   final IconData Function(String id) iconFor;
-  final String Function(ServiceItem) subtitleFor;
   final ValueChanged<ServiceItem> onTap;
 
   @override
@@ -628,17 +582,15 @@ class _ServicesGrid extends StatelessWidget {
           itemCount: grid.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            mainAxisExtent: 128,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
+            mainAxisExtent: 108,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 16,
           ),
           itemBuilder: (context, i) {
             final s = grid[i];
             return _ServiceTile(
               title: s.titleAr,
-              subtitle: subtitleFor(s),
               icon: iconFor(s.id),
-              badge: s.id == 'technician' ? 'شائع' : null,
               onTap: () => onTap(s),
             );
           },
@@ -648,7 +600,6 @@ class _ServicesGrid extends StatelessWidget {
           for (final s in wash)
             _WashWideTile(
               title: s.titleAr,
-              subtitle: subtitleFor(s),
               icon: iconFor(s.id),
               onTap: () => onTap(s),
             ),
@@ -661,16 +612,12 @@ class _ServicesGrid extends StatelessWidget {
 class _ServiceTile extends StatelessWidget {
   const _ServiceTile({
     required this.title,
-    required this.subtitle,
     required this.icon,
     required this.onTap,
-    this.badge,
   });
 
   final String title;
-  final String subtitle;
   final IconData icon;
-  final String? badge;
   final VoidCallback onTap;
 
   @override
@@ -707,25 +654,6 @@ class _ServiceTile extends StatelessWidget {
                     ),
                     child: Icon(icon, size: 22, color: AppColors.ink),
                   ),
-                  const Spacer(),
-                  if (badge != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.azureTint,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        badge!,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF45464D),
-                        ),
-                      ),
-                    ),
                 ],
               ),
               const Spacer(),
@@ -736,15 +664,6 @@ class _ServiceTile extends StatelessWidget {
                 style: const TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
-                ),
-              ),
-              Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF45464D),
                 ),
               ),
             ],
@@ -758,13 +677,11 @@ class _ServiceTile extends StatelessWidget {
 class _WashWideTile extends StatelessWidget {
   const _WashWideTile({
     required this.title,
-    required this.subtitle,
     required this.icon,
     required this.onTap,
   });
 
   final String title;
-  final String subtitle;
   final IconData icon;
   final VoidCallback onTap;
 
@@ -801,26 +718,12 @@ class _WashWideTile extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF45464D),
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
                 ),
               ),
               const Icon(Icons.chevron_left, color: AppColors.inkSoft),

@@ -149,11 +149,9 @@ class CustomerJobPanel extends StatelessWidget {
         contentPadding: EdgeInsets.zero,
         value: job.useWallet,
         title: Text('استخدم الرصيد (${formatIqd(balance)})'),
-        subtitle: Text(
-          job.useWallet
-              ? 'يُخصم ${formatIqd(job.walletReserve)} من المطلوب نقداً'
-              : 'الباقي من الدفع يبقى في المحفظة للطلب التالي',
-        ),
+        subtitle: job.useWallet
+            ? Text('يُخصم ${formatIqd(job.walletReserve)} من المطلوب نقداً')
+            : null,
         onChanged: (use) {
           AppScope.of(context).jobs.setUseWallet(
                 jobId: job.id,
@@ -183,12 +181,8 @@ class CustomerJobPanel extends StatelessWidget {
         if (job.isEmergency) {
           return [
             const LinearProgressIndicator(),
-            const SizedBox(height: 8),
-            Text(
-              job.isOilOrder
-                  ? 'نبحث عن أقرب ورشة زيوت. قد يستغرق القبول 30 ثانية.'
-                  : 'نبحث عن أقرب فني مناسب. قد يستغرق القبول 30 ثانية.',
-            ),
+            const SizedBox(height: 12),
+            const Text('بانتظار القبول'),
           ];
         }
         if (job.isPartsOrder) {
@@ -198,13 +192,9 @@ class CustomerJobPanel extends StatelessWidget {
         }
         return [
           const LinearProgressIndicator(),
-          const SizedBox(height: 8),
-          Text(
-            job.isOilOrder
-                ? 'نافذة قصيرة لجمع عروض ورش الزيوت (وكالة أصلية أو موثوقة).'
-                : 'نافذة قصيرة لجمع عروض السعر. إن وصل عرض واحد فقط يُعيَّن تلقائياً.',
-          ),
           const SizedBox(height: 12),
+          const Text('بانتظار العروض'),
+          const SizedBox(height: 16),
           QuoteCompareList(job: job, selectable: false),
         ];
       case JobStatus.comparing:
@@ -214,12 +204,6 @@ class CustomerJobPanel extends StatelessWidget {
           ];
         }
         return [
-          Text(
-            job.isOilOrder
-                ? 'اختر ورشة الزيوت حسب التصنيف (وكالة/موثوقة) والسعر والمسافة.'
-                : 'اختر حسب السعر والتقييم والمسافة التقريبية. رقم الهاتف والموقع الكامل مخفيان.',
-          ),
-          const SizedBox(height: 12),
           QuoteCompareList(job: job, selectable: true),
         ];
       case JobStatus.quoted:
@@ -227,19 +211,10 @@ class CustomerJobPanel extends StatelessWidget {
           _techLine(),
           const SizedBox(height: 10),
           _priceLine('السعر المبدئي', job.initialPrice),
-          const SizedBox(height: 8),
-          const Text(AppStrings.cashNote,
-              style: TextStyle(color: AppColors.inkSoft, fontSize: 13)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           FilledButton(
             onPressed: () => jobs.customerAcceptQuote(job.id),
-            child: Text(
-              job.isPartsOrder
-                  ? 'قبول عرض الورشة'
-                  : (job.isOilOrder
-                      ? 'قبول السعر وتوجيه ورشة الزيوت'
-                      : 'قبول السعر وتوجيه الفني'),
-            ),
+            child: Text(job.isPartsOrder ? 'قبول' : 'قبول السعر'),
           ),
         ];
       case JobStatus.enRoute:
@@ -248,11 +223,8 @@ class CustomerJobPanel extends StatelessWidget {
             job.isPartsOrder
                 ? 'تم قبول الورشة'
                 : (job.isOilOrder
-                    ? 'ورشة الزيوت في الطريق إليك'
-                    : 'الفني في الطريق إليك'),
-            job.isPartsOrder
-                ? 'الورشة المسؤولة ستجهّز القطعة وترسلها إليك.'
-                : 'موقعك الحقيقي ظاهر له الآن.',
+                    ? 'ورشة الزيوت في الطريق'
+                    : 'الفني في الطريق'),
           ),
           const SizedBox(height: 10),
           _techLine(),
@@ -261,12 +233,7 @@ class CustomerJobPanel extends StatelessWidget {
         ];
       case JobStatus.arrived:
         return [
-          _liveCard(
-            job.isOilOrder ? 'جاري تبديل الزيت' : 'جاري الفحص الميداني',
-            job.isOilOrder
-                ? 'ورشة الزيوت في موقعك وتنفّذ التبديل.'
-                : 'سيصلك السعر النهائي بعد التشخيص.',
-          ),
+          _liveCard(job.isOilOrder ? 'جاري تبديل الزيت' : 'جاري الفحص'),
           const SizedBox(height: 10),
           _techLine(),
         ];
@@ -289,11 +256,6 @@ class CustomerJobPanel extends StatelessWidget {
                     color: AppColors.emeraldDeep,
                   ),
                 ),
-                const SizedBox(height: 6),
-                const Text(
-                  'دفع نقدي عند انتهاء العمل',
-                  style: TextStyle(color: AppColors.inkSoft, fontSize: 12),
-                ),
               ],
             ),
           ),
@@ -307,13 +269,13 @@ class CustomerJobPanel extends StatelessWidget {
           const SizedBox(height: 14),
           FilledButton(
             onPressed: () => jobs.customerAcceptFinal(job.id),
-            child: const Text('موافقة على السعر وبدء الصيانة'),
+            child: const Text('قبول السعر'),
           ),
           ..._walletSwitch(context),
         ];
       case JobStatus.inProgress:
         return [
-          _liveCard('العمل جارٍ', 'سيظهر إنهاء المهمة عند اكتماله.'),
+          _liveCard('العمل جارٍ'),
           if (job.warranty.enabled) ...[
             const SizedBox(height: 10),
             StatusPill(
@@ -399,22 +361,8 @@ class CustomerJobPanel extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                Text(
-                  job.isPartsOrder
-                      ? 'ورشة معيّنة للطلب'
-                      : (job.isOilOrder
-                          ? 'ورشة زيوت معيّنة للطلب'
-                          : 'فني معيّن للطلب'),
-                  style: const TextStyle(color: AppColors.inkSoft, fontSize: 12),
-                ),
-              ],
-            ),
+            child: Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
           ),
-          const StatusPill(label: 'معتمد', icon: Icons.verified_outlined),
         ],
       ),
     );
@@ -435,26 +383,20 @@ class CustomerJobPanel extends StatelessWidget {
     );
   }
 
-  Widget _liveCard(String title, String body) {
+  Widget _liveCard(String title) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: AppTheme.brandGradient,
         borderRadius: BorderRadius.circular(18),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16)),
-          const SizedBox(height: 6),
-          Text(body,
-              style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.8), fontSize: 13)),
-        ],
+      child: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: 16,
+        ),
       ),
     );
   }

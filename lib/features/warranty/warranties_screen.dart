@@ -37,7 +37,7 @@ class WarrantiesScreen extends StatelessWidget {
               child: Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(
-                  'لا توجد ضمانات بعد. يظهر الضمان هنا بعد أن يفعّله الفني عند إنهاء الطلب.',
+                  'لا توجد ضمانات',
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -51,19 +51,9 @@ class WarrantiesScreen extends StatelessWidget {
                 child: Row(
                   children: [
                     const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'تغطية الضمان الميداني',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'زيارة مجانية إذا تكرر العطل خلال مدة الضمان',
-                            style: TextStyle(color: AppColors.inkSoft, fontSize: 12),
-                          ),
-                        ],
+                      child: Text(
+                        'الضمان',
+                        style: TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
                     StatusPill(label: '$active نشط'),

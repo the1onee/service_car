@@ -255,10 +255,22 @@ class AppTheme {
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: AppColors.surface,
-        selectedColor: AppColors.amberTint,
+        backgroundColor: AppColors.recessed,
+        selectedColor: AppColors.amber,
+        disabledColor: AppColors.recessed,
         side: const BorderSide(color: AppColors.outline),
-        labelStyle: ar(fontWeight: FontWeight.w600, fontSize: 13),
+        labelStyle: ar(
+          fontWeight: FontWeight.w600,
+          fontSize: 14,
+          color: AppColors.ink,
+        ),
+        secondaryLabelStyle: ar(
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
+          color: AppColors.ink,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        checkmarkColor: AppColors.ink,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),
       dividerTheme: const DividerThemeData(

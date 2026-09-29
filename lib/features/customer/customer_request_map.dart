@@ -121,7 +121,7 @@ class CustomerRequestMap extends StatelessWidget {
           right: 0,
           child: FieldTopBar(
             city: zone?.nameAr,
-            caption: showBack ? 'تحديد الموقع والطلب' : 'خدمة ميدانية',
+            caption: 'الموقع',
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -272,17 +272,17 @@ class _RequestComposer extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          emergency ? 'استجابة طوارئ الطريق' : 'طلب خدمة ميدانية',
+                          emergency ? 'طوارئ' : 'طلب',
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          zone == null
-                              ? 'حرّك الخريطة أو حدد الموقع من الزر'
-                              : 'تغطية ${zone!.nameAr}',
-                          style: const TextStyle(
-                              color: AppColors.inkSoft, fontSize: 12),
-                        ),
+                        if (zone != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            zone!.nameAr,
+                            style: const TextStyle(
+                                color: AppColors.inkSoft, fontSize: 12),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -379,20 +379,26 @@ class _RequestComposer extends StatelessWidget {
                   children: [
                     for (final t in items)
                       FilterChip(
-                        label: Text(t.nameAr),
+                        label: Text(
+                          t.nameAr,
+                          style: const TextStyle(
+                            color: AppColors.ink,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
                         selected: vehicleType?.id == t.id,
+                        showCheckmark: true,
+                        checkmarkColor: AppColors.ink,
+                        backgroundColor: AppColors.recessed,
+                        selectedColor: AppColors.amber,
                         onSelected: (_) => onSelectVehicle(t),
                       ),
                   ],
                 );
               },
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'السعر يحدده الفني بعد الفحص، والدفع نقداً عند انتهاء العمل.',
-              style: TextStyle(color: AppColors.inkSoft, fontSize: 12),
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: busy || selected == null || vehicleType == null
                   ? null

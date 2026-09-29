@@ -37,6 +37,7 @@ class CustomerAccountPage extends StatefulWidget {
 
 class _CustomerAccountPageState extends State<CustomerAccountPage> {
   var _uploadingPhoto = false;
+  var _photoSaved = false;
   var _savingName = false;
   var _savingAddress = false;
 
@@ -49,9 +50,10 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
       final url = await ProfilePhotoUpload().pickAndUpload();
       await users.updateProfile(uid, photoUrl: url);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم تحديث صورة الملف الشخصي')),
-      );
+      setState(() => _photoSaved = true);
+      Future<void>.delayed(const Duration(milliseconds: 1400), () {
+        if (mounted) setState(() => _photoSaved = false);
+      });
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString();
@@ -65,37 +67,13 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
   }
 
   Future<void> _editName() async {
-    final controller = TextEditingController(text: widget.profile.name);
     final next = await showDialog<String>(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('تعديل الاسم'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(
-              hintText: 'اسمك الظاهر في التطبيق',
-              border: OutlineInputBorder(),
-            ),
-            onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('إلغاء'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-              style: FilledButton.styleFrom(backgroundColor: AppColors.slate),
-              child: const Text('حفظ'),
-            ),
-          ],
-        );
-      },
+      builder: (ctx) => _PromptDialog(
+        title: 'تعديل الاسم',
+        initial: widget.profile.name,
+      ),
     );
-    controller.dispose();
     if (next == null || !mounted) return;
     if (next.isEmpty || next == widget.profile.name) return;
 
@@ -134,40 +112,16 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
     );
     if (picked == null || !mounted) return;
 
-    final controller = TextEditingController(
-      text: picked.label.isNotEmpty
-          ? picked.label
-          : (me.address.trim().isEmpty ? '' : me.address),
-    );
     final confirmed = await showDialog<String>(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('تأكيد العنوان'),
-          content: TextField(
-            controller: controller,
-            maxLines: 3,
-            autofocus: true,
-            decoration: const InputDecoration(
-              hintText: 'اكتب العنوان بوضوح (حي، شارع، علامة دالة)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('إلغاء'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-              style: FilledButton.styleFrom(backgroundColor: AppColors.slate),
-              child: const Text('حفظ'),
-            ),
-          ],
-        );
-      },
+      builder: (ctx) => _PromptDialog(
+        title: 'تأكيد العنوان',
+        initial: picked.label.isNotEmpty
+            ? picked.label
+            : (me.address.trim().isEmpty ? '' : me.address),
+        maxLines: 3,
+      ),
     );
-    controller.dispose();
     if (confirmed == null || !mounted) return;
     if (confirmed.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -219,11 +173,12 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                 _ProfileHero(
                   profile: me,
                   uploadingPhoto: _uploadingPhoto,
+                  photoSaved: _photoSaved,
                   savingName: _savingName,
                   onChangePhoto: _changePhoto,
                   onEditName: _editName,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 StreamBuilder<List<Job>>(
                   stream: widget.jobs,
                   builder: (context, snap) {
@@ -261,18 +216,24 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                     );
                   },
                 ),
-                const SizedBox(height: 18),
-                const Text(
-                  'الحساب',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 20),
                 _MenuCard(
                   children: [
                     _MenuTile(
+                      icon: Icons.assignment_outlined,
+                      title: 'الطلبات',
+                      onTap: widget.onOpenOrders,
+                    ),
+                    const Divider(height: 1),
+                    _MenuTile(
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'المحفظة',
+                      onTap: widget.onOpenWallet,
+                    ),
+                    const Divider(height: 1),
+                    _MenuTile(
                       icon: Icons.verified_user_outlined,
-                      title: 'سجل الضمانات',
-                      subtitle: 'المطالبات والتغطية السارية',
+                      title: 'الضمان',
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
@@ -288,83 +249,18 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                     ),
                     const Divider(height: 1),
                     _MenuTile(
-                      icon: Icons.assignment_outlined,
-                      title: 'الطلبات',
-                      subtitle: 'عرض وتتبع طلباتك',
-                      onTap: widget.onOpenOrders,
-                    ),
-                    const Divider(height: 1),
-                    _MenuTile(
-                      icon: Icons.account_balance_wallet_outlined,
-                      title: 'المحفظة والمدفوعات',
-                      subtitle: 'سجل المدفوعات النقدية',
-                      onTap: widget.onOpenWallet,
+                      icon: Icons.location_on_outlined,
+                      title: 'العنوان',
+                      subtitle: _savingAddress
+                          ? 'جاري الحفظ…'
+                          : (me.address.trim().isEmpty
+                              ? 'لا يوجد عنوان'
+                              : me.address),
+                      onTap: _savingAddress ? () {} : _editAddress,
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: AppTheme.cardShadow(),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.location_on_outlined,
-                              size: 18, color: AppColors.amberDeep),
-                          const SizedBox(width: 6),
-                          const Expanded(
-                            child: Text(
-                              'العنوان',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                          TextButton.icon(
-                            onPressed: _savingAddress ? null : _editAddress,
-                            icon: _savingAddress
-                                ? const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.edit_location_alt,
-                                    size: 16),
-                            label: Text(
-                              _savingAddress ? 'جاري الحفظ…' : 'تعديل',
-                            ),
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppColors.amberDeep,
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        me.address.trim().isEmpty
-                            ? 'لم يُحدد عنوان بعد — اضغط تعديل واختر موقعك على الخريطة'
-                            : me.address,
-                        style: const TextStyle(
-                          color: AppColors.inkSoft,
-                          fontSize: 13,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 28),
                 SizedBox(
                   height: 48,
                   child: OutlinedButton.icon(
@@ -398,6 +294,7 @@ class _ProfileHero extends StatelessWidget {
   const _ProfileHero({
     required this.profile,
     required this.uploadingPhoto,
+    required this.photoSaved,
     required this.savingName,
     required this.onChangePhoto,
     required this.onEditName,
@@ -405,6 +302,7 @@ class _ProfileHero extends StatelessWidget {
 
   final AppUser profile;
   final bool uploadingPhoto;
+  final bool photoSaved;
   final bool savingName;
   final VoidCallback onChangePhoto;
   final VoidCallback onEditName;
@@ -443,8 +341,8 @@ class _ProfileHero extends StatelessWidget {
                   alignment: Alignment.bottomLeft,
                   children: [
                     Container(
-                      width: 88,
-                      height: 88,
+                      width: 96,
+                      height: 96,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(color: AppColors.amber, width: 2.5),
@@ -492,27 +390,53 @@ class _ProfileHero extends StatelessWidget {
                       width: 30,
                       height: 30,
                       decoration: BoxDecoration(
-                        color: AppColors.amber,
+                        color: photoSaved ? AppColors.emerald : AppColors.amber,
                         shape: BoxShape.circle,
                         border: Border.all(color: AppColors.slate, width: 2),
                       ),
-                      child: const Icon(Icons.camera_alt,
-                          size: 15, color: AppColors.ink),
+                      child: Icon(
+                        photoSaved ? Icons.check_rounded : Icons.camera_alt,
+                        size: photoSaved ? 18 : 15,
+                        color: photoSaved ? Colors.white : AppColors.ink,
+                      ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                profile.name.trim().isEmpty ? 'بدون اسم' : profile.name,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 18,
-                ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text(
+                      profile.name.trim().isEmpty ? 'بدون اسم' : profile.name,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: savingName ? null : onEditName,
+                    visualDensity: VisualDensity.compact,
+                    icon: savingName
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.amber,
+                            ),
+                          )
+                        : const Icon(Icons.edit_outlined, size: 18),
+                    color: AppColors.amber,
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
               Text(
                 profile.phone,
                 textDirection: TextDirection.ltr,
@@ -522,55 +446,22 @@ class _ProfileHero extends StatelessWidget {
                   letterSpacing: 0.3,
                 ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const Text(
-                      'عميل',
-                      style: TextStyle(
-                        color: Color(0xFFFFDDB8),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+              const SizedBox(height: 10),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  'عميل',
+                  style: TextStyle(
+                    color: Color(0xFFFFDDB8),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
                   ),
-                  const SizedBox(width: 8),
-                  TextButton.icon(
-                    onPressed: savingName ? null : onEditName,
-                    icon: savingName
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.amber,
-                            ),
-                          )
-                        : const Icon(Icons.edit_outlined, size: 16),
-                    label: Text(savingName ? 'جاري الحفظ…' : 'تعديل الاسم'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.amber,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: uploadingPhoto ? null : onChangePhoto,
-                    icon: const Icon(Icons.photo_camera_outlined, size: 16),
-                    label: const Text('تغيير الصورة'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.amber,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
           ),
@@ -649,13 +540,13 @@ class _MenuTile extends StatelessWidget {
   const _MenuTile({
     required this.icon,
     required this.title,
-    required this.subtitle,
     required this.onTap,
+    this.subtitle,
   });
 
   final IconData icon;
   final String title;
-  final String subtitle;
+  final String? subtitle;
   final VoidCallback onTap;
 
   @override
@@ -672,11 +563,73 @@ class _MenuTile extends StatelessWidget {
         child: Icon(icon, color: AppColors.slate, size: 20),
       ),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
-      ),
+      subtitle: subtitle == null
+          ? null
+          : Text(
+              subtitle!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
+            ),
       trailing: const Icon(Icons.chevron_left, color: AppColors.inkSoft),
+    );
+  }
+}
+
+class _PromptDialog extends StatefulWidget {
+  const _PromptDialog({
+    required this.title,
+    required this.initial,
+    this.maxLines = 1,
+  });
+
+  final String title;
+  final String initial;
+  final int maxLines;
+
+  @override
+  State<_PromptDialog> createState() => _PromptDialogState();
+}
+
+class _PromptDialogState extends State<_PromptDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() => Navigator.of(context).pop(_controller.text.trim());
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLines: widget.maxLines,
+        textInputAction:
+            widget.maxLines == 1 ? TextInputAction.done : TextInputAction.newline,
+        decoration: InputDecoration(
+          hintText: widget.maxLines == 1 ? 'الاسم' : 'العنوان',
+          border: const OutlineInputBorder(),
+        ),
+        onSubmitted: widget.maxLines == 1 ? (_) => _save() : null,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('إلغاء'),
+        ),
+        FilledButton(
+          onPressed: _save,
+          style: FilledButton.styleFrom(backgroundColor: AppColors.slate),
+          child: const Text('حفظ'),
+        ),
+      ],
     );
   }
 }

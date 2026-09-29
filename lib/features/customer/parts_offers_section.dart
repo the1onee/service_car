@@ -20,7 +20,6 @@ class PartsOffersSection extends StatelessWidget {
   final bool? selectable;
 
   static const _secondary = Color(0xFF855300);
-  static const _surfaceLow = Color(0xFFEFF4FF);
   static const _surfaceHigh = Color(0xFFDCE9FF);
 
   bool get _canSelect =>
@@ -65,7 +64,7 @@ class PartsOffersSection extends StatelessWidget {
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
-                    'عروض أسعار الورش المتاحة لطلبك',
+                    'العروض',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 16,
@@ -92,23 +91,17 @@ class PartsOffersSection extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             if (quotes.isEmpty && waiting) ...[
               const LinearProgressIndicator(minHeight: 3),
-              const SizedBox(height: 10),
-              const Text(
-                'ننتظر عروض الورش القريبة. ستظهر هنا فور وصولها.',
-                style: TextStyle(color: Color(0xFF45464D), height: 1.45),
-              ),
+              const SizedBox(height: 16),
+              const Text('بانتظار العروض'),
             ] else if (quotes.isEmpty)
-              const Text(
-                'لم تصل عروض بعد من الورش.',
-                style: TextStyle(color: Color(0xFF45464D)),
-              )
+              const Text('بانتظار العروض')
             else
               for (final q in quotes)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.only(bottom: 16),
                   child: _OfferCard(
                     offer: q,
                     isAgency: quotes.length == 1 ||
@@ -127,31 +120,6 @@ class PartsOffersSection extends StatelessWidget {
                     },
                   ),
                 ),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: _surfaceLow,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.shield_outlined, color: _secondary, size: 22),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'الورشة المقبولة ستتولى تجهيز وتوصيل القطعة مباشرة إلى موقعك، والدفع كاش عند الاستلام والفحص.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        height: 1.5,
-                        color: Color(0xFF45464D),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ],
         );
       },
@@ -286,32 +254,22 @@ class _OfferCard extends StatelessWidget {
               ],
             ),
           ],
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Icon(
-                isAgency ? Icons.schedule : Icons.local_shipping_outlined,
-                size: 16,
-                color: const Color(0xFF45464D),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  etaMin == null
-                      ? (isAgency
-                          ? 'شامل التوصيل السريع لموقعك'
-                          : 'يشمل توصيل مباشر لموقعك')
-                      : (isAgency
-                          ? 'شامل التوصيل السريع لموقعك خلال $etaMin دقيقة'
-                          : 'أجور التوصيل حسب المسافة · ~$etaMin د'),
+          if (etaMin != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.schedule, size: 16, color: Color(0xFF45464D)),
+                const SizedBox(width: 4),
+                Text(
+                  '~$etaMin د',
                   style: const TextStyle(
                     fontSize: 12,
                     color: Color(0xFF45464D),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(12),
@@ -405,9 +363,7 @@ class _OfferCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      isAgency
-                          ? 'قبول هذا العرض وتأكيد الطلب'
-                          : 'قبول هذا العرض',
+                      isAgency ? 'قبول' : 'قبول',
                       style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 14,

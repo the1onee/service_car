@@ -604,8 +604,8 @@ class _CustomerHomeState extends State<CustomerHome> {
                         Expanded(
                           child: Text(
                             job.partName.isNotEmpty
-                                ? 'طلب قطع قيد العروض: ${job.partName}'
-                                : 'لديك طلب قطع قيد العروض — تابع من الطلبات',
+                                ? job.partName
+                                : 'عروض قطع',
                             style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -626,7 +626,7 @@ class _CustomerHomeState extends State<CustomerHome> {
                 services: catalog,
                 recentJobs: recent,
                 onServiceTap: _onLandingService,
-                onEmergencyTap: _onEmergency,
+                onEmergencyTap: _onPartsHero,
                 onOpenWarranties: () {
                   Navigator.of(context).push(
                     softPageRoute<void>(
@@ -640,12 +640,29 @@ class _CustomerHomeState extends State<CustomerHome> {
                   );
                 },
                 onOpenAccount: () => _onTab(3),
+                onRefresh: _refreshLanding,
               ),
             ),
           ],
         );
       },
     );
+  }
+
+  Future<void> _refreshLanding() async {
+    final started = DateTime.now();
+    if (mounted) {
+      setState(() {
+        _servicesStream =
+            AppScope.of(context).users.watchServices();
+        _recentJobsStream = AppScope.of(context)
+            .jobs
+            .watchRecentForCustomer(widget.profile.id);
+      });
+    }
+    const minSpin = Duration(milliseconds: 700);
+    final left = minSpin - DateTime.now().difference(started);
+    if (left > Duration.zero) await Future<void>.delayed(left);
   }
 
   Future<void> _onLandingService(ServiceItem s) async {
@@ -673,8 +690,7 @@ class _CustomerHomeState extends State<CustomerHome> {
     });
   }
 
-  Future<void> _onEmergency() async {
-    // لا نستمع لنفس ستريم الـ StreamBuilder (أحادي الاستماع).
+  Future<void> _onPartsHero() async {
     List<ServiceItem> items;
     try {
       items = await AppScope.of(context).users.watchServices().first;
@@ -682,24 +698,16 @@ class _CustomerHomeState extends State<CustomerHome> {
       items = seedServices.where((e) => e.active).toList();
     }
     if (items.isEmpty) items = seedServices.where((e) => e.active).toList();
-    ServiceItem? emergency;
-    for (final s in items) {
-      if (s.isEmergency || s.id == 'towing') {
-        emergency = s;
-        if (s.id == 'towing') break;
-      }
-    }
-    emergency ??= items.firstWhere(
-      (s) => s.id == 'towing',
-      orElse: () => seedServices.firstWhere((s) => s.id == 'towing'),
-    );
-    if (!mounted) return;
-    setState(() {
-      _dropCatalogStreams();
-      _entryId = emergency!.id;
-      _selected = emergency;
-      _composing = true;
-    });
+    final parts = items.cast<ServiceItem?>().firstWhere(
+          (s) => s?.id == 'parts',
+          orElse: () => null,
+        ) ??
+        seedServices.cast<ServiceItem?>().firstWhere(
+          (s) => s?.id == 'parts',
+          orElse: () => null,
+        );
+    if (parts == null || !mounted) return;
+    await _onLandingService(parts);
   }
 
   Widget _mapBody(
