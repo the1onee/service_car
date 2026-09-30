@@ -56,23 +56,67 @@ class JobDetailScreen extends StatelessWidget {
   }
 }
 
-class _Body extends StatelessWidget {
+class _Body extends StatefulWidget {
   const _Body({required this.job, required this.profile});
 
   final Job job;
   final AppUser profile;
 
   @override
+  State<_Body> createState() => _BodyState();
+}
+
+class _BodyState extends State<_Body> {
+  var _promoted = false;
+
+  Job get job => widget.job;
+  AppUser get profile => widget.profile;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _maybePromoteQuoted();
+  }
+
+  @override
+  void didUpdateWidget(covariant _Body oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.job.status != job.status ||
+        oldWidget.job.id != job.id) {
+      _promoted = false;
+      _maybePromoteQuoted();
+    }
+  }
+
+  void _maybePromoteQuoted() {
+    if (_promoted) return;
+    if (!profile.isWorkshop || !job.isPartsOrder) return;
+    if (job.status != JobStatus.quoted || job.technicianId == null) return;
+    _promoted = true;
+    AppScope.of(context).jobs.promotePartsQuotedToEnRoute(job.id);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final colors = jobStatusColors(job.status);
+    final parts = job.isPartsOrder;
+    final colors = jobStatusColors(job.status, isParts: parts);
     final price = job.receivedAmount ?? job.finalPrice ?? job.initialPrice;
     final customer = !profile.isTechnician &&
         !profile.isWorkshop &&
         !profile.isOilWorkshop &&
         !profile.isPaintShop;
+    final workshopViewer = profile.isWorkshop && parts;
     final showWorkshopDetails = customer &&
         (job.technicianName ?? '').isNotEmpty &&
-        job.isPartsOrder;
+        parts;
+    final canShip = workshopViewer &&
+        (job.status == JobStatus.quoted ||
+            job.status == JobStatus.enRoute ||
+            job.status == JobStatus.arrived);
+    final waitingReceive = workshopViewer &&
+        (job.status == JobStatus.inProgress ||
+            job.status == JobStatus.finalQuote);
+
     return Scaffold(
       backgroundColor: AppColors.canvas,
       appBar: AppBar(title: Text(jobCode(job))),
@@ -93,7 +137,7 @@ class _Body extends StatelessWidget {
                       ),
                     ),
                     StatusPill(
-                      label: jobStatusLabel(job.status),
+                      label: jobStatusLabel(job.status, isParts: parts),
                       color: colors.$1,
                       background: colors.$2,
                     ),
@@ -117,7 +161,7 @@ class _Body extends StatelessWidget {
                 ],
                 if (jobIsOpen(job)) ...[
                   const SizedBox(height: 14),
-                  _Progress(status: job.status),
+                  _Progress(status: job.status, isParts: parts),
                 ],
               ],
             ),
@@ -159,8 +203,7 @@ class _Body extends StatelessWidget {
                 ],
               ),
             )
-          else if ((customer ? job.technicianName : null) != null ||
-              (job.technicianName ?? '').isNotEmpty)
+          else if ((job.technicianName ?? '').isNotEmpty)
             FieldCard(
               child: Row(
                 children: [
@@ -174,12 +217,13 @@ class _Body extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          job.technicianName ?? 'فني',
+                          job.technicianName ?? (parts ? 'ورشة' : 'فني'),
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
-                        const Text(
-                          'الفني المعيّن',
-                          style: TextStyle(color: AppColors.inkSoft, fontSize: 12),
+                        Text(
+                          parts ? 'الورشة المعيّنة' : 'الفني المعيّن',
+                          style: const TextStyle(
+                              color: AppColors.inkSoft, fontSize: 12),
                         ),
                       ],
                     ),
@@ -191,7 +235,7 @@ class _Body extends StatelessWidget {
                 ],
               ),
             ),
-          if (customer && job.isPartsOrder && jobIsOpen(job)) ...[
+          if (customer && parts && jobIsOpen(job)) ...[
             const SizedBox(height: 12),
             FieldCard(
               child: PartsOffersSection(
@@ -211,18 +255,32 @@ class _Body extends StatelessWidget {
                   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
                 ),
                 const SizedBox(height: 10),
-                _MoneyRow(label: 'السعر المبدئي', value: job.initialPrice),
-                _MoneyRow(label: 'السعر النهائي', value: job.finalPrice),
-                _MoneyRow(label: 'المبلغ المستلم نقداً', value: job.receivedAmount),
+                if (parts) ...[
+                  _MoneyRow(
+                    label: 'سعر القطعة',
+                    value: job.finalPrice ?? job.initialPrice,
+                  ),
+                  if (job.receivedAmount != null)
+                    _MoneyRow(
+                      label: 'المبلغ عند الاستلام',
+                      value: job.receivedAmount,
+                    ),
+                ] else ...[
+                  _MoneyRow(label: 'السعر المبدئي', value: job.initialPrice),
+                  _MoneyRow(label: 'السعر النهائي', value: job.finalPrice),
+                  _MoneyRow(
+                      label: 'المبلغ المستلم نقداً',
+                      value: job.receivedAmount),
+                ],
                 if (!customer && job.commissionAmount != null)
                   _MoneyRow(label: 'عمولة المنصة', value: job.commissionAmount),
                 const Divider(height: 20),
                 Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        'المبلغ الظاهر',
-                        style: TextStyle(fontWeight: FontWeight.w700),
+                        parts ? 'المبلغ المتفق' : 'المبلغ الظاهر',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
                     Text(
@@ -236,13 +294,38 @@ class _Body extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 6),
-                const Text(
-                  AppStrings.cashNote,
-                  style: TextStyle(color: AppColors.inkSoft, fontSize: 12),
+                Text(
+                  parts
+                      ? 'الدفع كاش عند استلام القطعة على باب الزبون.'
+                      : AppStrings.cashNote,
+                  style: const TextStyle(
+                      color: AppColors.inkSoft, fontSize: 12),
                 ),
               ],
             ),
           ),
+          if (canShip) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 48,
+              child: FilledButton(
+                onPressed: () => _shipParts(context),
+                child: const Text('تأكيد تجهيز وإرسال القطعة'),
+              ),
+            ),
+          ],
+          if (waitingReceive) ...[
+            const SizedBox(height: 16),
+            FieldCard(
+              child: Text(
+                'بانتظار تأكيد استلام العميل',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.emeraldDeep,
+                ),
+              ),
+            ),
+          ],
           if (job.warranty.enabled) ...[
             const SizedBox(height: 12),
             _WarrantyCard(job: job, customer: customer, profile: profile),
@@ -255,19 +338,20 @@ class _Body extends StatelessWidget {
             ),
           ],
           if (customer &&
-              (job.status == JobStatus.completed || job.status == JobStatus.rated) &&
+              (job.status == JobStatus.completed ||
+                  job.status == JobStatus.rated) &&
               job.ratings.customerToTech == null) ...[
             const SizedBox(height: 16),
             FilledButton(
               onPressed: () => _rate(context),
-              child: Text(job.isPartsOrder ? 'تقييم الورشة' : 'تقييم الفني'),
+              child: Text(parts ? 'تقييم الورشة' : 'تقييم الفني'),
             ),
           ],
           if (job.ratings.customerToTech != null) ...[
             const SizedBox(height: 12),
             FieldCard(
               child: Text(
-                job.isPartsOrder
+                parts
                     ? 'تقييمك للورشة: ${job.ratings.customerToTech} / 5'
                     : 'تقييمك للفني: ${job.ratings.customerToTech} / 5',
               ),
@@ -276,6 +360,21 @@ class _Body extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _shipParts(BuildContext context) async {
+    try {
+      await AppScope.of(context).jobs.markPartsShipped(job.id);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم تأكيد تجهيز/إرسال القطعة للعميل.')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذّر تأكيد الإرسال: $e')),
+      );
+    }
   }
 
   Future<void> _confirmCancel(BuildContext context) async {
@@ -434,17 +533,25 @@ String _initial(String? name) {
 }
 
 class _Progress extends StatelessWidget {
-  const _Progress({required this.status});
+  const _Progress({required this.status, this.isParts = false});
 
   final JobStatus status;
+  final bool isParts;
 
   @override
   Widget build(BuildContext context) {
-    const labels = ['القبول', 'الطريق', 'الفحص', 'العمل'];
+    final labels = isParts
+        ? const ['القبول', 'التجهيز', 'الإرسال', 'الاستلام']
+        : const ['القبول', 'الطريق', 'الفحص', 'العمل'];
     final active = switch (status) {
-      JobStatus.dispatching || JobStatus.offerPending || JobStatus.comparing || JobStatus.quoted => 0,
-      JobStatus.enRoute => 1,
-      JobStatus.arrived || JobStatus.finalQuote => 2,
+      JobStatus.dispatching ||
+      JobStatus.offerPending ||
+      JobStatus.comparing =>
+        0,
+      JobStatus.quoted || JobStatus.enRoute => isParts ? 1 : 0,
+      JobStatus.arrived => isParts ? 2 : 2,
+      JobStatus.finalQuote => isParts ? 2 : 2,
+      JobStatus.inProgress => 3,
       _ => 3,
     };
     return Row(

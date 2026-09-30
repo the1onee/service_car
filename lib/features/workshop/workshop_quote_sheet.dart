@@ -28,17 +28,16 @@ class WorkshopQuoteSheet extends StatefulWidget {
 }
 
 enum _PartCondition { oem, aftermarket, used }
-enum _DeliveryType { delivery, pickup }
 
 class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
 
   final _price = TextEditingController();
-  final _warrantyDays = TextEditingController(text: '30');
+  final _warrantyDays = TextEditingController(text: '7');
   final _warrantyNote = TextEditingController();
   final _vendorNotes = TextEditingController();
 
   _PartCondition _condition = _PartCondition.oem;
-  _DeliveryType _delivery = _DeliveryType.delivery;
+  var _warrantyEnabled = false;
   late int _left;
   Timer? _timer;
   var _busy = false;
@@ -71,9 +70,20 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
 
   String get _conditionLabel => switch (_condition) {
         _PartCondition.oem => 'أصلي وكالة جديد',
-        _PartCondition.aftermarket => 'كوري درجة أولى مضمون',
+        _PartCondition.aftermarket => 'تجاري',
         _PartCondition.used => 'مستعمل تفصيخ مفحوص',
       };
+
+  String get _summaryMeta {
+    final parts = <String>[_conditionLabel];
+    if (_warrantyEnabled) {
+      final days = _warrantyDays.text.trim().isEmpty
+          ? '7'
+          : _warrantyDays.text.trim();
+      parts.insert(0, 'ضمان: $days يوم');
+    }
+    return parts.join(' · ');
+  }
 
   Future<void> _submit() async {
     final parsed = double.tryParse(_price.text.replaceAll(',', '').trim());
@@ -83,10 +93,17 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
           amountError ?? 'أدخل مبلغاً ينتهي بـ 000، والحد الأدنى 3000');
       return;
     }
-    final days = int.tryParse(_warrantyDays.text.trim()) ?? 0;
-    if (days <= 0) {
-      setState(() => _error = 'أدخل عدد أيام الضمان (مثلاً 7 أو 30).');
-      return;
+    var days = 0;
+    var note = '';
+    if (_warrantyEnabled) {
+      days = int.tryParse(_warrantyDays.text.trim()) ?? 0;
+      if (days <= 0) {
+        setState(() => _error = 'أدخل عدد أيام الضمان (مثلاً 7).');
+        return;
+      }
+      note = _warrantyNote.text.trim().isEmpty
+          ? 'ضمان $days يوم'
+          : _warrantyNote.text.trim();
     }
     setState(() {
       _busy = true;
@@ -101,10 +118,8 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
         initialPrice: parsed,
         partCondition: _condition.name,
         warrantyDays: days,
-        warrantyNote: _warrantyNote.text.trim().isEmpty
-            ? 'ضمان $days يوم'
-            : _warrantyNote.text.trim(),
-        deliveryType: _delivery.name,
+        warrantyNote: note,
+        deliveryType: 'delivery',
         vendorNote: _vendorNotes.text.trim(),
       );
       if (!mounted) return;
@@ -592,8 +607,7 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
                                 _ConditionTile(
                                   selected: _condition == _PartCondition.oem,
                                   title: 'أصلي وكالة جديد (Genuine OEM)',
-                                  subtitle:
-                                      'مستورد كوري - كارتون المصنع مع رقم القطعة',
+                                  subtitle: 'كارتون المصنع مع رقم القطعة',
                                   trailing: const Icon(Icons.verified,
                                       color: AppColors.emerald, size: 20),
                                   onTap: () => setState(
@@ -603,10 +617,10 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
                                 _ConditionTile(
                                   selected:
                                       _condition == _PartCondition.aftermarket,
-                                  title: 'كوري درجة أولى مضمون',
+                                  title: 'تجاري',
                                   subtitle:
-                                      'مطابق لمعايير الوكالة بكفاءة عالية',
-                                  trailing: _Tag('تجاري ممتاز'),
+                                      'قطعة تجارية مطابقة للاستخدام اليومي',
+                                  trailing: _Tag('تجاري'),
                                   onTap: () => setState(() =>
                                       _condition = _PartCondition.aftermarket),
                                 ),
@@ -658,82 +672,64 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
                                   onChanged: (_) => setState(() {}),
                                 ),
                                 const SizedBox(height: 14),
-                                const Text(
-                                  'مدة الضمان (بالأيام) — الورشة تحددها:',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                TextField(
-                                  controller: _warrantyDays,
-                                  keyboardType: TextInputType.number,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                  ],
-                                  decoration: InputDecoration(
-                                    hintText: 'مثال: 7 أو 30 أو 90',
-                                    filled: true,
-                                    fillColor: AppColors.petrolTint,
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                    suffixText: 'يوم',
-                                  ),
-                                  onChanged: (_) => setState(() {}),
-                                ),
-                                const SizedBox(height: 8),
-                                TextField(
-                                  controller: _warrantyNote,
-                                  maxLines: 2,
-                                  decoration: InputDecoration(
-                                    hintText:
-                                        'وصف الضمان (اختياري) مثل: استبدال فوري / كفالة تشغيل',
-                                    filled: true,
-                                    fillColor: AppColors.petrolTint,
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 14),
-                                const Text(
-                                  'طريقة التسليم:',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                _ConditionTile(
-                                  selected:
-                                      _delivery == _DeliveryType.delivery,
-                                  title: 'توصيل مباشر لموقع الزبون',
-                                  subtitle: 'الوصول حسب المسافة والازدحام',
-                                  trailing: const Text(
-                                    'مجاني',
+                                SwitchListTile.adaptive(
+                                  contentPadding: EdgeInsets.zero,
+                                  value: _warrantyEnabled,
+                                  onChanged: (v) => setState(() {
+                                    _warrantyEnabled = v;
+                                    if (v && _warrantyDays.text.trim().isEmpty) {
+                                      _warrantyDays.text = '7';
+                                    }
+                                  }),
+                                  title: const Text(
+                                    'إضافة ضمان للقطعة',
                                     style: TextStyle(
-                                      color: AppColors.emerald,
-                                      fontWeight: FontWeight.w800,
+                                      fontWeight: FontWeight.w600,
                                       fontSize: 13,
                                     ),
                                   ),
-                                  onTap: () => setState(() =>
-                                      _delivery = _DeliveryType.delivery),
+                                  subtitle: const Text(
+                                    'اختياري — غير مفعّل تلقائياً',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
                                 ),
-                                const SizedBox(height: 8),
-                                _ConditionTile(
-                                  selected: _delivery == _DeliveryType.pickup,
-                                  title: 'استلام يدوي من مقر الورشة',
-                                  subtitle: 'القطعة جاهزة للاستلام',
-                                  trailing: const Icon(Icons.store_outlined,
-                                      size: 18, color: Color(0xFF45464D)),
-                                  onTap: () => setState(
-                                      () => _delivery = _DeliveryType.pickup),
-                                ),
+                                if (_warrantyEnabled) ...[
+                                  const SizedBox(height: 6),
+                                  TextField(
+                                    controller: _warrantyDays,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                    decoration: InputDecoration(
+                                      hintText: '7',
+                                      filled: true,
+                                      fillColor: AppColors.petrolTint,
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      suffixText: 'يوم',
+                                      helperText: 'يمكنك تعديل المدة بحرية',
+                                    ),
+                                    onChanged: (_) => setState(() {}),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  TextField(
+                                    controller: _warrantyNote,
+                                    maxLines: 2,
+                                    decoration: InputDecoration(
+                                      hintText:
+                                          'وصف الضمان (اختياري) مثل: استبدال فوري',
+                                      filled: true,
+                                      fillColor: AppColors.petrolTint,
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(height: 14),
                                 const Text(
                                   'ملاحظات إضافية للزبون (اختياري):',
@@ -818,7 +814,7 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
                                             ],
                                           ),
                                           Text(
-                                            'ضمان: ${_warrantyDays.text.isEmpty ? '—' : '${_warrantyDays.text} يوم'} · $_conditionLabel',
+                                            _summaryMeta,
                                             style: const TextStyle(
                                               fontSize: 11,
                                               color: Color(0xFF45464D),

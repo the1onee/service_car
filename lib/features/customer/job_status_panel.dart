@@ -60,7 +60,7 @@ class CustomerJobPanel extends StatelessWidget {
               ],
               if (_showSteps(job.status)) ...[
                 const SizedBox(height: 14),
-                _Steps(status: job.status),
+                _Steps(status: job.status, isParts: job.isPartsOrder),
               ],
               const SizedBox(height: 14),
               ..._body(context),
@@ -72,6 +72,12 @@ class CustomerJobPanel extends StatelessWidget {
   }
 
   bool _showSteps(JobStatus s) {
+    if (job.isPartsOrder) {
+      return s == JobStatus.quoted ||
+          s == JobStatus.enRoute ||
+          s == JobStatus.arrived ||
+          s == JobStatus.inProgress;
+    }
     return s == JobStatus.quoted ||
         s == JobStatus.enRoute ||
         s == JobStatus.arrived ||
@@ -91,7 +97,7 @@ class CustomerJobPanel extends StatelessWidget {
       case JobStatus.comparing:
         return AppStrings.compareQuotes;
       case JobStatus.quoted:
-        if (parts) return 'ورشة قدّمت عرضاً';
+        if (parts) return 'الورشة تجهّز طلبك';
         if (oil) return 'ورشة الزيوت قبلت الطلب';
         return 'فني قبل الطلب';
       case JobStatus.enRoute:
@@ -103,13 +109,14 @@ class CustomerJobPanel extends StatelessWidget {
         if (oil) return 'ورشة الزيوت وصلت — جاري التبديل';
         return 'الفني وصل — جاري الفحص';
       case JobStatus.finalQuote:
+        if (parts) return 'القطعة في الطريق إليك';
         return 'السعر النهائي بانتظار موافقتك';
       case JobStatus.inProgress:
-        if (parts) return 'القطعة في الطريق إليك';
+        if (parts) return 'القطعة في الطريق — أكّد الاستلام';
         if (oil) return 'جاري تبديل الزيت';
         return 'جاري العمل';
       case JobStatus.completed:
-        if (parts) return 'تم تسليم القطعة';
+        if (parts) return 'تم استلام القطعة';
         if (oil) return 'تم تبديل الزيت';
         return 'انتهت المهمة';
       case JobStatus.noTechnician:
@@ -207,6 +214,9 @@ class CustomerJobPanel extends StatelessWidget {
           QuoteCompareList(job: job, selectable: true),
         ];
       case JobStatus.quoted:
+        if (job.isPartsOrder) {
+          return _partsPreparing(jobs);
+        }
         return [
           _techLine(),
           const SizedBox(height: 10),
@@ -214,17 +224,18 @@ class CustomerJobPanel extends StatelessWidget {
           const SizedBox(height: 16),
           FilledButton(
             onPressed: () => jobs.customerAcceptQuote(job.id),
-            child: Text(job.isPartsOrder ? 'قبول' : 'قبول السعر'),
+            child: const Text('قبول السعر'),
           ),
         ];
       case JobStatus.enRoute:
+        if (job.isPartsOrder) {
+          return _partsPreparing(jobs);
+        }
         return [
           _liveCard(
-            job.isPartsOrder
-                ? 'تم قبول الورشة'
-                : (job.isOilOrder
-                    ? 'ورشة الزيوت في الطريق'
-                    : 'الفني في الطريق'),
+            job.isOilOrder
+                ? 'ورشة الزيوت في الطريق'
+                : 'الفني في الطريق',
           ),
           const SizedBox(height: 10),
           _techLine(),
@@ -232,12 +243,18 @@ class CustomerJobPanel extends StatelessWidget {
           _priceLine('السعر المبدئي', job.initialPrice),
         ];
       case JobStatus.arrived:
+        if (job.isPartsOrder) {
+          return _partsPreparing(jobs);
+        }
         return [
           _liveCard(job.isOilOrder ? 'جاري تبديل الزيت' : 'جاري الفحص'),
           const SizedBox(height: 10),
           _techLine(),
         ];
       case JobStatus.finalQuote:
+        if (job.isPartsOrder) {
+          return _partsReceive(context, jobs);
+        }
         return [
           _techLine(),
           const SizedBox(height: 10),
@@ -274,6 +291,9 @@ class CustomerJobPanel extends StatelessWidget {
           ..._walletSwitch(context),
         ];
       case JobStatus.inProgress:
+        if (job.isPartsOrder) {
+          return _partsReceive(context, jobs);
+        }
         return [
           _liveCard('العمل جارٍ'),
           if (job.warranty.enabled) ...[
@@ -346,6 +366,58 @@ class CustomerJobPanel extends StatelessWidget {
     }
   }
 
+  List<Widget> _partsPreparing(JobRepository jobs) {
+    return [
+      _liveCard('تم قبول العرض — الورشة تجهّز القطعة وترسلها إليك'),
+      const SizedBox(height: 10),
+      _techLine(),
+      const SizedBox(height: 8),
+      _priceLine('سعر القطعة المتفق', job.billAmount > 0 ? job.billAmount : job.initialPrice),
+      if (job.warranty.enabled) ...[
+        const SizedBox(height: 10),
+        StatusPill(
+          label: warrantyLabel(job.warranty),
+          icon: Icons.verified_user_outlined,
+        ),
+      ],
+    ];
+  }
+
+  List<Widget> _partsReceive(BuildContext context, JobRepository jobs) {
+    return [
+      _liveCard('القطعة في الطريق إليك'),
+      const SizedBox(height: 10),
+      _techLine(),
+      const SizedBox(height: 8),
+      _priceLine('المبلغ عند الاستلام', job.billAmount > 0 ? job.billAmount : job.initialPrice),
+      if (job.warranty.enabled) ...[
+        const SizedBox(height: 10),
+        StatusPill(
+          label: warrantyLabel(job.warranty),
+          icon: Icons.verified_user_outlined,
+        ),
+      ],
+      const SizedBox(height: 16),
+      FilledButton(
+        onPressed: () async {
+          try {
+            await jobs.customerConfirmPartsReceived(job.id);
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('تم تأكيد استلام الطلب.')),
+            );
+          } catch (e) {
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('تعذّر تأكيد الاستلام: $e')),
+            );
+          }
+        },
+        child: const Text('استلام الطلب'),
+      ),
+    ];
+  }
+
   Widget _techLine() {
     final name = job.technicianName ??
         (job.isPartsOrder
@@ -403,17 +475,22 @@ class CustomerJobPanel extends StatelessWidget {
 }
 
 class _Steps extends StatelessWidget {
-  const _Steps({required this.status});
+  const _Steps({required this.status, this.isParts = false});
 
   final JobStatus status;
+  final bool isParts;
 
   @override
   Widget build(BuildContext context) {
-    const labels = ['القبول', 'في الطريق', 'الفحص', 'العمل'];
+    final labels = isParts
+        ? const ['القبول', 'التجهيز', 'الإرسال', 'الاستلام']
+        : const ['القبول', 'في الطريق', 'الفحص', 'العمل'];
     final active = switch (status) {
       JobStatus.quoted => 0,
       JobStatus.enRoute => 1,
-      JobStatus.arrived || JobStatus.finalQuote => 2,
+      JobStatus.arrived => isParts ? 2 : 2,
+      JobStatus.finalQuote => isParts ? 2 : 2,
+      JobStatus.inProgress => 3,
       _ => 3,
     };
     return Row(

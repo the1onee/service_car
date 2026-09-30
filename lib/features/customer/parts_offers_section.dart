@@ -296,7 +296,7 @@ class _OfferCard extends StatelessWidget {
                           if (offer.partCondition.isNotEmpty)
                             switch (offer.partCondition) {
                               'oem' => 'أصلي وكالة',
-                              'aftermarket' => 'كوري درجة أولى',
+                              'aftermarket' => 'تجاري',
                               'used' => 'مستعمل مفحوص',
                               _ => offer.partCondition,
                             },

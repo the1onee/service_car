@@ -201,10 +201,19 @@ class JobRepository {
         : (job.isOilOrder
             ? 'oilWorkshop'
             : (job.isPaintOrder ? 'paintShop' : 'technician'));
-    final techs = await _db
-        .collection(Cols.users)
-        .where('role', isEqualTo: providerRole)
-        .get();
+    // استعلام role فقط (متوافق مع قواعد القراءة). التصفية بالمعتمد محلياً.
+    QuerySnapshot<Map<String, dynamic>> techsSnap;
+    try {
+      techsSnap = await _db
+          .collection(Cols.users)
+          .where('role', isEqualTo: providerRole)
+          .get();
+    } catch (e) {
+      // لا نترك الطلب معلّقاً على dispatching.
+      await _jobs.doc(jobId).update({'status': JobStatus.noTechnician.name});
+      rethrow;
+    }
+    final techs = techsSnap;
 
     final previous = await _offers.where('jobId', isEqualTo: jobId).get();
     final now = DateTime.now();
@@ -258,7 +267,8 @@ class JobRepository {
             token: data['fcmToken'] as String?,
             name: data['name'] as String? ?? defaultName,
             rating: (data['ratingAvg'] as num?)?.toDouble() ?? 5,
-            verified: data['verified'] as bool? ?? false,
+            verified: data['verified'] == true ||
+                data['verificationStatus'] == 'approved',
             wallet: (data['walletBalance'] as num?)?.toDouble() ?? 0,
             serviceIds: serviceIds,
             vehicleTypeIds: vehicleTypeIds,
@@ -268,9 +278,17 @@ class JobRepository {
             specialtyAr: data['specialtyAr'] as String? ?? '',
           );
         })
-        .where((t) => t.online)
+        .where((t) {
+          // طلبات القطع تصل لكل ورش التخصص دون شرط متاح/غير متاح.
+          if (job.isPartsOrder) return true;
+          return t.online;
+        })
         .where((t) => t.verified)
-        .where((t) => t.isWorkshop || t.wallet >= minWallet)
+        .where((t) {
+          // ورش القطع ترى الطلبات حتى مع رصيد منخفض؛ القفل عند التسعير فقط.
+          if (job.isPartsOrder) return true;
+          return t.isWorkshop || t.wallet >= minWallet;
+        })
         .where((t) => !used.contains(t.id))
         .where((t) {
           // ورش القطع لا تُفلتر بـ serviceIds (غالباً غير مضبوطة).
@@ -292,18 +310,14 @@ class JobRepository {
         })
         .toList();
 
-    // أولاً: مطابقة الاختصاص؛ إن لم يبقَ أحد نوسّع لكل الورش المتاحة.
+    // قطع الغيار: تطابق اختصاص صارم فقط (بدون توسيع لكل الورش).
     var ranked = candidates.where((t) {
       if (job.isPartsOrder && job.specialtyId.isNotEmpty) {
-        return t.specialtyId.isEmpty || t.specialtyId == job.specialtyId;
+        return t.specialtyId == job.specialtyId;
       }
       return true;
     }).toList()
       ..sort((a, b) => a.km.compareTo(b.km));
-
-    if (ranked.isEmpty && job.isPartsOrder && job.specialtyId.isNotEmpty) {
-      ranked = List.of(candidates)..sort((a, b) => a.km.compareTo(b.km));
-    }
 
     final take = job.isPartsOrder
         ? ranked.length
@@ -329,6 +343,7 @@ class JobRepository {
         'jobId': jobId,
         'technicianId': t.id,
         'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
         if (expires != null) 'expiresAt': Timestamp.fromDate(expires),
         'serviceTitle': job.serviceTitle,
         'vehicleTypeTitle': job.vehicleTypeTitle,
@@ -493,16 +508,8 @@ class JobRepository {
       return true;
     });
     if (!ok) return false;
-    final jobId = (await offerRef.get()).data()?['jobId'] as String?;
-    if (jobId != null) {
-      final submitted = await _offers
-          .where('jobId', isEqualTo: jobId)
-          .where('status', isEqualTo: 'submitted')
-          .get();
-      if (submitted.docs.length >= AppConstants.maxQuotes) {
-        await closeQuoteWindow(jobId);
-      }
-    }
+    // لا نستعلم عن كل عروض الطلب هنا: المزود لا يقرأ عروض الورش الأخرى
+    // وفق القواعد → permission-denied بعد نجاح الإرسال. إغلاق النافذة عبر CF/العميل.
     return true;
   }
 
@@ -548,11 +555,16 @@ class JobRepository {
   Future<void> _assignOffer(String jobId, JobOffer offer) async {
     final warrantyDays = offer.warrantyDays;
     final warrantyNote = offer.warrantyNote;
+    final jobSnap = await _jobs.doc(jobId).get();
+    final isParts = jobSnap.exists && Job.fromDoc(jobSnap).isPartsOrder;
+    final price = offer.initialPrice;
+    // قطع الغيار: القبول يُسند الطلب مباشرة للورشة للتجهيز (بدون موافقة سعر أولي/نهائي).
     await _jobs.doc(jobId).update({
       'technicianId': offer.technicianId,
       'technicianName': offer.technicianName ?? 'فني',
-      'initialPrice': offer.initialPrice,
-      'status': JobStatus.quoted.name,
+      'initialPrice': price,
+      if (isParts && price != null) 'finalPrice': price,
+      'status': isParts ? JobStatus.enRoute.name : JobStatus.quoted.name,
       if (offer.partCondition.isNotEmpty) 'partCondition': offer.partCondition,
       if (offer.deliveryType.isNotEmpty) 'deliveryType': offer.deliveryType,
       if (offer.vendorNote.isNotEmpty) 'vendorNote': offer.vendorNote,
@@ -731,8 +743,50 @@ class JobRepository {
   }
 
   /// ورشة قطع الغيار: تأكيد تجهيز/إرسال القطعة للعميل.
-  Future<void> markPartsShipped(String jobId) {
-    return _jobs.doc(jobId).update({'status': JobStatus.inProgress.name});
+  Future<void> markPartsShipped(String jobId) async {
+    // إن بقي الطلب على quoted من CF القديمة، رقِّه أولاً.
+    await promotePartsQuotedToEnRoute(jobId);
+    await _jobs.doc(jobId).update({'status': JobStatus.inProgress.name});
+  }
+
+  /// ترحيل طلبات القطع العالقة على quoted بعد قبول العميل → enRoute.
+  Future<void> promotePartsQuotedToEnRoute(String jobId) async {
+    final snap = await _jobs.doc(jobId).get();
+    if (!snap.exists) return;
+    final job = Job.fromDoc(snap);
+    if (!job.isPartsOrder) return;
+    if (job.status != JobStatus.quoted) return;
+    if (job.technicianId == null) return;
+    await _jobs.doc(jobId).update({
+      'status': JobStatus.enRoute.name,
+      if (job.finalPrice == null && job.initialPrice != null)
+        'finalPrice': job.initialPrice,
+    });
+  }
+
+  /// العميل يؤكد استلام القطعة — يُكمل الطلب دون عمولة محفظة (قطع الغيار عمولتها 0).
+  Future<void> customerConfirmPartsReceived(String jobId) async {
+    final snap = await _jobs.doc(jobId).get();
+    if (!snap.exists) return;
+    final job = Job.fromDoc(snap);
+    if (!job.isPartsOrder) {
+      throw StateError('تأكيد الاستلام متاح لطلبات القطع فقط');
+    }
+    if (job.status != JobStatus.inProgress &&
+        job.status != JobStatus.arrived &&
+        job.status != JobStatus.finalQuote) {
+      throw StateError('الطلب ليس جاهزاً للاستلام بعد');
+    }
+    final amount = job.billAmount;
+    await _jobs.doc(jobId).update({
+      'status': JobStatus.completed.name,
+      'receivedAmount': amount,
+      if (job.finalPrice == null && job.initialPrice != null)
+        'finalPrice': job.initialPrice,
+      'commissionAmount': 0,
+      if (job.warranty.enabled)
+        'warranty.startsAt': Timestamp.fromDate(DateTime.now()),
+    });
   }
 
   Future<void> submitFinalQuote({

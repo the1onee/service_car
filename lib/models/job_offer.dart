@@ -28,6 +28,7 @@ class JobOffer {
     this.oilWorkshopTier = '',
     this.specialtyAr = '',
     this.partImageUrl = '',
+    this.createdAt,
   });
 
   final String id;
@@ -35,6 +36,8 @@ class JobOffer {
   final String technicianId;
   final OfferStatus status;
   final DateTime expiresAt;
+  /// وقت إنشاء العرض — لإخفاء الطلبات الأقدم من يوم في لوحة الورشة.
+  final DateTime? createdAt;
   final String? serviceTitle;
   final String? vehicleTypeTitle;
   final GeoPoint? approxLocation;
@@ -96,6 +99,7 @@ class JobOffer {
       oilWorkshopTier: d['oilWorkshopTier'] as String? ?? '',
       specialtyAr: d['specialtyAr'] as String? ?? '',
       partImageUrl: d['partImageUrl'] as String? ?? '',
+      createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
     );
   }
 }

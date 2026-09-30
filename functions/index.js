@@ -104,12 +104,43 @@ async function expirePending(jobId) {
 
 async function assignOffer(jobRef, offerSnap) {
   const offer = offerSnap.data();
-  await jobRef.update({
+  const jobSnap = await jobRef.get();
+  const job = jobSnap.data() || {};
+  const isParts =
+    job.serviceId === "parts" || job.providerKind === "workshop";
+  const price = Number(offer.initialPrice || 0);
+  const patch = {
     technicianId: offer.technicianId,
-    technicianName: offer.technicianName || "فني",
-    initialPrice: Number(offer.initialPrice || 0),
-    status: "quoted",
-  });
+    technicianName: offer.technicianName || (isParts ? "ورشة" : "فني"),
+    initialPrice: price,
+    status: isParts ? "enRoute" : "quoted",
+  };
+  if (isParts && Number.isFinite(price) && price > 0) {
+    patch.finalPrice = price;
+  }
+  if (typeof offer.partCondition === "string" && offer.partCondition) {
+    patch.partCondition = offer.partCondition;
+  }
+  if (typeof offer.deliveryType === "string" && offer.deliveryType) {
+    patch.deliveryType = offer.deliveryType;
+  }
+  if (typeof offer.vendorNote === "string" && offer.vendorNote) {
+    patch.vendorNote = offer.vendorNote;
+  }
+  const days = Math.round(Number(offer.warrantyDays || 0));
+  if (Number.isFinite(days) && days > 0) {
+    patch.warranty = {
+      enabled: true,
+      type: "part",
+      days,
+      note:
+        typeof offer.warrantyNote === "string" && offer.warrantyNote
+          ? offer.warrantyNote
+          : `ضمان ${days} يوم`,
+      startsAt: null,
+    };
+  }
+  await jobRef.update(patch);
   await offerSnap.ref.update({ status: "accepted" });
   const others = await db.collection("jobOffers").where("jobId", "==", offer.jobId).get();
   const batch = db.batch();
@@ -238,7 +269,9 @@ async function dispatchJobInternal(jobId) {
       const geo = data.geo;
       const km = geo
         ? haversineKm(origin.latitude, origin.longitude, geo.latitude, geo.longitude)
-        : MAX_KM;
+        : isParts
+          ? 0
+          : MAX_KM;
       const vehicleTypeIds = Array.isArray(data.vehicleTypeIds)
         ? data.vehicleTypeIds.filter((id) => typeof id === "string")
         : [];
@@ -260,7 +293,7 @@ async function dispatchJobInternal(jobId) {
         token: data.fcmToken,
         name: data.name || defaultName,
         rating: data.ratingAvg || 5,
-        verified: !!data.verified,
+        verified: !!data.verified || data.verificationStatus === "approved",
         wallet: Number(data.walletBalance || 0),
         vehicleTypeIds,
         serviceIds,
@@ -273,11 +306,18 @@ async function dispatchJobInternal(jobId) {
           typeof data.specialtyAr === "string" ? data.specialtyAr : "",
       };
     })
-    .filter((t) => t.online)
-    .filter((t) => !t.serviceIds.length || t.serviceIds.includes(job.serviceId))
+    .filter((t) => (isParts ? true : t.online))
+    .filter((t) =>
+      isParts
+        ? true
+        : !t.serviceIds.length || t.serviceIds.includes(job.serviceId),
+    )
     .filter((t) => t.km <= (isParts ? MAX_PARTS_KM : MAX_KM))
     .filter((t) => t.verified)
-    .filter((t) => t.isWorkshop || t.wallet >= minWallet)
+    .filter((t) =>
+      // قطع الغيار: لا نحجب الاستقبال بالرصيد هنا؛ القفل عند التسعير في التطبيق.
+      isParts ? true : t.isWorkshop || t.wallet >= minWallet,
+    )
     .filter((t) => !used.has(t.id))
     .filter((t) => {
       if (isParts && neededSpecialty) {
@@ -314,6 +354,7 @@ async function dispatchJobInternal(jobId) {
       jobId,
       technicianId: t.id,
       status: "pending",
+      createdAt: FieldValue.serverTimestamp(),
       serviceTitle: job.serviceTitle || job.serviceId,
       vehicleTypeTitle: job.vehicleTypeTitle || null,
       approxLocation: job.approxLocation,
@@ -401,6 +442,7 @@ exports.onJobCreated = onDocumentCreated("jobs/{jobId}", async (event) => {
   const jobId = event.params.jobId;
   const data = event.data?.data();
   if (!data || data.status !== "dispatching") return;
+  // يشمل قطع الغيار: Admin SDK يتجاوز قواعد العميل حتى لا تعلق الطلبات على dispatching.
   await dispatchJobInternal(jobId);
 });
 
@@ -454,7 +496,15 @@ exports.onQuoteWindow = onDocumentUpdated(
 
 exports.acceptOffer = onCall(async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "login");
-  const { offerId, initialPrice } = request.data || {};
+  const {
+    offerId,
+    initialPrice,
+    partCondition,
+    warrantyDays,
+    warrantyNote,
+    deliveryType,
+    vendorNote,
+  } = request.data || {};
   const uid = request.auth.uid;
   if (!offerId || !initialPrice) throw new HttpsError("invalid-argument", "data");
   const price = Math.round(Number(initialPrice));
@@ -464,12 +514,6 @@ exports.acceptOffer = onCall(async (request) => {
 
   const user = await db.collection("users").doc(uid).get();
   const userData = user.data() || {};
-  const minWallet = await walletFns.getMinWalletBalance();
-  if (!userData.verified || Number(userData.walletBalance || 0) < minWallet) {
-    throw new HttpsError("failed-precondition", "wallet_or_verify");
-  }
-  const technicianName = userData.name || "فني";
-
   const offerRef = db.collection("jobOffers").doc(offerId);
   const offerSnap = await offerRef.get();
   if (!offerSnap.exists) return { ok: false };
@@ -477,7 +521,33 @@ exports.acceptOffer = onCall(async (request) => {
   const jobRef = db.collection("jobs").doc(offer.jobId);
   const job = (await jobRef.get()).data();
   if (!job) return { ok: false };
+  const isParts =
+    job.serviceId === "parts" || job.providerKind === "workshop";
+  const minWallet = await walletFns.getMinWalletBalance();
+  // ورش القطع: لا يُشترط الرصيد عند إرسال العرض (القفل عند التسعير في التطبيق إن لزم).
+  if (
+    !userData.verified ||
+    (!isParts && Number(userData.walletBalance || 0) < minWallet)
+  ) {
+    throw new HttpsError("failed-precondition", "wallet_or_verify");
+  }
+  const technicianName = userData.name || "فني";
   const emergency = isEmergencyJob(job);
+  const quoteExtras = {};
+  if (typeof partCondition === "string" && partCondition) {
+    quoteExtras.partCondition = partCondition;
+  }
+  const days = Math.round(Number(warrantyDays || 0));
+  if (Number.isFinite(days) && days > 0) quoteExtras.warrantyDays = days;
+  if (typeof warrantyNote === "string" && warrantyNote) {
+    quoteExtras.warrantyNote = warrantyNote;
+  }
+  if (typeof deliveryType === "string" && deliveryType) {
+    quoteExtras.deliveryType = deliveryType;
+  }
+  if (typeof vendorNote === "string" && vendorNote) {
+    quoteExtras.vendorNote = vendorNote;
+  }
 
   if (emergency) {
     const won = await db.runTransaction(async (tx) => {
@@ -485,7 +555,7 @@ exports.acceptOffer = onCall(async (request) => {
       if (!oSnap.exists) return false;
       const o = oSnap.data();
       if (o.technicianId !== uid || o.status !== "pending") return false;
-      if (o.expiresAt.toDate() < new Date()) {
+      if (o.expiresAt?.toDate && o.expiresAt.toDate() < new Date()) {
         tx.update(offerRef, { status: "expired" });
         return false;
       }
@@ -519,17 +589,24 @@ exports.acceptOffer = onCall(async (request) => {
     if (!oSnap.exists) return false;
     const o = oSnap.data();
     if (o.technicianId !== uid || o.status !== "pending") return false;
-    if (o.expiresAt.toDate() < new Date()) {
+    if (o.expiresAt?.toDate && o.expiresAt.toDate() < new Date()) {
       tx.update(offerRef, { status: "expired" });
       return false;
     }
     const jSnap = await tx.get(jobRef);
     if (jSnap.data().technicianId) return false;
-    if (jSnap.data().status !== "offerPending") return false;
+    if (
+      !["offerPending", "dispatching", "noTechnician"].includes(
+        jSnap.data().status,
+      )
+    ) {
+      return false;
+    }
     tx.update(offerRef, {
       status: "submitted",
       initialPrice: Number(initialPrice),
       technicianName,
+      ...quoteExtras,
     });
     return true;
   });
@@ -540,7 +617,7 @@ exports.acceptOffer = onCall(async (request) => {
     .where("jobId", "==", offer.jobId)
     .where("status", "==", "submitted")
     .get();
-  if (submitted.size >= MAX_QUOTES) {
+  if (!isParts && submitted.size >= MAX_QUOTES) {
     await closeQuoteWindow(offer.jobId);
   } else {
     const customer = await db.collection("users").doc(job.customerId).get();

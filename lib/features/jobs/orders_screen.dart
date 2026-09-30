@@ -353,7 +353,7 @@ class _FeaturedJob extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = jobStatusColors(job.status);
+    final colors = jobStatusColors(job.status, isParts: job.isPartsOrder);
     final price = job.finalPrice ?? job.receivedAmount ?? job.initialPrice;
     return Container(
       padding: const EdgeInsets.all(14),
@@ -400,7 +400,7 @@ class _FeaturedJob extends StatelessWidget {
                 ),
               ),
               StatusPill(
-                label: jobStatusLabel(job.status),
+                label: jobStatusLabel(job.status, isParts: job.isPartsOrder),
                 color: colors.$1,
                 background: colors.$2,
               ),
@@ -480,7 +480,7 @@ class _OrderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = jobStatusColors(job.status);
+    final colors = jobStatusColors(job.status, isParts: job.isPartsOrder);
     final price = job.finalPrice ?? job.receivedAmount ?? job.initialPrice;
     return Material(
       color: Colors.white,
@@ -529,7 +529,7 @@ class _OrderTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   StatusPill(
-                    label: jobStatusLabel(job.status),
+                    label: jobStatusLabel(job.status, isParts: job.isPartsOrder),
                     color: colors.$1,
                     background: colors.$2,
                   ),

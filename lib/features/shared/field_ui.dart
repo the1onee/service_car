@@ -319,7 +319,31 @@ String formatWhen(DateTime? date) {
   return '${date.day} ${months[date.month - 1]} · $h:$m';
 }
 
-String jobStatusLabel(JobStatus status) {
+String jobStatusLabel(JobStatus status, {bool isParts = false}) {
+  if (isParts) {
+    switch (status) {
+      case JobStatus.dispatching:
+      case JobStatus.offerPending:
+        return 'بانتظار العروض';
+      case JobStatus.comparing:
+        return 'مقارنة العروض';
+      case JobStatus.quoted:
+      case JobStatus.enRoute:
+      case JobStatus.arrived:
+        return 'جاري التجهيز';
+      case JobStatus.finalQuote:
+      case JobStatus.inProgress:
+        return 'أُرسل — بانتظار الاستلام';
+      case JobStatus.completed:
+        return 'تم الاستلام';
+      case JobStatus.rated:
+        return 'مقيَّم';
+      case JobStatus.noTechnician:
+        return 'لا توجد ورشة';
+      case JobStatus.cancelled:
+        return 'ملغى';
+    }
+  }
   switch (status) {
     case JobStatus.dispatching:
     case JobStatus.offerPending:
@@ -347,7 +371,26 @@ String jobStatusLabel(JobStatus status) {
   }
 }
 
-(Color, Color) jobStatusColors(JobStatus status) {
+(Color, Color) jobStatusColors(JobStatus status, {bool isParts = false}) {
+  if (isParts) {
+    switch (status) {
+      case JobStatus.completed:
+      case JobStatus.rated:
+        return (AppColors.emeraldDeep, AppColors.emeraldTint);
+      case JobStatus.cancelled:
+      case JobStatus.noTechnician:
+        return (AppColors.danger, AppColors.dangerTint);
+      case JobStatus.inProgress:
+      case JobStatus.finalQuote:
+        return (AppColors.emeraldDeep, AppColors.emeraldTint);
+      case JobStatus.quoted:
+      case JobStatus.enRoute:
+      case JobStatus.arrived:
+        return (const Color(0xFF92400E), AppColors.amberTint);
+      default:
+        return (AppColors.inkSoft, AppColors.recessed);
+    }
+  }
   switch (status) {
     case JobStatus.completed:
     case JobStatus.rated:

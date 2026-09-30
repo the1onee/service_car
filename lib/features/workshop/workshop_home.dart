@@ -1,19 +1,32 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
-import 'package:barrr/core/strings.dart';
+import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/jobs/orders_screen.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
+import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/features/shared/app_network_or_data_image.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/workshop/workshop_quote_sheet.dart';
+import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/models/job_offer.dart';
+import 'package:barrr/models/wallet_entry.dart';
+import 'package:barrr/models/wallet_top_up.dart';
 import 'package:barrr/services/fcm_service.dart';
-import 'package:barrr/services/user_repository.dart';
+import 'package:barrr/services/profile_photo_upload.dart';
+import 'package:barrr/services/wallet_top_up_upload.dart';
+
+part 'workshop_wallet.part.dart';
+part 'workshop_account.part.dart';
 
 /// لوحة الورشة: استقبال طلبات القطع وتقديم عروض الأسعار.
 class WorkshopHome extends StatefulWidget {
@@ -32,9 +45,6 @@ class _WorkshopHomeState extends State<WorkshopHome> {
   var _booted = false;
   var _tab = 0;
   var _filter = _BoardFilter.incoming;
-  var _dutyBusy = false;
-  bool? _duty;
-  String? _dutyHint;
   VoidCallback? _fcmFocusListener;
   FcmService? _fcm;
   List<JobOffer> _pendingOffers = const [];
@@ -43,12 +53,25 @@ class _WorkshopHomeState extends State<WorkshopHome> {
   StreamSubscription? _submittedSub;
   Stream<AppUser?>? _userStream;
   Stream<List<Job>>? _recentJobsStream;
+  Stream<AppSettings>? _settingsStream;
+
+  static bool _withinOneDay(DateTime? at) {
+    if (at == null) return true;
+    return DateTime.now().difference(at) < const Duration(days: 1);
+  }
+
+  List<JobOffer> get _freshPending =>
+      _pendingOffers.where((o) => _withinOneDay(o.createdAt)).toList();
+
+  List<JobOffer> get _freshSubmitted =>
+      _submittedOffers.where((o) => _withinOneDay(o.createdAt)).toList();
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final scope = AppScope.of(context);
     _userStream ??= scope.users.watch(widget.profile.id);
+    _settingsStream ??= scope.settings.watchSettings();
     if (_booted) return;
     _booted = true;
     _fcm = scope.fcm;
@@ -62,7 +85,6 @@ class _WorkshopHomeState extends State<WorkshopHome> {
       scope.fcm.focusJobId.value = null;
     };
     scope.fcm.focusJobId.addListener(_fcmFocusListener!);
-    // العروض دائماً — لا تفويت طلب تسعير وارد.
     _offersSub = scope.jobs.watchPendingOffers(widget.profile.id).listen(
       (offers) {
         if (!mounted) return;
@@ -90,6 +112,14 @@ class _WorkshopHomeState extends State<WorkshopHome> {
         AppScope.of(context).jobs.watchRecentForTechnician(widget.profile.id);
   }
 
+  void _onTab(int i) {
+    if (i == _tab) return;
+    setState(() {
+      if (i != _tab) _recentJobsStream = null;
+      _tab = i;
+    });
+  }
+
   @override
   void dispose() {
     _offersSub?.cancel();
@@ -100,61 +130,12 @@ class _WorkshopHomeState extends State<WorkshopHome> {
     super.dispose();
   }
 
-  Future<void> _toggleOnline(bool value) async {
-    if (_dutyBusy) return;
-    setState(() {
-      _dutyBusy = true;
-      _duty = value;
-      _dutyHint = null;
-    });
-    final scope = AppScope.of(context);
-    try {
-      final result = await scope.users.setOnline(widget.profile.id, value);
-      if (!mounted) return;
-      if (!result.ok) {
-        setState(() {
-          _duty = widget.profile.isOnline;
-          _dutyHint = result.block == OnlineBlock.rejected
-              ? 'الحساب مرفوض من الإدارة.'
-              : 'بانتظار موافقة الإدارة لتفعيل الورشة.';
-        });
-        return;
-      }
-      setState(() {
-        _duty = value;
-        _dutyHint = value ? 'متاح لاستقبال طلبات التسعير' : null;
-      });
-    } finally {
-      if (mounted) setState(() => _dutyBusy = false);
-    }
-  }
-
   Future<void> _markShipped(Job job) async {
     await AppScope.of(context).jobs.markPartsShipped(job.id);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('تم تأكيد تجهيز/إرسال القطعة للعميل.')),
     );
-  }
-
-  Future<void> _markDelivered(Job job) async {
-    try {
-      final amount = job.billAmount;
-      await AppScope.of(context).jobs.completeJob(
-        jobId: job.id,
-        receivedAmount: amount > 0 ? amount : 0,
-        warrantyEnabled: job.warranty.enabled,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم إكمال الطلب وتسليمه للعميل.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذّر إنهاء الطلب: $e')),
-      );
-    }
   }
 
   Future<void> _cancelJob(Job job) async {
@@ -201,9 +182,21 @@ class _WorkshopHomeState extends State<WorkshopHome> {
     }
   }
 
+  void _openQuote(JobOffer offer, {required bool locked}) {
+    if (locked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('الحساب مقفل — اشحن الرصيد المطلوب أولاً.'),
+        ),
+      );
+      _onTab(2);
+      return;
+    }
+    setState(() => _quoting = offer);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final online = _duty ?? widget.profile.isOnline;
     final me = widget.profile;
     final userStream = _userStream;
     if (userStream == null) {
@@ -212,249 +205,224 @@ class _WorkshopHomeState extends State<WorkshopHome> {
       );
     }
 
-    return Stack(
-      children: [
-        FieldShell(
-          tab: _tab,
-          onTab: (i) => setState(() {
-            if (i != _tab) _recentJobsStream = null;
-            _tab = i;
-          }),
-          items: const [
-            FieldNavItem(icon: Icons.storefront_outlined, label: 'الورشة'),
-            FieldNavItem(icon: Icons.receipt_long_outlined, label: 'الطلبات'),
-            FieldNavItem(icon: Icons.notifications_outlined, label: 'تنبيهات'),
-          ],
-          body: switch (_tab) {
-            1 => OrdersScreen(
-                stream: _ensureRecentJobs(),
-                profile: me,
+    return PopScope(
+      canPop: _tab == 0 && _quoting == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_quoting != null) {
+          setState(() => _quoting = null);
+          return;
+        }
+        if (_tab != 0) _onTab(0);
+      },
+      child: Stack(
+        children: [
+          FieldShell(
+            tab: _tab,
+            onTab: _onTab,
+            items: const [
+              FieldNavItem(icon: Icons.home_rounded, label: 'الرئيسية'),
+              FieldNavItem(icon: Icons.receipt_long_outlined, label: 'الطلبات'),
+              FieldNavItem(
+                icon: Icons.account_balance_wallet_outlined,
+                label: 'المحفظة',
               ),
-            2 => const NotificationsScreen(),
-            _ => StreamBuilder<AppUser?>(
-                stream: userStream,
-                builder: (context, snap) {
-                  final profile = snap.data ?? me;
-                  return _buildBoard(profile, online);
-                },
-              ),
-          },
-        ),
-        if (_quoting != null)
-          WorkshopQuoteSheet(
-            offer: _quoting!,
-            workshopName: me.name,
-            onDone: () => setState(() => _quoting = null),
+              FieldNavItem(icon: Icons.person_outline_rounded, label: 'الملف'),
+            ],
+            body: switch (_tab) {
+              1 => StreamBuilder<AppUser?>(
+                  stream: userStream,
+                  builder: (context, snap) {
+                    return OrdersScreen(
+                      stream: _ensureRecentJobs(),
+                      profile: snap.data ?? me,
+                    );
+                  },
+                ),
+              2 => StreamBuilder<AppUser?>(
+                  stream: userStream,
+                  builder: (context, snap) {
+                    return _WalletPage(
+                      me: snap.data ?? me,
+                      city: (snap.data ?? me).address.isEmpty ? 'البصرة' : null,
+                      onAccount: () => _onTab(3),
+                    );
+                  },
+                ),
+              3 => StreamBuilder<AppUser?>(
+                  stream: userStream,
+                  builder: (context, snap) {
+                    return _AccountPage(
+                      me: snap.data ?? me,
+                      jobs: _ensureRecentJobs(),
+                      onOpenOrders: () => _onTab(1),
+                      onOpenWallet: () => _onTab(2),
+                    );
+                  },
+                ),
+              _ => StreamBuilder<AppUser?>(
+                  stream: userStream,
+                  builder: (context, snap) {
+                    final profile = snap.data ?? me;
+                    return StreamBuilder<AppSettings>(
+                      stream: _settingsStream,
+                      builder: (context, settingsSnap) {
+                        final min = settingsSnap.data?.minWalletBalance ??
+                            AppConstants.minWalletBalance;
+                        return _buildBoard(profile, min);
+                      },
+                    );
+                  },
+                ),
+            },
           ),
-      ],
+          if (_quoting != null)
+            WorkshopQuoteSheet(
+              offer: _quoting!,
+              workshopName: me.name,
+              onDone: () => setState(() => _quoting = null),
+            ),
+        ],
+      ),
     );
   }
 
-  Widget _buildBoard(
-    AppUser profile,
-    bool online,
-  ) {
-    final scope = AppScope.of(context);
+  Widget _buildBoard(AppUser profile, double minBalance) {
+    final locked = profile.isWalletLocked(minBalance);
+    final required = profile.requiredTopUp(minBalance);
+    final firstName = () {
+      final parts = profile.name.trim().split(RegExp(r'\s+'));
+      return parts.isEmpty || parts.first.isEmpty ? 'بك' : parts.first;
+    }();
+    final specialty = profile.specialtyAr.isEmpty
+        ? 'ورشة قطع غيار'
+        : profile.specialtyAr;
+    final pending = _freshPending;
+    final waiting = _freshSubmitted;
+
     return ColoredBox(
       color: AppColors.canvas,
       child: Column(
         children: [
-          FieldTopBar(
-            city: profile.address.isEmpty ? 'البصرة' : null,
-            caption: 'ورشة قطع غيار',
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                NotificationsBellButton(uid: profile.id),
-                IconButton(
-                  tooltip: AppStrings.logout,
-                  onPressed: () => scope.auth.signOut(),
-                  icon: const Icon(Icons.logout_rounded),
+          Material(
+            color: AppColors.canvas.withValues(alpha: 0.92),
+            child: SafeArea(
+              bottom: false,
+              child: SizedBox(
+                height: 64,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      const FieldMark(size: 32),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'ورشة قطع غيار',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                              ),
+                            ),
+                            Text(
+                              specialty,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF45464D),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      NotificationsBellButton(uid: profile.id),
+                      const SizedBox(width: 4),
+                      InkWell(
+                        onTap: () => _onTab(3),
+                        borderRadius: BorderRadius.circular(999),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: const BoxDecoration(
+                            color: Colors.black,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.person,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ),
             ),
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
               children: [
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
+                Text.rich(
+                  TextSpan(
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink,
+                    ),
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: online ? AppColors.emerald : AppColors.inkSoft,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              online
-                                  ? 'متاح لاستقبال طلبات التسعير'
-                                  : 'غير متاح حالياً',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: online ? AppColors.emerald : AppColors.inkSoft,
-                              ),
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              const Icon(Icons.star_rounded,
-                                  size: 14, color: AppColors.amber),
-                              const SizedBox(width: 2),
-                              Text(
-                                profile.ratingAvg.toStringAsFixed(1),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.amberDeep,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              Text(
-                                ' (${profile.ratingCount} تقييم)',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF45464D),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF131B2E),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.car_repair,
-                              color: Colors.white,
-                              size: 26,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Flexible(
-                                      child: Text(
-                                        profile.name,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                    ),
-                                    if (profile.isApproved) ...[
-                                      const SizedBox(width: 4),
-                                      const Icon(Icons.verified,
-                                          size: 18, color: AppColors.emerald),
-                                    ],
-                                  ],
-                                ),
-                                Text(
-                                  [
-                                    if (profile.specialtyAr.isNotEmpty)
-                                      profile.specialtyAr,
-                                    if (profile.address.isNotEmpty)
-                                      profile.address,
-                                  ].join(' • ').isEmpty
-                                      ? 'ورشة قطع غيار'
-                                      : [
-                                          if (profile.specialtyAr.isNotEmpty)
-                                            profile.specialtyAr,
-                                          if (profile.address.isNotEmpty)
-                                            profile.address,
-                                        ].join(' • '),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFF45464D),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Switch.adaptive(
-                            value: online,
-                            onChanged: _dutyBusy ? null : _toggleOnline,
-                          ),
-                        ],
-                      ),
-                      if (_dutyHint != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          _dutyHint!,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.danger,
-                          ),
-                        ),
-                      ],
+                      const TextSpan(text: 'أهلاً، '),
+                      TextSpan(text: firstName),
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 4),
+                Text(
+                  'طلبات تخصصك خلال آخر 24 ساعة',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.inkSoft,
+                  ),
+                ),
+                if (locked) ...[
+                  const SizedBox(height: 12),
+                  _LockBanner(
+                    requiredAmount: required,
+                    onPay: () => _onTab(2),
+                  ),
+                ],
+                const SizedBox(height: 14),
                 _SegmentBar(
                   filter: _filter,
-                  incomingCount: _pendingOffers.length,
-                  waitingCount: _submittedOffers.length,
+                  incomingCount: pending.length,
+                  waitingCount: waiting.length,
                   onChanged: (f) => setState(() => _filter = f),
                 ),
                 const SizedBox(height: 12),
                 if (_filter == _BoardFilter.incoming) ...[
-                  if (_pendingOffers.isEmpty)
-                    _EmptyBox(
-                      online
-                          ? 'لا توجد طلبات واردة حالياً.'
-                          : 'فعّل التوفر لاستقبال طلبات التسعير.',
-                    )
+                  if (pending.isEmpty)
+                    const _EmptyBox('لا توجد طلبات جديدة حالياً.')
                   else
-                    for (final offer in _pendingOffers)
+                    for (final offer in pending)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: _IncomingOfferCard(
                           offer: offer,
-                          onOpen: () => setState(() => _quoting = offer),
+                          onOpen: () =>
+                              _openQuote(offer, locked: locked),
                         ),
                       ),
                 ] else if (_filter == _BoardFilter.waiting) ...[
-                  if (_submittedOffers.isEmpty)
-                    const _EmptyBox(
-                      'لا توجد عروض قيد الانتظار. بعد تقديم السعر تظهر هنا حتى يقبل العميل.',
-                    )
+                  if (waiting.isEmpty)
+                    const _EmptyBox('لا توجد عروض بانتظار قبول العميل.')
                   else
-                    for (final offer in _submittedOffers)
+                    for (final offer in waiting)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: _WaitingOfferCard(offer: offer),
@@ -480,17 +448,25 @@ class _WorkshopHomeState extends State<WorkshopHome> {
                       final accepted = jobs
                           .where(
                             (j) =>
-                                j.status == JobStatus.quoted ||
-                                j.status == JobStatus.enRoute ||
-                                j.status == JobStatus.arrived ||
-                                j.status == JobStatus.inProgress ||
-                                j.status == JobStatus.finalQuote,
+                                _withinOneDay(j.createdAt) &&
+                                (j.status == JobStatus.quoted ||
+                                    j.status == JobStatus.enRoute ||
+                                    j.status == JobStatus.arrived ||
+                                    j.status == JobStatus.inProgress ||
+                                    j.status == JobStatus.finalQuote),
                           )
                           .toList();
+                      // ترحيل طلبات quoted القديمة إلى enRoute دون انتظار فتح التفاصيل.
+                      for (final j in accepted) {
+                        if (j.status == JobStatus.quoted &&
+                            j.technicianId != null) {
+                          AppScope.of(context)
+                              .jobs
+                              .promotePartsQuotedToEnRoute(j.id);
+                        }
+                      }
                       if (accepted.isEmpty) {
-                        return const _EmptyBox(
-                          'لا توجد طلبات مقبولة للتجهيز.',
-                        );
+                        return const _EmptyBox('لا توجد طلبات قيد التنفيذ.');
                       }
                       return Column(
                         children: [
@@ -500,7 +476,6 @@ class _WorkshopHomeState extends State<WorkshopHome> {
                               child: _AcceptedJobCard(
                                 job: job,
                                 onShip: () => _markShipped(job),
-                                onDeliver: () => _markDelivered(job),
                                 onCancel: () => _cancelJob(job),
                               ),
                             ),
@@ -509,6 +484,67 @@ class _WorkshopHomeState extends State<WorkshopHome> {
                     },
                   ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LockBanner extends StatelessWidget {
+  const _LockBanner({
+    required this.requiredAmount,
+    required this.onPay,
+  });
+
+  final double requiredAmount;
+  final VoidCallback onPay;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.dangerTint,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.danger.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'الحساب مقفل',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: AppColors.danger,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            requiredAmount > 0
+                ? 'اشحن ${formatIqd(requiredAmount)} لاستئناف استقبال الطلبات.'
+                : 'اشحن رصيد المحفظة لاستئناف استقبال الطلبات.',
+            style: const TextStyle(fontSize: 12.5, color: Color(0xFF45464D)),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 42,
+            child: FilledButton(
+              onPressed: onPay,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.slate,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: Text(
+                requiredAmount > 0
+                    ? 'الرصيد المطلوب · ${formatIqd(requiredAmount)}'
+                    : 'شحن الرصيد',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
             ),
           ),
         ],
@@ -532,23 +568,24 @@ class _SegmentBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget chip(_BoardFilter f, String label, {int? badge, String? soft}) {
+    Widget chip(_BoardFilter f, String label, {int count = 0}) {
       final on = filter == f;
       return Expanded(
         child: InkWell(
           onTap: () => onChanged(f),
           borderRadius: BorderRadius.circular(10),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
             decoration: BoxDecoration(
               color: on ? Colors.white : Colors.transparent,
               borderRadius: BorderRadius.circular(10),
               boxShadow: on
                   ? [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 4,
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
                       ),
                     ]
                   : null,
@@ -561,39 +598,22 @@ class _SegmentBar extends StatelessWidget {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: on ? FontWeight.w700 : FontWeight.w600,
-                      color: on ? AppColors.ink : const Color(0xFF45464D),
+                      fontWeight: on ? FontWeight.w700 : FontWeight.w500,
+                      color: on ? AppColors.ink : AppColors.inkSoft,
                     ),
                   ),
                 ),
-                if (badge != null && badge > 0) ...[
+                if (count > 0) ...[
                   const SizedBox(width: 4),
-                  Container(
-                    width: 20,
-                    height: 20,
-                    alignment: Alignment.center,
-                    decoration: const BoxDecoration(
-                      color: AppColors.amber,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text(
-                      '$badge',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                  ),
-                ] else if (soft != null) ...[
-                  const SizedBox(width: 2),
                   Text(
-                    soft,
-                    style: const TextStyle(
+                    '$count',
+                    style: TextStyle(
                       fontSize: 11,
-                      color: Color(0xFF45464D),
+                      fontWeight: FontWeight.w700,
+                      color: on ? AppColors.amberDeep : AppColors.inkSoft,
                     ),
                   ),
                 ],
@@ -607,15 +627,14 @@ class _SegmentBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppColors.petrolTint,
+        color: const Color(0xFFEEF2F7),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          chip(_BoardFilter.incoming, 'طلبات واردة', badge: incomingCount),
-          chip(_BoardFilter.waiting, 'عروض قيد الانتظار',
-              soft: waitingCount > 0 ? '($waitingCount)' : null),
-          chip(_BoardFilter.accepted, 'مقبولة للتجهيز'),
+          chip(_BoardFilter.incoming, 'جديدة', count: incomingCount),
+          chip(_BoardFilter.waiting, 'انتظار', count: waitingCount),
+          chip(_BoardFilter.accepted, 'تنفيذ'),
         ],
       ),
     );
@@ -630,9 +649,6 @@ class _IncomingOfferCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final left = offer.remainingSeconds();
-    final m = left ~/ 60;
-    final s = (left % 60).toString().padLeft(2, '0');
     final title = offer.partName.isNotEmpty
         ? offer.partName
         : (offer.serviceTitle ?? 'طلب قطع غيار');
@@ -640,14 +656,22 @@ class _IncomingOfferCard extends StatelessWidget {
       if (offer.carMake.isNotEmpty) offer.carMake,
       if (offer.carModel.isNotEmpty) offer.carModel,
     ].join(' ');
+    final meta = [
+      if (car.isNotEmpty) car,
+      if (offer.distanceKm != null)
+        '${offer.distanceKm!.toStringAsFixed(1)} كم',
+      if (offer.specialtyAr.isNotEmpty) offer.specialtyAr,
+    ].join(' · ');
 
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
+      elevation: 0,
       child: InkWell(
         onTap: onOpen,
         borderRadius: BorderRadius.circular(14),
         child: Container(
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
@@ -658,94 +682,42 @@ class _IncomingOfferCard extends StatelessWidget {
               ),
             ],
           ),
-          clipBehavior: Clip.antiAlias,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                color: AppColors.azureTint,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Row(
-                  children: [
-                    const Icon(Icons.schedule, size: 16),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'ينتهي بعد $m:$s',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.danger,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      '#${offer.jobId.length > 5 ? offer.jobId.substring(0, 5).toUpperCase() : offer.jobId}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF45464D),
-                      ),
-                    ),
-                  ],
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'القطعة المطلوبة',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.amberDeep,
-                      ),
+              if (meta.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  meta,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.inkSoft,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: FilledButton(
+                  onPressed: onOpen,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.slate,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 17,
-                      ),
-                    ),
-                    if (car.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        car,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF45464D),
-                        ),
-                      ),
-                    ],
-                    if (offer.distanceKm != null) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        'المسافة التقريبية ${offer.distanceKm!.toStringAsFixed(1)} كم',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 44,
-                      child: FilledButton(
-                        onPressed: onOpen,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text(
-                          'فتح وتقديم عرض السعر',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
+                  child: const Text(
+                    'تقديم عرض سعر',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ),
               ),
             ],
@@ -770,12 +742,16 @@ class _WaitingOfferCard extends StatelessWidget {
       if (offer.carMake.isNotEmpty) offer.carMake,
       if (offer.carModel.isNotEmpty) offer.carModel,
     ].join(' ');
-    final price = offer.initialPrice;
-    final warranty = offer.warrantyDays > 0
-        ? (offer.warrantyNote.isNotEmpty
-            ? offer.warrantyNote
-            : '${offer.warrantyDays} يوم')
-        : null;
+    final conditionLabel = switch (offer.partCondition) {
+      'oem' => 'أصلي وكالة',
+      'aftermarket' => 'تجاري',
+      'used' => 'مستعمل مفحوص',
+      _ => offer.partCondition,
+    };
+    final details = [
+      if (car.isNotEmpty) car,
+      if (conditionLabel.isNotEmpty) conditionLabel,
+    ].join(' · ');
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -799,62 +775,36 @@ class _WaitingOfferCard extends StatelessWidget {
                 child: Text(
                   title,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
                   ),
                 ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.amberTint,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: const Text(
-                  'بانتظار قبول العميل',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.amberDeep,
-                  ),
+              const Text(
+                'بانتظار القبول',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.amberDeep,
                 ),
               ),
             ],
           ),
-          if (car.isNotEmpty) ...[
+          if (offer.initialPrice != null) ...[
             const SizedBox(height: 6),
-            Text(car, style: const TextStyle(color: Color(0xFF45464D))),
-          ],
-          if (price != null) ...[
-            const SizedBox(height: 8),
             Text(
-              formatIqd(price),
+              formatIqd(offer.initialPrice!),
               style: const TextStyle(
                 fontWeight: FontWeight.w800,
-                fontSize: 18,
+                fontSize: 16,
               ),
             ),
           ],
-          if (offer.partCondition.isNotEmpty) ...[
+          if (details.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
-              'الحالة: ${offer.partCondition}',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF45464D)),
-            ),
-          ],
-          if (warranty != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              'الضمان: $warranty',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF45464D)),
-            ),
-          ],
-          if (offer.deliveryType.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              'التوصيل: ${offer.deliveryType}',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF45464D)),
+              details,
+              style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
             ),
           ],
         ],
@@ -867,13 +817,11 @@ class _AcceptedJobCard extends StatelessWidget {
   const _AcceptedJobCard({
     required this.job,
     required this.onShip,
-    required this.onDeliver,
     required this.onCancel,
   });
 
   final Job job;
   final VoidCallback onShip;
-  final VoidCallback onDeliver;
   final VoidCallback onCancel;
 
   @override
@@ -885,11 +833,17 @@ class _AcceptedJobCard extends StatelessWidget {
       if (job.carModel.isNotEmpty) job.carModel,
       if (job.carYear.isNotEmpty) job.carYear,
     ].join(' ');
-    final warranty = job.warranty.enabled
-        ? (job.warranty.note?.isNotEmpty == true
-            ? job.warranty.note!
-            : '${job.warranty.days} يوم')
-        : null;
+    final meta = [
+      if (car.isNotEmpty) car,
+      if (job.customerPhone.isNotEmpty) job.customerPhone,
+      if (job.initialPrice != null) formatIqd(job.initialPrice!),
+    ].join(' · ');
+
+    final waitingReceive = job.status == JobStatus.inProgress ||
+        job.status == JobStatus.finalQuote;
+    final canShip = job.status == JobStatus.quoted ||
+        job.status == JobStatus.enRoute ||
+        job.status == JobStatus.arrived;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -907,72 +861,81 @@ class _AcceptedJobCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style:
-                  const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-          if (job.specialtyAr.isNotEmpty) ...[
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              Text(
+                _statusAr(job.status),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.inkSoft,
+                ),
+              ),
+            ],
+          ),
+          if (meta.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
-              'الاختصاص: ${job.specialtyAr}',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF45464D),
-              ),
+              meta,
+              style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
             ),
-          ],
-          if (car.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(car, style: const TextStyle(color: Color(0xFF45464D))),
-          ],
-          if (job.customerPhone.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text('هاتف: ${job.customerPhone}',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-          ],
-          if (warranty != null) ...[
-            const SizedBox(height: 4),
-            Text('الضمان: $warranty',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF45464D))),
           ],
           if (job.partImageUrl.isNotEmpty) ...[
             const SizedBox(height: 8),
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: SizedBox(
-                height: 140,
+                height: 120,
                 width: double.infinity,
                 child: AppNetworkOrDataImage(source: job.partImageUrl),
               ),
             ),
           ],
-          const SizedBox(height: 8),
-          Text(
-            'الحالة: ${_statusAr(job.status)}'
-            '${job.initialPrice != null ? ' · ${formatIqd(job.initialPrice!)}' : ''}',
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 10),
-          if (job.status == JobStatus.quoted ||
-              job.status == JobStatus.enRoute ||
-              job.status == JobStatus.arrived)
-            FilledButton(
-              onPressed: onShip,
-              style: FilledButton.styleFrom(backgroundColor: Colors.black),
-              child: const Text('تأكيد إرسال القطعة للعميل'),
-            )
-          else if (job.status == JobStatus.inProgress ||
-              job.status == JobStatus.finalQuote)
-            FilledButton(
-              onPressed: onDeliver,
-              style: FilledButton.styleFrom(backgroundColor: Colors.black),
-              child: const Text('تم التسليم للعميل'),
+          if (canShip) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: FilledButton(
+                onPressed: onShip,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.slate,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('تأكيد تجهيز وإرسال القطعة'),
+              ),
             ),
+          ],
+          if (waitingReceive) ...[
+            const SizedBox(height: 12),
+            Text(
+              'بانتظار تأكيد استلام العميل',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.emeraldDeep,
+              ),
+            ),
+          ],
           if (job.technicianCanWithdraw) ...[
             const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: onCancel,
-              child: const Text('إلغاء الطلب'),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: onCancel,
+                child: const Text('إلغاء الطلب'),
+              ),
             ),
           ],
         ],
@@ -981,9 +944,12 @@ class _AcceptedJobCard extends StatelessWidget {
   }
 
   String _statusAr(JobStatus s) => switch (s) {
-        JobStatus.quoted => 'بانتظار التنفيذ',
-        JobStatus.enRoute => 'قيد التوصيل',
-        JobStatus.inProgress => 'جاري الإرسال',
+        JobStatus.quoted => 'بانتظار التجهيز',
+        JobStatus.enRoute => 'جاري التجهيز',
+        JobStatus.arrived => 'جاهز للإرسال',
+        JobStatus.inProgress => 'أُرسل — بانتظار استلام العميل',
+        JobStatus.finalQuote => 'أُرسل — بانتظار الاستلام',
+        JobStatus.completed => 'تم الاستلام',
         _ => s.name,
       };
 }
@@ -997,14 +963,22 @@ class _EmptyBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
       decoration: BoxDecoration(
-        color: const Color(0xFFEFF4FF),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Text(
         text,
-        style: const TextStyle(color: Color(0xFF45464D)),
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: AppColors.inkSoft, fontSize: 13),
       ),
     );
   }

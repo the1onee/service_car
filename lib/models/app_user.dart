@@ -79,7 +79,20 @@ class AppUser {
   bool get canReceiveJobs =>
       (isTechnician || isWorkshop || isOilWorkshop || isPaintShop) &&
       isApproved &&
-      (isWorkshop || isPaintShop || walletBalance >= AppConstants.minWalletBalance);
+      (isPaintShop || walletBalance >= AppConstants.minWalletBalance);
+
+  /// الورشة/الفني مقفل عند نقص الرصيد عن الحد الأدنى (ورش الدهان مستثناة).
+  bool isWalletLocked([double? minBalance]) {
+    if (isPaintShop) return false;
+    final min = minBalance ?? AppConstants.minWalletBalance;
+    return walletBalance < min;
+  }
+
+  double requiredTopUp([double? minBalance]) {
+    final min = minBalance ?? AppConstants.minWalletBalance;
+    final need = min - walletBalance;
+    return need > 0 ? need : 0;
+  }
 
   String get oilWorkshopTierLabel {
     return switch (oilWorkshopTier) {

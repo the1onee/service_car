@@ -27,7 +27,7 @@ class DispatchService {
           data?['providerKind'] == 'workshop';
     } catch (_) {}
 
-    // طلبات القطع: توزيع محلي فقط (اختصاص + نطاق أوسع).
+    // قطع الغيار: توزيع محلي فقط — استدعاء CF يستهلك المهلة وقد يُفشل قبل إنشاء العروض.
     if (isParts) {
       await _jobs.dispatch(jobId);
       return;
@@ -100,6 +100,22 @@ class DispatchService {
     required String jobId,
     required JobOffer offer,
   }) async {
+    // قطع الغيار: قبول محلي فقط — CF القديمة تضع quoted («بانتظار الموافقة»).
+    var isParts = false;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection(Cols.jobs)
+          .doc(jobId)
+          .get()
+          .timeout(_cfTimeout);
+      final data = snap.data();
+      isParts = data?['serviceId'] == 'parts' ||
+          data?['providerKind'] == 'workshop';
+    } catch (_) {}
+    if (isParts) {
+      return _jobs.customerSelectOffer(jobId, offer);
+    }
+
     try {
       final res = await _functions
           .httpsCallable('selectOffer')

@@ -9,6 +9,7 @@ import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/models/app_user.dart';
+import 'package:barrr/models/job.dart';
 import 'package:barrr/models/service_item.dart';
 import 'package:barrr/services/cloudinary_upload.dart';
 import 'package:barrr/services/specialties_catalog.dart';
@@ -197,14 +198,28 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
         specialtyId: specialtyId,
         specialtyAr: _specialtyAr,
       );
-      // انتظر التوزيع بمهلة حتى تصل العروض للورش قبل مغادرة الشاشة.
+      // توزيع محلي مباشر لقطع الغيار مع إعادة محاولة — لا نعتمد على CF هنا.
       var dispatchFailed = false;
-      try {
-        await scope.dispatch
-            .dispatch(jobId)
-            .timeout(const Duration(seconds: 15));
-      } catch (_) {
-        dispatchFailed = true;
+      for (var attempt = 0; attempt < 3; attempt++) {
+        try {
+          await scope.dispatch
+              .dispatch(jobId)
+              .timeout(const Duration(seconds: 25));
+          // تأكد أن الطلب خرج من حالة التوزيع.
+          final job = await scope.jobs.watchJob(jobId).first.timeout(
+                const Duration(seconds: 5),
+              );
+          if (job != null &&
+              (job.status == JobStatus.offerPending ||
+                  job.status == JobStatus.noTechnician ||
+                  job.status == JobStatus.comparing)) {
+            dispatchFailed = false;
+            break;
+          }
+          dispatchFailed = true;
+        } catch (_) {
+          dispatchFailed = true;
+        }
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

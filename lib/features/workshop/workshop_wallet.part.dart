@@ -1,22 +1,16 @@
-part of 'technician_home.dart';
+part of 'workshop_home.dart';
 
 enum _LedgerFilter { movements, payouts }
 
 class _WalletPage extends StatefulWidget {
   const _WalletPage({
     required this.me,
-    required this.online,
-    required this.onToggle,
     required this.onAccount,
-    this.dutyHint,
     this.city,
   });
 
   final AppUser me;
-  final bool online;
-  final String? dutyHint;
   final String? city;
-  final ValueChanged<bool> onToggle;
   final VoidCallback onAccount;
 
   @override
@@ -25,6 +19,18 @@ class _WalletPage extends StatefulWidget {
 
 class _WalletPageState extends State<_WalletPage> {
   var _filter = _LedgerFilter.movements;
+  final _rechargeKey = GlobalKey();
+
+  void _scrollToRecharge() {
+    final ctx = _rechargeKey.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOut,
+      alignment: 0.1,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +45,7 @@ class _WalletPageState extends State<_WalletPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               NotificationsBellButton(uid: me.id),
+              const SizedBox(width: 4),
               Material(
                 color: AppColors.slate,
                 shape: const CircleBorder(),
@@ -61,6 +68,8 @@ class _WalletPageState extends State<_WalletPage> {
             builder: (context, settingsSnap) {
               final min = settingsSnap.data?.minWalletBalance ??
                   AppConstants.minWalletBalance;
+              final required = me.requiredTopUp(min);
+              final locked = me.isWalletLocked(min);
               return StreamBuilder<List<Job>>(
                 stream: scope.jobs.watchRecentForTechnician(me.id),
                 builder: (context, jobSnap) {
@@ -78,52 +87,45 @@ class _WalletPageState extends State<_WalletPage> {
                         return entry.type != WalletEntryType.commission;
                       }).toList();
                       return ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                        padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
                         children: [
                           _BalanceCard(
                             balance: me.walletBalance,
                             minBalance: min,
-                            online: widget.online,
-                            dutyHint: widget.dutyHint,
-                            city: widget.city,
-                            onToggle: widget.onToggle,
+                            locked: locked,
                           ),
-                          const SizedBox(height: 12),
-                          _WalletRechargePanel(technicianId: me.id),
-                          const SizedBox(height: 12),
+                          if (required > 0) ...[
+                            const SizedBox(height: 8),
+                            _RequiredBalanceButton(
+                              amount: required,
+                              onPressed: _scrollToRecharge,
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          KeyedSubtree(
+                            key: _rechargeKey,
+                            child: _WalletRechargePanel(technicianId: me.id),
+                          ),
+                          const SizedBox(height: 8),
                           _MetricRow(jobs: jobs),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 8),
                           _FilterBar(
                             filter: _filter,
                             onChanged: (value) =>
                                 setState(() => _filter = value),
                           ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              const Expanded(
-                                child: Text(
-                                  'الحركات الأخيرة',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                'تحديث فوري',
-                                style: TextStyle(
-                                  color:
-                                      AppColors.inkSoft.withValues(alpha: 0.9),
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
                           const SizedBox(height: 8),
+                          const Text(
+                            'الحركات الأخيرة',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
                           if (waiting)
                             const Padding(
-                              padding: EdgeInsets.all(24),
+                              padding: EdgeInsets.all(20),
                               child: Center(child: CircularProgressIndicator()),
                             )
                           else if (shown.isEmpty)
@@ -142,10 +144,15 @@ class _WalletPageState extends State<_WalletPage> {
                                     ? null
                                     : jobsById[entry.jobId],
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 6),
                             ],
-                          const SizedBox(height: 4),
-                          _LowBalanceNote(minBalance: min),
+                          if (locked) ...[
+                            const SizedBox(height: 4),
+                            _LowBalanceNote(
+                              minBalance: min,
+                              requiredAmount: required,
+                            ),
+                          ],
                         ],
                       );
                     },
@@ -160,216 +167,135 @@ class _WalletPageState extends State<_WalletPage> {
   }
 }
 
-class _BalanceCard extends StatelessWidget {
-  const _BalanceCard({
-    required this.balance,
-    required this.minBalance,
-    required this.online,
-    required this.onToggle,
-    this.dutyHint,
-    this.city,
+class _RequiredBalanceButton extends StatelessWidget {
+  const _RequiredBalanceButton({
+    required this.amount,
+    required this.onPressed,
   });
 
-  final double balance;
-  final double minBalance;
-  final bool online;
-  final String? dutyHint;
-  final String? city;
-  final ValueChanged<bool> onToggle;
+  final double amount;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final place = (city == null || city!.isEmpty) ? 'البصرة' : city!;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF131B2E),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppTheme.cardShadow(),
-      ),
-      child: Column(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.account_balance_wallet_outlined,
-                            color: Color(0xFF7C839B), size: 18),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'رصيد حساب العمليات الميدانية',
-                            style: const TextStyle(
-                              color: Color(0xFF7C839B),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          formatIqd(balance, withUnit: false),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.w700,
-                            height: 1,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        const Text(
-                          'د.ع',
-                          style: TextStyle(
-                            color: Color(0xFFFFB95F),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF6FFBBE),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'الحد الأدنى: ${formatIqd(minBalance)}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: FilledButton.icon(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.amberDeep,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF213145).withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF002113),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.sensors,
-                      color: Color(0xFF4EDEA3), size: 18),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        online ? 'متصل ومتاح لاستقبال الطلبات' : 'غير متصل',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        online
-                            ? 'جاهز للبلاغات الفورية في $place'
-                            : 'لن تصلك بلاغات حتى تعيد الاتصال',
-                        style: const TextStyle(
-                          color: Color(0xFF7C839B),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                _DutySwitch(online: online, onToggle: onToggle),
-              ],
-            ),
-          ),
-          if (dutyHint != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              dutyHint!,
-              style: const TextStyle(color: Color(0xFFFFB4AB), fontSize: 12),
-            ),
-          ],
-        ],
+        ),
+        icon: const Icon(Icons.payments_outlined, size: 20),
+        label: Text(
+          'الرصيد المطلوب · ${formatIqd(amount)}',
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
       ),
     );
   }
 }
 
-class _DutySwitch extends StatelessWidget {
-  const _DutySwitch({required this.online, required this.onToggle});
+class _BalanceCard extends StatelessWidget {
+  const _BalanceCard({
+    required this.balance,
+    required this.minBalance,
+    required this.locked,
+  });
 
-  final bool online;
-  final ValueChanged<bool> onToggle;
+  final double balance;
+  final double minBalance;
+  final bool locked;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => onToggle(!online),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        width: 48,
-        height: 28,
-        padding: const EdgeInsets.all(2),
-        alignment: online
-            ? AlignmentDirectional.centerEnd
-            : AlignmentDirectional.centerStart,
-        decoration: BoxDecoration(
-          color: online ? const Color(0xFF002113) : const Color(0xFFD3E4FE),
-          borderRadius: BorderRadius.circular(99),
-        ),
-        child: Container(
-          width: 24,
-          height: 24,
-          decoration: BoxDecoration(
-            color: online ? const Color(0xFF6FFBBE) : const Color(0xFF76777D),
-            shape: BoxShape.circle,
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.slate,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: AppTheme.cardShadow(),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.account_balance_wallet_outlined,
+                color: Color(0xFF7C839B),
+                size: 18,
+              ),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'رصيد محفظة الورشة',
+                  style: TextStyle(
+                    color: Color(0xFF7C839B),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: locked
+                      ? const Color(0xFFFFDAD6)
+                      : Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  locked ? 'مقفل' : 'نشط',
+                  style: TextStyle(
+                    color: locked
+                        ? const Color(0xFF93000A)
+                        : const Color(0xFF6FFBBE),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
           ),
-          child: Icon(
-            online ? Icons.check : Icons.close,
-            size: 14,
-            color: online ? const Color(0xFF002113) : Colors.white,
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                formatIqd(balance, withUnit: false),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'د.ع',
+                style: TextStyle(
+                  color: Color(0xFFFFB95F),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
-        ),
+          const SizedBox(height: 8),
+          Text(
+            'الحد الأدنى للاستقبال: ${formatIqd(minBalance)}',
+            style: const TextStyle(
+              color: Color(0xFF7C839B),
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -470,9 +396,9 @@ class _WalletRechargePanelState extends State<_WalletRechargePanel> {
       return 'غير مسموح بإرسال طلب الشحن لهذا الحساب. حدّث التطبيق أو تواصل مع الدعم.';
     }
     if (lower.contains('cloudinary')) {
-      return msg
-          .replaceFirst(RegExp(r'^Exception:\s*'), '')
-          .replaceFirst(RegExp(r'^Bad state:\s*'), '');
+      return msg.replaceFirst(RegExp(r'^[^:]+:\s*'), '').trim().isEmpty
+          ? 'تعذّر رفع صورة الفاتورة. أعد المحاولة بصورة أصغر.'
+          : msg.replaceFirst(RegExp(r'^Exception:\s*'), '').replaceFirst(RegExp(r'^Bad state:\s*'), '');
     }
     if (lower.contains('network') ||
         lower.contains('socket') ||
@@ -1095,17 +1021,21 @@ class _LedgerRow extends StatelessWidget {
 }
 
 class _LowBalanceNote extends StatelessWidget {
-  const _LowBalanceNote({required this.minBalance});
+  const _LowBalanceNote({
+    required this.minBalance,
+    required this.requiredAmount,
+  });
 
   final double minBalance;
+  final double requiredAmount;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFDCE9FF),
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.dangerTint,
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1117,7 +1047,7 @@ class _LowBalanceNote extends StatelessWidget {
               color: Color(0xFFFFDAD6),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.warning_amber_rounded,
+            child: const Icon(Icons.lock_outline,
                 color: Color(0xFF93000A), size: 18),
           ),
           const SizedBox(width: 10),
@@ -1126,7 +1056,7 @@ class _LowBalanceNote extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'تنبيه إيقاف البلاغات التلقائي',
+                  'الحساب مقفل بسبب نقص الرصيد',
                   style: TextStyle(
                     color: AppColors.danger,
                     fontWeight: FontWeight.w700,
@@ -1135,7 +1065,9 @@ class _LowBalanceNote extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'إذا انخفض الرصيد عن ${formatIqd(minBalance)} سيتم تحويل حالتك تلقائياً إلى غير متصل حتى تعيد الشحن عبر كي كارد/سوبر كي وترفع الفاتورة للموافقة.',
+                  requiredAmount > 0
+                      ? 'الحد الأدنى ${formatIqd(minBalance)}. الرصيد المطلوب للشحن ${formatIqd(requiredAmount)} حتى تستأنف استقبال طلبات التسعير.'
+                      : 'اشحن المحفظة للوصول إلى الحد الأدنى ${formatIqd(minBalance)} لاستئناف استقبال الطلبات.',
                   style: const TextStyle(
                     color: Color(0xFF45464D),
                     fontSize: 12,
