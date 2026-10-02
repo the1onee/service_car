@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
@@ -368,13 +367,4 @@ Future<String?> _askReason(BuildContext context, String title, String label) {
       );
     },
   ).whenComplete(controller.dispose);
-}
-
-Future<void> openCustomerInMaps(double lat, double lng) async {
-  final uri = Uri.parse(
-    'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving',
-  );
-  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-  if (opened) return;
-  await launchUrl(uri, mode: LaunchMode.platformDefault);
 }

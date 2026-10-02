@@ -116,6 +116,11 @@ class _BodyState extends State<_Body> {
     final waitingReceive = workshopViewer &&
         (job.status == JobStatus.inProgress ||
             job.status == JobStatus.finalQuote);
+    final canConfirmReceive = customer &&
+        parts &&
+        (job.status == JobStatus.inProgress ||
+            job.status == JobStatus.finalQuote ||
+            job.status == JobStatus.arrived);
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
@@ -235,6 +240,10 @@ class _BodyState extends State<_Body> {
                 ],
               ),
             ),
+          if (workshopViewer && job.technicianId == profile.id) ...[
+            const SizedBox(height: 12),
+            DeliveryAddressBlock(job: job, framed: true),
+          ],
           if (customer && parts && jobIsOpen(job)) ...[
             const SizedBox(height: 12),
             FieldCard(
@@ -314,6 +323,22 @@ class _BodyState extends State<_Body> {
               ),
             ),
           ],
+          if (job.vendorNote.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            FieldCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'ملاحظات',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(job.vendorNote.trim()),
+                ],
+              ),
+            ),
+          ],
           if (waitingReceive) ...[
             const SizedBox(height: 16),
             FieldCard(
@@ -323,6 +348,16 @@ class _BodyState extends State<_Body> {
                   fontWeight: FontWeight.w700,
                   color: AppColors.emeraldDeep,
                 ),
+              ),
+            ),
+          ],
+          if (canConfirmReceive) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 48,
+              child: FilledButton(
+                onPressed: () => _confirmPartsReceived(context),
+                child: const Text('استلام الطلب'),
               ),
             ),
           ],
@@ -360,6 +395,21 @@ class _BodyState extends State<_Body> {
         ],
       ),
     );
+  }
+
+  Future<void> _confirmPartsReceived(BuildContext context) async {
+    try {
+      await AppScope.of(context).jobs.customerConfirmPartsReceived(job.id);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم تأكيد استلام الطلب.')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذّر تأكيد الاستلام: $e')),
+      );
+    }
   }
 
   Future<void> _shipParts(BuildContext context) async {

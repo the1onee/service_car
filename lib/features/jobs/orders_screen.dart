@@ -433,7 +433,7 @@ class _FeaturedJob extends StatelessWidget {
           if (job.technicianName != null && job.technicianName!.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
-              'الفني: ${job.technicianName}',
+              job.technicianName!,
               style: const TextStyle(fontSize: 13, color: AppColors.inkSoft),
             ),
           ],

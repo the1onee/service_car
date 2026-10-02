@@ -341,6 +341,25 @@ class _OfferCard extends StatelessWidget {
               ],
             ),
           ),
+          if (offer.vendorNote.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'ملاحظات',
+              style: const TextStyle(
+                fontSize: 11,
+                color: Color(0xFF45464D),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              offer.vendorNote.trim(),
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+          ],
           if (canSelect) ...[
             const SizedBox(height: 12),
             SizedBox(

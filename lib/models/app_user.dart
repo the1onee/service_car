@@ -33,6 +33,7 @@ class AppUser {
     this.verified = false,
     this.verificationStatus = VerificationStatus.pending,
     this.walletBalance = 0,
+    this.commissionPercent = 0,
   });
 
   final String id;
@@ -66,6 +67,8 @@ class AppUser {
   final bool verified;
   final VerificationStatus verificationStatus;
   final double walletBalance;
+  /// نسبة عمولة ورشة القطع (٥ تعني ٥٪). يحدّدها الأدمن عند التسجيل.
+  final double commissionPercent;
 
   bool get isTechnician => role == UserRole.technician;
   bool get isWorkshop => role == UserRole.workshop;
@@ -125,6 +128,7 @@ class AppUser {
         'verified': verified,
         'verificationStatus': verificationStatus.name,
         'walletBalance': walletBalance,
+        'commissionPercent': commissionPercent,
       };
 
   factory AppUser.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -180,6 +184,7 @@ class AppUser {
       verified: verifiedFlag,
       verificationStatus: _statusOf(d['verificationStatus'], verifiedFlag),
       walletBalance: (d['walletBalance'] as num?)?.toDouble() ?? 0,
+      commissionPercent: (d['commissionPercent'] as num?)?.toDouble() ?? 0,
     );
   }
 
@@ -239,6 +244,7 @@ class AppUser {
       verified: verified ?? this.verified,
       verificationStatus: verificationStatus ?? this.verificationStatus,
       walletBalance: walletBalance ?? this.walletBalance,
+      commissionPercent: commissionPercent,
     );
   }
 }

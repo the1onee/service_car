@@ -282,8 +282,6 @@ class _WashRequestFormState extends State<WashRequestForm> {
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                   children: [
-                    const _BannerCard(),
-                    const SizedBox(height: 18),
                     _SectionHeader(
                       icon: Icons.directions_car,
                       title: 'المركبة',
@@ -458,12 +456,6 @@ class _TopBar extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          const Text(
-                            'طلب الفني',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 15),
-                          ),
-                          const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 7, vertical: 2),
@@ -490,23 +482,6 @@ class _TopBar extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _BannerCard extends StatelessWidget {
-  const _BannerCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Text(
-      'غسيل',
-      style: TextStyle(
-        fontSize: 24,
-        fontWeight: FontWeight.w800,
-        color: AppColors.ink,
-        height: 1.2,
       ),
     );
   }

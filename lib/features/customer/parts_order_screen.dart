@@ -194,6 +194,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
         carModel: model,
         carYear: _carYear.text.trim(),
         customerPhone: _phone.text.trim(),
+        deliveryAddress: address,
         providerKind: 'workshop',
         specialtyId: specialtyId,
         specialtyAr: _specialtyAr,
@@ -300,15 +301,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                           children: [
                             Row(
                               children: [
-                                const Text(
-                                  'طلب قطع غيار',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 16,
-                                  ),
-                                ),
                                 if (city.isNotEmpty) ...[
-                                  const SizedBox(width: 6),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 6,
@@ -346,20 +339,6 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
-                  Container(
-                    width: double.infinity,
-                    color: AppColors.petrolTint,
-                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-                    child: const Text(
-                      'قطع غيار',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        height: 1.2,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                  ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
                     child: Container(

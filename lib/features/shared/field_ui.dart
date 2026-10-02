@@ -1,6 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
 
 class FieldNavItem {
@@ -131,10 +134,14 @@ class FieldTopBar extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          const Text(
-                            'طلب الفني',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 16),
+                          Flexible(
+                            child: Text(
+                              caption,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w700, fontSize: 16),
+                            ),
                           ),
                           if (city != null && city!.isNotEmpty) ...[
                             const SizedBox(width: 6),
@@ -156,11 +163,6 @@ class FieldTopBar extends StatelessWidget {
                             ),
                           ],
                         ],
-                      ),
-                      Text(
-                        caption,
-                        style: const TextStyle(
-                            fontSize: 11, color: AppColors.inkSoft),
                       ),
                     ],
                   ),
@@ -455,4 +457,110 @@ class AccountHeader extends StatelessWidget {
 
 Future<void> signOutFrom(BuildContext context) {
   return AppScope.of(context).auth.signOut();
+}
+
+Future<void> openCustomerInMaps(double lat, double lng) async {
+  final uri = Uri.parse(
+    'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving',
+  );
+  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (opened) return;
+  await launchUrl(uri, mode: LaunchMode.platformDefault);
+}
+
+/// عنوان التوصيل للورشة المعيّنة. الطلبات القديمة بلا عنوان منسوخ تُقرأ من ملف العميل.
+class DeliveryAddressBlock extends StatefulWidget {
+  const DeliveryAddressBlock({super.key, required this.job, this.framed = false});
+
+  final Job job;
+  final bool framed;
+
+  @override
+  State<DeliveryAddressBlock> createState() => _DeliveryAddressBlockState();
+}
+
+class _DeliveryAddressBlockState extends State<DeliveryAddressBlock> {
+  AppUser? _customer;
+  var _started = false;
+  var _loading = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    final job = widget.job;
+    if (job.deliveryAddress.trim().isNotEmpty && job.exactLocation != null) {
+      return;
+    }
+    _started = true;
+    _loading = true;
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final user = await AppScope.of(context).users.get(widget.job.customerId);
+      if (!mounted) return;
+      setState(() {
+        _customer = user;
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final job = widget.job;
+    final saved = job.deliveryAddress.trim();
+    final address = saved.isNotEmpty ? saved : (_customer?.address.trim() ?? '');
+    final GeoPoint? geo = job.exactLocation ?? _customer?.geo;
+    if (address.isEmpty && geo == null) {
+      if (_loading) {
+        return const SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        );
+      }
+      return const SizedBox.shrink();
+    }
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'عنوان التوصيل',
+          style: TextStyle(fontSize: 12, color: AppColors.inkSoft),
+        ),
+        if (address.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.location_on, size: 18, color: AppColors.amberDeep),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  address,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (geo != null)
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              onPressed: () => openCustomerInMaps(geo.latitude, geo.longitude),
+              icon: const Icon(Icons.map_outlined, size: 18),
+              label: const Text('فتح العنوان في الخريطة'),
+            ),
+          ),
+      ],
+    );
+    if (!widget.framed) return body;
+    return FieldCard(child: body);
+  }
 }

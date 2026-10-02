@@ -126,11 +126,17 @@ class _CustomerLandingState extends State<CustomerLanding> {
                           children: [
                             Row(
                               children: [
-                                const Text(
-                                  'طلب الفني',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 16,
+                                Flexible(
+                                  child: Text(
+                                    widget.profile.name.isEmpty
+                                        ? 'حسابي'
+                                        : widget.profile.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 16,
+                                    ),
                                   ),
                                 ),
                                 if (widget.city != null &&
@@ -155,17 +161,6 @@ class _CustomerLandingState extends State<CustomerLanding> {
                                   ),
                                 ],
                               ],
-                            ),
-                            Text(
-                              widget.profile.name.isEmpty
-                                  ? 'حسابي'
-                                  : widget.profile.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF45464D),
-                              ),
                             ),
                           ],
                         ),

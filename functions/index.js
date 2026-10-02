@@ -118,6 +118,14 @@ async function assignOffer(jobRef, offerSnap) {
   if (isParts && Number.isFinite(price) && price > 0) {
     patch.finalPrice = price;
   }
+  if (isParts) {
+    const loc = await db.collection("jobLocations").doc(jobRef.id).get();
+    const locData = loc.data() || {};
+    if (locData.exact) patch.exactLocation = locData.exact;
+    if (typeof locData.label === "string" && locData.label.trim()) {
+      patch.deliveryAddress = locData.label.trim();
+    }
+  }
   if (typeof offer.partCondition === "string" && offer.partCondition) {
     patch.partCondition = offer.partCondition;
   }

@@ -889,6 +889,8 @@ class _AcceptedJobCard extends StatelessWidget {
               style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
             ),
           ],
+          const SizedBox(height: 8),
+          DeliveryAddressBlock(job: job),
           if (job.partImageUrl.isNotEmpty) ...[
             const SizedBox(height: 8),
             ClipRRect(

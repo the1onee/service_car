@@ -122,6 +122,7 @@ class JobRepository {
     String carModel = '',
     String carYear = '',
     String customerPhone = '',
+    String deliveryAddress = '',
     String providerKind = '',
     String specialtyId = '',
     String specialtyAr = '',
@@ -173,6 +174,7 @@ class JobRepository {
     final locPayload = <String, dynamic>{
       'customerId': customerId,
       'exact': exact,
+      if (deliveryAddress.trim().isNotEmpty) 'label': deliveryAddress.trim(),
     };
     if (dropoff != null) {
       locPayload['dropoff'] = dropoff;
@@ -558,6 +560,14 @@ class JobRepository {
     final jobSnap = await _jobs.doc(jobId).get();
     final isParts = jobSnap.exists && Job.fromDoc(jobSnap).isPartsOrder;
     final price = offer.initialPrice;
+    GeoPoint? exact;
+    var deliveryAddress = '';
+    if (isParts) {
+      final loc = await _db.collection('jobLocations').doc(jobId).get();
+      final data = loc.data();
+      exact = data?['exact'] as GeoPoint?;
+      deliveryAddress = (data?['label'] as String? ?? '').trim();
+    }
     // قطع الغيار: القبول يُسند الطلب مباشرة للورشة للتجهيز (بدون موافقة سعر أولي/نهائي).
     await _jobs.doc(jobId).update({
       'technicianId': offer.technicianId,
@@ -565,6 +575,8 @@ class JobRepository {
       'initialPrice': price,
       if (isParts && price != null) 'finalPrice': price,
       'status': isParts ? JobStatus.enRoute.name : JobStatus.quoted.name,
+      if (exact != null) 'exactLocation': exact,
+      if (deliveryAddress.isNotEmpty) 'deliveryAddress': deliveryAddress,
       if (offer.partCondition.isNotEmpty) 'partCondition': offer.partCondition,
       if (offer.deliveryType.isNotEmpty) 'deliveryType': offer.deliveryType,
       if (offer.vendorNote.isNotEmpty) 'vendorNote': offer.vendorNote,
@@ -764,28 +776,65 @@ class JobRepository {
     });
   }
 
-  /// العميل يؤكد استلام القطعة — يُكمل الطلب دون عمولة محفظة (قطع الغيار عمولتها 0).
+  /// العميل يؤكد استلام القطعة، وتُخصم نسبة الورشة المسجّلة على حسابها.
   Future<void> customerConfirmPartsReceived(String jobId) async {
-    final snap = await _jobs.doc(jobId).get();
-    if (!snap.exists) return;
-    final job = Job.fromDoc(snap);
-    if (!job.isPartsOrder) {
-      throw StateError('تأكيد الاستلام متاح لطلبات القطع فقط');
-    }
-    if (job.status != JobStatus.inProgress &&
-        job.status != JobStatus.arrived &&
-        job.status != JobStatus.finalQuote) {
-      throw StateError('الطلب ليس جاهزاً للاستلام بعد');
-    }
-    final amount = job.billAmount;
-    await _jobs.doc(jobId).update({
-      'status': JobStatus.completed.name,
-      'receivedAmount': amount,
-      if (job.finalPrice == null && job.initialPrice != null)
-        'finalPrice': job.initialPrice,
-      'commissionAmount': 0,
-      if (job.warranty.enabled)
-        'warranty.startsAt': Timestamp.fromDate(DateTime.now()),
+    final jobRef = _jobs.doc(jobId);
+    final entryRef = _db.collection(Cols.walletEntries).doc('commission_$jobId');
+    await _db.runTransaction((tx) async {
+      final jobSnap = await tx.get(jobRef);
+      if (!jobSnap.exists) return;
+      final job = Job.fromDoc(jobSnap);
+      if (!job.isPartsOrder) {
+        throw StateError('تأكيد الاستلام متاح لطلبات القطع فقط');
+      }
+      if (job.status == JobStatus.completed || job.status == JobStatus.rated) {
+        return;
+      }
+      if (job.status != JobStatus.inProgress &&
+          job.status != JobStatus.arrived &&
+          job.status != JobStatus.finalQuote) {
+        throw StateError('الطلب ليس جاهزاً للاستلام بعد');
+      }
+      final techId = job.technicianId;
+      if (techId == null || techId.isEmpty) {
+        throw StateError('لا توجد ورشة معيّنة');
+      }
+      final techRef = _db.collection(Cols.users).doc(techId);
+      final techSnap = await tx.get(techRef);
+      final entrySnap = await tx.get(entryRef);
+      final percent =
+          (techSnap.data()?['commissionPercent'] as num?)?.toDouble() ?? 0;
+      final rate = (percent / 100).clamp(0.0, 1.0);
+      final amount = job.billAmount;
+      final commission = _money(amount * rate);
+      tx.update(jobRef, {
+        'status': JobStatus.completed.name,
+        'receivedAmount': amount,
+        if (job.finalPrice == null && job.initialPrice != null)
+          'finalPrice': job.initialPrice,
+        'commissionAmount': commission,
+        'commissionRate': rate,
+        if (job.warranty.enabled)
+          'warranty.startsAt': Timestamp.fromDate(DateTime.now()),
+      });
+      if (commission <= 0 || entrySnap.exists) return;
+      final wallet = (techSnap.data()?['walletBalance'] as num?)?.toDouble() ?? 0;
+      final next = wallet - commission;
+      tx.set(entryRef, {
+        'userId': techId,
+        'type': 'commission',
+        'amount': commission,
+        'signedAmount': -commission,
+        'balanceAfter': next,
+        'jobId': jobId,
+        'note': 'عمولة قطعة الغيار',
+        'createdBy': job.customerId,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      tx.update(techRef, {
+        'walletBalance': next,
+        'walletJobId': jobId,
+      });
     });
   }
 

@@ -73,9 +73,11 @@ class Job {
     this.carModel = '',
     this.carYear = '',
     this.customerPhone = '',
+    this.deliveryAddress = '',
     this.providerKind = '',
     this.specialtyId = '',
     this.specialtyAr = '',
+    this.vendorNote = '',
   });
 
   final String id;
@@ -117,11 +119,15 @@ class Job {
   final String carModel;
   final String carYear;
   final String customerPhone;
+  /// عنوان التوصيل، يُنسخ إلى الطلب بعد قبول العرض حتى لا يظهر للورش قبل التعيين.
+  final String deliveryAddress;
   /// workshop | oilWorkshop | paintShop | technician — لمن يُوزَّع الطلب.
   final String providerKind;
   /// اختصاص السيارة/الورشة من كتالوج workshopSpecialties.
   final String specialtyId;
   final String specialtyAr;
+  /// ملاحظة الورشة للعميل، تُنسخ من العرض عند التعيين.
+  final String vendorNote;
 
   bool get isPartsOrder =>
       serviceId == 'parts' || providerKind == 'workshop';
@@ -265,9 +271,11 @@ class Job {
       carModel: d['carModel'] as String? ?? '',
       carYear: d['carYear'] as String? ?? '',
       customerPhone: d['customerPhone'] as String? ?? '',
+      deliveryAddress: d['deliveryAddress'] as String? ?? '',
       providerKind: d['providerKind'] as String? ?? '',
       specialtyId: d['specialtyId'] as String? ?? '',
       specialtyAr: d['specialtyAr'] as String? ?? '',
+      vendorNote: d['vendorNote'] as String? ?? '',
     );
   }
 }

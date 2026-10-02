@@ -310,8 +310,6 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                     return ListView(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                       children: [
-                        const _LiveHeader(),
-                        const SizedBox(height: 20),
                         _sectionTitle(1, 'نوع الخدمة'),
                         const SizedBox(height: 10),
                         if (services.isEmpty)
@@ -789,14 +787,6 @@ class _FormTopBar extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          const Text(
-                            'طلب الفني',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 7, vertical: 2),
@@ -823,23 +813,6 @@ class _FormTopBar extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _LiveHeader extends StatelessWidget {
-  const _LiveHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Text(
-      'طلب فني',
-      style: TextStyle(
-        fontSize: 24,
-        fontWeight: FontWeight.w800,
-        color: AppColors.ink,
-        height: 1.2,
       ),
     );
   }

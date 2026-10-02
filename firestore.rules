@@ -101,7 +101,42 @@ service cloud.firestore {
       allow update: if isAdmin()
         || (isUser(uid) && keepsProtectedFields())
         || (isUser(uid) && commissionDebit())
-        || customerWalletSettle();
+        || customerWalletSettle()
+        || customerDebitsWorkshopCommission();
+
+      // العميل يكمل طلب قطعة: يخصم نسبة الورشة المسجّلة على حسابها فقط.
+      function customerDebitsWorkshopCommission() {
+        let jobId = request.resource.data.walletJobId;
+        let job = getAfter(/databases/$(database)/documents/jobs/$(jobId)).data;
+        let beforeBal = resource.data.get('walletBalance', 0);
+        let afterBal = request.resource.data.walletBalance;
+        let percent = resource.data.get('commissionPercent', 0);
+        let bill = job.finalPrice is number && job.finalPrice > 0
+          ? job.finalPrice
+          : (job.initialPrice is number && job.initialPrice > 0
+              ? job.initialPrice
+              : 0);
+        let expected = bill * percent / 100;
+        return signedIn()
+          && resource.data.role == 'workshop'
+          && jobId is string
+          && request.resource.data.diff(resource.data)
+              .affectedKeys().hasOnly(['walletBalance', 'walletJobId'])
+          && afterBal is number
+          && percent is number
+          && percent >= 0
+          && percent <= 100
+          && job.customerId == request.auth.uid
+          && job.technicianId == uid
+          && job.status == 'completed'
+          && (job.serviceId == 'parts' || job.providerKind == 'workshop')
+          && job.commissionAmount is number
+          && job.commissionAmount >= 0
+          && beforeBal - afterBal >= job.commissionAmount - 0.05
+          && beforeBal - afterBal <= job.commissionAmount + 0.05
+          && job.commissionAmount >= expected - 0.05
+          && job.commissionAmount <= expected + 0.05;
+      }
 
       // الفني/ورشة الزيوت يحدّث رصيد العميل فقط بمبلغ التسوية المسجّل على الطلب الذي يكمله.
       function customerWalletSettle() {
@@ -267,6 +302,22 @@ service cloud.firestore {
             || id.matches('change_.+')))
         || isOwner(resource.data.userId)
       );
+      allow create: if request.resource.data.type == 'commission'
+        && request.resource.data.jobId is string
+        && id == 'commission_' + request.resource.data.jobId
+        && request.resource.data.amount is number
+        && request.resource.data.amount >= 0
+        && request.resource.data.signedAmount == (0 - request.resource.data.amount)
+        && getAfter(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.customerId == request.auth.uid
+        && getAfter(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.technicianId == request.resource.data.userId
+        && getAfter(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.status == 'completed'
+        && getAfter(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.commissionAmount == request.resource.data.amount
+        && get(/databases/$(database)/documents/users/$(request.resource.data.userId)).data.walletBalance
+            - getAfter(/databases/$(database)/documents/users/$(request.resource.data.userId)).data.walletBalance
+            >= request.resource.data.amount - 0.05
+        && get(/databases/$(database)/documents/users/$(request.resource.data.userId)).data.walletBalance
+            - getAfter(/databases/$(database)/documents/users/$(request.resource.data.userId)).data.walletBalance
+            <= request.resource.data.amount + 0.05;
       allow create: if isOwner(request.resource.data.userId)
         && request.resource.data.type == 'commission'
         && request.resource.data.jobId is string
