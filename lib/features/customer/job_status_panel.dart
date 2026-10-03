@@ -5,6 +5,7 @@ import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/customer/parts_offers_section.dart';
 import 'package:barrr/features/customer/quote_compare_list.dart';
 import 'package:barrr/features/jobs/rating_sheet.dart';
+import 'package:barrr/features/oil_workshop/oil_job_details.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/warranty/warranty_form.dart';
 import 'package:barrr/models/app_user.dart';
@@ -47,10 +48,21 @@ class CustomerJobPanel extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 4),
               Text(
-                job.serviceTitle ?? job.serviceId,
-                style: const TextStyle(color: AppColors.inkSoft),
+                job.isOilOrder
+                    ? job.oilDisplayTitle
+                    : (job.serviceTitle ?? job.serviceId),
+                style: TextStyle(
+                  color: job.isOilOrder
+                      ? AppColors.amberDeep
+                      : AppColors.inkSoft,
+                  fontWeight:
+                      job.isOilOrder ? FontWeight.w700 : FontWeight.w400,
+                ),
               ),
-              if (job.vehicleTypeTitle != null &&
+              if (job.isOilOrder) ...[
+                const SizedBox(height: 10),
+                OilJobDetailsCard.fromJob(job, compact: true, showPhone: true),
+              ] else if (job.vehicleTypeTitle != null &&
                   job.vehicleTypeTitle!.trim().isNotEmpty) ...[
                 const SizedBox(height: 2),
                 Text(
@@ -194,7 +206,17 @@ class CustomerJobPanel extends StatelessWidget {
         }
         if (job.isPartsOrder) {
           return [
-            PartsOffersSection(job: job, selectable: false),
+            PartsOffersSection(job: job, selectable: true),
+          ];
+        }
+        if (job.isOilOrder) {
+          return [
+            const Text(
+              'اختر عرض ورشة الزيوت عندما يصل — بدون مهلة زمنية.',
+              style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            QuoteCompareList(job: job, selectable: true),
           ];
         }
         return [
@@ -224,7 +246,9 @@ class CustomerJobPanel extends StatelessWidget {
           const SizedBox(height: 16),
           FilledButton(
             onPressed: () => jobs.customerAcceptQuote(job.id),
-            child: const Text('قبول السعر'),
+            child: Text(
+              job.isOilOrder ? 'قبول الطلب وبدء التوجه' : 'قبول السعر',
+            ),
           ),
         ];
       case JobStatus.enRoute:

@@ -78,6 +78,12 @@ class Job {
     this.specialtyId = '',
     this.specialtyAr = '',
     this.vendorNote = '',
+    this.oilTypeId = '',
+    this.oilTypeName = '',
+    this.cylinders = 0,
+    this.liters = 0,
+    this.includeOilFilter = false,
+    this.landmark = '',
   });
 
   final String id;
@@ -128,12 +134,34 @@ class Job {
   final String specialtyAr;
   /// ملاحظة الورشة للعميل، تُنسخ من العرض عند التعيين.
   final String vendorNote;
+  /// حقول طلب الزيت المنظمة (مع الإبقاء على partName/partNote للتوافق).
+  final String oilTypeId;
+  final String oilTypeName;
+  final int cylinders;
+  final double liters;
+  final bool includeOilFilter;
+  final String landmark;
 
   bool get isPartsOrder =>
       serviceId == 'parts' || providerKind == 'workshop';
 
   bool get isOilOrder =>
       serviceId == 'oil' || providerKind == 'oilWorkshop';
+
+  String get oilDisplayTitle {
+    if (oilTypeName.trim().isNotEmpty) return oilTypeName.trim();
+    if (partName.trim().isNotEmpty) return partName.trim();
+    return serviceTitle ?? 'تبديل زيت';
+  }
+
+  String get carSummary {
+    final parts = <String>[
+      if (carMake.trim().isNotEmpty) carMake.trim(),
+      if (carModel.trim().isNotEmpty) carModel.trim(),
+      if (carYear.trim().isNotEmpty) carYear.trim(),
+    ];
+    return parts.join(' ');
+  }
 
   bool get isPaintOrder =>
       serviceId == 'paint' ||
@@ -230,6 +258,12 @@ class Job {
         'providerKind': providerKind,
         'specialtyId': specialtyId,
         'specialtyAr': specialtyAr,
+        if (oilTypeId.isNotEmpty) 'oilTypeId': oilTypeId,
+        if (oilTypeName.isNotEmpty) 'oilTypeName': oilTypeName,
+        if (cylinders > 0) 'cylinders': cylinders,
+        if (liters > 0) 'liters': liters,
+        if (isOilOrder) 'includeOilFilter': includeOilFilter,
+        if (landmark.isNotEmpty) 'landmark': landmark,
         'createdAt': FieldValue.serverTimestamp(),
       };
 
@@ -276,6 +310,12 @@ class Job {
       specialtyId: d['specialtyId'] as String? ?? '',
       specialtyAr: d['specialtyAr'] as String? ?? '',
       vendorNote: d['vendorNote'] as String? ?? '',
+      oilTypeId: d['oilTypeId'] as String? ?? '',
+      oilTypeName: d['oilTypeName'] as String? ?? '',
+      cylinders: (d['cylinders'] as num?)?.toInt() ?? 0,
+      liters: (d['liters'] as num?)?.toDouble() ?? 0,
+      includeOilFilter: d['includeOilFilter'] == true,
+      landmark: d['landmark'] as String? ?? '',
     );
   }
 }

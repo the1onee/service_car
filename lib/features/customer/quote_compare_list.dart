@@ -19,8 +19,9 @@ class QuoteCompareList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final oil = job.isOilOrder;
-    final emptyLabel = 'بانتظار العروض';
-    final pickLabel = 'قبول';
+    final emptyLabel =
+        oil ? 'بانتظار عروض ورش الزيوت…' : 'بانتظار العروض';
+    final pickLabel = oil ? 'قبول الطلب' : 'قبول';
 
     return StreamBuilder<List<JobOffer>>(
       stream: AppScope.of(context).jobs.watchJobQuotes(job.id),

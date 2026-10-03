@@ -1,0 +1,222 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/constants.dart';
+import 'package:barrr/core/strings.dart';
+import 'package:barrr/core/theme.dart';
+import 'package:barrr/features/oil_workshop/oil_job_details.dart';
+import 'package:barrr/features/shared/field_ui.dart';
+import 'package:barrr/models/job_offer.dart';
+
+/// عرض وارد لورشة الزيوت مع تفاصيل الطلب الكاملة.
+class OilOfferOverlay extends StatefulWidget {
+  const OilOfferOverlay({
+    super.key,
+    required this.offer,
+    required this.workshopName,
+    required this.onDone,
+  });
+
+  final JobOffer offer;
+  final String workshopName;
+  final VoidCallback onDone;
+
+  @override
+  State<OilOfferOverlay> createState() => _OilOfferOverlayState();
+}
+
+class _OilOfferOverlayState extends State<OilOfferOverlay> {
+  late int _left;
+  Timer? _timer;
+  final _price = TextEditingController();
+  bool _busy = false;
+  String? _error;
+  late final bool _openEnded;
+
+  @override
+  void initState() {
+    super.initState();
+    _openEnded = widget.offer.isOpenEnded;
+    _left = widget.offer.remainingSeconds();
+    if (_openEnded) return;
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      final n = widget.offer.remainingSeconds();
+      if (n <= 0) {
+        _timer?.cancel();
+        widget.onDone();
+      }
+      if (mounted) setState(() => _left = n);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _price.dispose();
+    super.dispose();
+  }
+
+  Future<void> _accept() async {
+    final parsed = double.tryParse(_price.text.replaceAll(',', '').trim());
+    final amountError = AppConstants.serviceAmountError(parsed);
+    if (amountError != null || parsed == null) {
+      setState(() => _error =
+          amountError ?? 'أدخل مبلغاً ينتهي بـ 000، والحد الأدنى 3000');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final ok = await AppScope.of(context).dispatch.acceptOffer(
+          offerId: widget.offer.id,
+          technicianId: widget.offer.technicianId,
+          technicianName: widget.workshopName,
+          initialPrice: parsed,
+        );
+    if (!mounted) return;
+    if (!ok) {
+      setState(() {
+        _busy = false;
+        _error = _openEnded
+            ? 'تعذر إرسال العرض. قد يكون العميل قبل عرضاً آخر.'
+            : 'فاتك الطلب أو انتهت المهلة.';
+      });
+      widget.onDone();
+      return;
+    }
+    widget.onDone();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final offer = widget.offer;
+    return Material(
+      color: Colors.black54,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420, maxHeight: 640),
+          child: Card(
+            margin: const EdgeInsets.all(20),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'طلب تبديل زيت جديد',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                offer.oilDisplayTitle,
+                                style: const TextStyle(
+                                  color: AppColors.amberDeep,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (!_openEnded)
+                          CircleAvatar(
+                            radius: 26,
+                            backgroundColor: AppColors.amberTint,
+                            child: Text(
+                              '$_left',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.amberDeep,
+                              ),
+                            ),
+                          )
+                        else
+                          const StatusPill(
+                            label: 'بدون مهلة',
+                            color: AppColors.emeraldDeep,
+                            background: AppColors.emeraldTint,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    OilJobDetailsCard.fromOffer(offer),
+                    const SizedBox(height: 10),
+                    Text(
+                      _openEnded
+                          ? 'أرسل سعرك متى جاهز. الموقع والهاتف يظهران بعد قبول العميل.'
+                          : 'الموقع تقريبي ورقم الهاتف مخفي حتى يقبل العميل عرضك.',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.inkSoft,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _price,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: AppStrings.initialPrice,
+                        hintText: '5000',
+                        helperText: 'الحد الأدنى 3000 وينتهي بـ 000',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(color: AppColors.danger),
+                        ),
+                      ),
+                    const SizedBox(height: 14),
+                    FilledButton(
+                      onPressed: _busy ? null : _accept,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                        backgroundColor: AppColors.slate,
+                      ),
+                      child: Text(_busy ? 'جارٍ الإرسال…' : 'تقديم عرض السعر'),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: _busy
+                          ? null
+                          : () async {
+                              await AppScope.of(context)
+                                  .jobs
+                                  .rejectOffer(offer.id);
+                              widget.onDone();
+                            },
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 44),
+                      ),
+                      child: const Text(AppStrings.reject),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

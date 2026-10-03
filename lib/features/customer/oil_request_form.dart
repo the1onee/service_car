@@ -261,6 +261,12 @@ class _OilRequestFormState extends State<OilRequestForm> {
         carYear: _year.text.trim(),
         customerPhone: phone,
         providerKind: 'oilWorkshop',
+        oilTypeId: oil.id,
+        oilTypeName: oil.nameAr,
+        cylinders: _cylinders,
+        liters: _liters,
+        includeOilFilter: _includeFilter,
+        landmark: landmark,
       );
       var dispatchFailed = false;
       try {

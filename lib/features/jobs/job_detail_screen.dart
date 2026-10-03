@@ -3,8 +3,10 @@ import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/customer/parts_offers_section.dart';
+import 'package:barrr/features/customer/quote_compare_list.dart';
 import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/jobs/rating_sheet.dart';
+import 'package:barrr/features/oil_workshop/oil_job_details.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/warranty/warranty_claim_screen.dart';
 import 'package:barrr/features/warranty/warranty_form.dart';
@@ -99,6 +101,7 @@ class _BodyState extends State<_Body> {
   @override
   Widget build(BuildContext context) {
     final parts = job.isPartsOrder;
+    final oil = job.isOilOrder;
     final colors = jobStatusColors(job.status, isParts: parts);
     final price = job.receivedAmount ?? job.finalPrice ?? job.initialPrice;
     final customer = !profile.isTechnician &&
@@ -106,6 +109,7 @@ class _BodyState extends State<_Body> {
         !profile.isOilWorkshop &&
         !profile.isPaintShop;
     final workshopViewer = profile.isWorkshop && parts;
+    final oilViewer = profile.isOilWorkshop && oil;
     final showWorkshopDetails = customer &&
         (job.technicianName ?? '').isNotEmpty &&
         parts;
@@ -136,7 +140,9 @@ class _BodyState extends State<_Body> {
                   children: [
                     Expanded(
                       child: Text(
-                        job.serviceTitle ?? 'طلب خدمة',
+                        oil
+                            ? job.oilDisplayTitle
+                            : (job.serviceTitle ?? 'طلب خدمة'),
                         style: const TextStyle(
                             fontWeight: FontWeight.w700, fontSize: 18),
                       ),
@@ -171,6 +177,15 @@ class _BodyState extends State<_Body> {
               ],
             ),
           ),
+          if (oil) ...[
+            const SizedBox(height: 12),
+            OilJobDetailsCard.fromJob(
+              job,
+              showPhone: (customer || oilViewer || profile.isOilWorkshop) &&
+                  job.customerPhone.trim().isNotEmpty &&
+                  (job.locationRevealed || customer),
+            ),
+          ],
           const SizedBox(height: 12),
           if (showWorkshopDetails)
             FieldCard(
@@ -222,11 +237,16 @@ class _BodyState extends State<_Body> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          job.technicianName ?? (parts ? 'ورشة' : 'فني'),
+                          job.technicianName ??
+                              (parts
+                                  ? 'ورشة'
+                                  : (oil ? 'ورشة زيوت' : 'فني')),
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                         Text(
-                          parts ? 'الورشة المعيّنة' : 'الفني المعيّن',
+                          parts
+                              ? 'الورشة المعيّنة'
+                              : (oil ? 'ورشة الزيوت المعيّنة' : 'الفني المعيّن'),
                           style: const TextStyle(
                               color: AppColors.inkSoft, fontSize: 12),
                         ),
@@ -251,6 +271,45 @@ class _BodyState extends State<_Body> {
                 job: job,
                 selectable: job.status == JobStatus.offerPending ||
                     job.status == JobStatus.comparing,
+              ),
+            ),
+          ],
+          if (customer &&
+              oil &&
+              (job.status == JobStatus.offerPending ||
+                  job.status == JobStatus.comparing)) ...[
+            const SizedBox(height: 12),
+            FieldCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'عروض ورش الزيوت',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  ),
+                  const SizedBox(height: 10),
+                  QuoteCompareList(job: job, selectable: true),
+                ],
+              ),
+            ),
+          ],
+          if (customer && oil && job.status == JobStatus.quoted) ...[
+            const SizedBox(height: 12),
+            FieldCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'السعر: ${price == null ? '—' : formatIqd(price)}',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: () =>
+                        AppScope.of(context).jobs.customerAcceptQuote(job.id),
+                    child: const Text('قبول الطلب وبدء التوجه'),
+                  ),
+                ],
               ),
             ),
           ],

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
+import 'package:barrr/features/oil_workshop/oil_job_details.dart';
 import 'package:barrr/models/job_offer.dart';
 
 class OfferOverlay extends StatefulWidget {
@@ -93,13 +94,20 @@ class _OfferOverlayState extends State<OfferOverlay> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('طلب جديد', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                Text(
+                  widget.offer.hasOilDetails ? 'طلب تبديل زيت' : 'طلب جديد',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                ),
                 const SizedBox(height: 8),
-                Text(widget.offer.serviceTitle ?? 'خدمة'),
-                if (widget.offer.vehicleTypeTitle != null &&
-                    widget.offer.vehicleTypeTitle!.trim().isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text('نوع السيارة: ${widget.offer.vehicleTypeTitle}'),
+                if (widget.offer.hasOilDetails) ...[
+                  OilJobDetailsCard.fromOffer(widget.offer, compact: true),
+                ] else ...[
+                  Text(widget.offer.serviceTitle ?? 'خدمة'),
+                  if (widget.offer.vehicleTypeTitle != null &&
+                      widget.offer.vehicleTypeTitle!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text('نوع السيارة: ${widget.offer.vehicleTypeTitle}'),
+                  ],
                 ],
                 const SizedBox(height: 8),
                 const Text('الموقع تقريبي ورقم الهاتف مخفي حتى يقبل العميل'),
@@ -126,7 +134,11 @@ class _OfferOverlayState extends State<OfferOverlay> {
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: _busy ? null : _accept,
-                  child: const Text(AppStrings.accept),
+                  child: Text(
+                    widget.offer.hasOilDetails
+                        ? 'تقديم عرض السعر'
+                        : AppStrings.accept,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton(

@@ -4,6 +4,7 @@ import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/jobs/rating_sheet.dart';
+import 'package:barrr/features/oil_workshop/oil_job_details.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/warranty/warranty_form.dart';
 import 'package:barrr/models/app_user.dart';
@@ -67,6 +68,7 @@ class _TechJobPanelState extends State<TechJobPanel> {
   @override
   Widget build(BuildContext context) {
     final job = widget.job;
+    final oil = job.isOilOrder;
     return Material(
       color: AppColors.surface,
       elevation: 16,
@@ -79,17 +81,37 @@ class _TechJobPanelState extends State<TechJobPanel> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(_title(job.status),
+              Text(_title(job.status, oil),
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
-              Text(job.serviceTitle ?? ''),
-              if (job.vehicleTypeTitle != null &&
+              Text(
+                oil ? job.oilDisplayTitle : (job.serviceTitle ?? ''),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: oil ? AppColors.amberDeep : AppColors.ink,
+                ),
+              ),
+              if (!oil &&
+                  job.vehicleTypeTitle != null &&
                   job.vehicleTypeTitle!.trim().isNotEmpty)
                 Text('نوع السيارة: ${job.vehicleTypeTitle}'),
+              if (oil) ...[
+                const SizedBox(height: 10),
+                OilJobDetailsCard.fromJob(
+                  job,
+                  compact: true,
+                  showPhone: job.locationRevealed &&
+                      job.customerPhone.trim().isNotEmpty,
+                ),
+              ],
               if (job.status == JobStatus.quoted)
-                const Text(
-                    'بانتظار قبول العميل للسعر المبدئي. الموقع الحقيقي مخفي.'),
+                Text(
+                  oil
+                      ? 'بانتظار قبول العميل لعرض السعر. موقع الزيارة مخفي.'
+                      : 'بانتظار قبول العميل للسعر المبدئي. الموقع الحقيقي مخفي.',
+                ),
               if (job.locationRevealed) ...[
+                const SizedBox(height: 8),
                 Text(
                   'موقع العميل: ${job.displayLocation.latitude.toStringAsFixed(5)}, ${job.displayLocation.longitude.toStringAsFixed(5)}',
                 ),
@@ -112,22 +134,28 @@ class _TechJobPanelState extends State<TechJobPanel> {
     );
   }
 
-  String _title(JobStatus s) {
+  String _title(JobStatus s, bool oil) {
     switch (s) {
       case JobStatus.quoted:
-        return 'تم قبولك — انتظر موافقة العميل';
+        return oil
+            ? 'تم قبول عرضك — انتظر موافقة العميل'
+            : 'تم قبولك — انتظر موافقة العميل';
       case JobStatus.enRoute:
-        return 'توجه إلى العميل';
+        return oil ? 'ورشة الزيوت في الطريق' : 'توجه إلى العميل';
       case JobStatus.arrived:
-        return 'افحص السيارة وحدد السعر النهائي';
+        return oil
+            ? 'وصلت للموقع — حدّد السعر النهائي'
+            : 'افحص السيارة وحدد السعر النهائي';
       case JobStatus.finalQuote:
         return 'بانتظار موافقة العميل على السعر النهائي';
       case JobStatus.inProgress:
-        return 'يمكنك إنهاء المهمة بعد العمل';
+        return oil
+            ? 'أكمل تبديل الزيت ثم أكّد استلام المبلغ'
+            : 'يمكنك إنهاء المهمة بعد العمل';
       case JobStatus.completed:
         return 'قيّم العميل';
       default:
-        return 'مهمة جارية';
+        return oil ? 'طلب زيت جارٍ' : 'مهمة جارية';
     }
   }
 
@@ -174,7 +202,9 @@ class _TechJobPanelState extends State<TechJobPanel> {
         return [
           FilledButton(
             onPressed: () => jobs.markArrived(job.id),
-            child: const Text(AppStrings.arrived),
+            child: Text(
+              job.isOilOrder ? 'وصلت لموقع العميل' : AppStrings.arrived,
+            ),
           ),
         ];
       case JobStatus.arrived:
@@ -224,13 +254,21 @@ class _TechJobPanelState extends State<TechJobPanel> {
                 ),
               );
             },
-            child: const Text('إرسال السعر النهائي'),
+            child: Text(
+              job.isOilOrder
+                  ? 'إرسال السعر النهائي لتبديل الزيت'
+                  : 'إرسال السعر النهائي',
+            ),
           ),
         ];
       case JobStatus.inProgress:
         final due = job.cashDue > 0 ? job.cashDue : job.billAmount;
         return [
-          const Text(AppStrings.cashNote),
+          Text(
+            job.isOilOrder
+                ? 'بعد إكمال تبديل الزيت أكّد المبلغ المستلم نقداً.'
+                : AppStrings.cashNote,
+          ),
           const SizedBox(height: 8),
           if (job.billAmount > 0)
             Text('الفاتورة ${formatIqd(job.billAmount)}'),
@@ -286,7 +324,13 @@ class _TechJobPanelState extends State<TechJobPanel> {
                       if (mounted) setState(() => _busy = false);
                     }
                   },
-            child: Text(_busy ? 'جارٍ الإنهاء…' : AppStrings.endJob),
+            child: Text(
+              _busy
+                  ? 'جارٍ الإنهاء…'
+                  : (job.isOilOrder
+                      ? 'تأكيد استلام المبلغ وإكمال تبديل الزيت'
+                      : AppStrings.endJob),
+            ),
           ),
         ];
       case JobStatus.completed:

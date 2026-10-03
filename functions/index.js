@@ -108,17 +108,22 @@ async function assignOffer(jobRef, offerSnap) {
   const job = jobSnap.data() || {};
   const isParts =
     job.serviceId === "parts" || job.providerKind === "workshop";
+  const isOil =
+    job.serviceId === "oil" || job.providerKind === "oilWorkshop";
+  const directAssign = isParts || isOil;
   const price = Number(offer.initialPrice || 0);
   const patch = {
     technicianId: offer.technicianId,
-    technicianName: offer.technicianName || (isParts ? "ورشة" : "فني"),
+    technicianName:
+      offer.technicianName ||
+      (isOil ? "ورشة زيوت" : isParts ? "ورشة" : "فني"),
     initialPrice: price,
-    status: isParts ? "enRoute" : "quoted",
+    status: directAssign ? "enRoute" : "quoted",
   };
   if (isParts && Number.isFinite(price) && price > 0) {
     patch.finalPrice = price;
   }
-  if (isParts) {
+  if (directAssign) {
     const loc = await db.collection("jobLocations").doc(jobRef.id).get();
     const locData = loc.data() || {};
     if (locData.exact) patch.exactLocation = locData.exact;
@@ -351,7 +356,7 @@ async function dispatchJobInternal(jobId) {
     return { ok: false, reason: "none" };
   }
 
-  const noExpiry = isParts;
+  const noExpiry = isParts || isOil;
   const seconds = emergency ? EMERGENCY_SECONDS : QUOTE_SECONDS;
   const expires = noExpiry
     ? null
@@ -375,9 +380,17 @@ async function dispatchJobInternal(jobId) {
       partName: job.partName || "",
       carMake: job.carMake || "",
       carModel: job.carModel || "",
+      carYear: job.carYear || "",
       specialtyAr: t.specialtyAr || job.specialtyAr || "",
     };
     if (expires) offer.expiresAt = expires;
+    if (job.partNote) offer.partNote = job.partNote;
+    if (job.oilTypeId) offer.oilTypeId = job.oilTypeId;
+    if (job.oilTypeName) offer.oilTypeName = job.oilTypeName;
+    if (job.cylinders) offer.cylinders = job.cylinders;
+    if (job.liters) offer.liters = job.liters;
+    if (isOil) offer.includeOilFilter = !!job.includeOilFilter;
+    if (job.landmark) offer.landmark = job.landmark;
     if (t.oilWorkshopTier) offer.oilWorkshopTier = t.oilWorkshopTier;
     batch.set(db.collection("jobOffers").doc(), offer);
   }
@@ -397,7 +410,9 @@ async function dispatchJobInternal(jobId) {
       ? "لديك 30 ثانية لقبول الطلب وإدخال السعر المبدئي"
       : isParts
         ? "طلب قطع غيار ضمن اختصاصك — أرسل سعرك متى توفرت القطعة"
-        : "أرسل سعراً مبدئياً خلال دقائق ليراه العميل",
+        : isOil
+          ? "طلب تبديل زيت — أرسل سعرك متى جاهز (بدون مهلة)"
+          : "أرسل سعراً مبدئياً خلال دقائق ليراه العميل",
     { jobId, type: "offer" },
   );
   return { ok: true, count: ranked.length };
@@ -418,8 +433,10 @@ exports.onWindowExpired = onCall(async (request) => {
   if (!job) return { ok: false };
   const isParts =
     job.serviceId === "parts" || job.providerKind === "workshop";
-  // طلبات القطع تبقى مفتوحة حتى القبول أو الإلغاء.
-  if (isParts) return { ok: true, skipped: true };
+  const isOil =
+    job.serviceId === "oil" || job.providerKind === "oilWorkshop";
+  // طلبات القطع والزيوت تبقى مفتوحة حتى القبول أو الإلغاء.
+  if (isParts || isOil) return { ok: true, skipped: true };
   if (isEmergencyJob(job)) {
     await maybeRedispatchInternal(jobId);
     return { ok: true };
@@ -492,8 +509,10 @@ exports.onQuoteWindow = onDocumentUpdated(
     if (!after || after.status !== "offerPending" || isEmergencyJob(after)) return;
     const isParts =
       after.serviceId === "parts" || after.providerKind === "workshop";
-    // طلبات القطع بلا نافذة زمنية.
-    if (isParts || !after.expiresAt) return;
+    const isOil =
+      after.serviceId === "oil" || after.providerKind === "oilWorkshop";
+    // طلبات القطع والزيوت بلا نافذة زمنية.
+    if (isParts || isOil || !after.expiresAt) return;
     if (before.status === "offerPending") return;
     const exp = after.expiresAt?.toDate?.() || new Date(Date.now() + QUOTE_SECONDS * 1000);
     const wait = exp.getTime() - Date.now() + 1000;

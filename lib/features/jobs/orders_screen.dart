@@ -382,7 +382,9 @@ class _FeaturedJob extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      job.serviceTitle ?? 'طلب خدمة',
+                      job.isOilOrder
+                          ? job.oilDisplayTitle
+                          : (job.serviceTitle ?? 'طلب خدمة'),
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 16,
@@ -512,7 +514,9 @@ class _OrderTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      job.serviceTitle ?? 'طلب خدمة',
+                      job.isOilOrder
+                          ? job.oilDisplayTitle
+                          : (job.serviceTitle ?? 'طلب خدمة'),
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 2),

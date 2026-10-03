@@ -126,6 +126,12 @@ class JobRepository {
     String providerKind = '',
     String specialtyId = '',
     String specialtyAr = '',
+    String oilTypeId = '',
+    String oilTypeName = '',
+    int cylinders = 0,
+    double liters = 0,
+    bool includeOilFilter = false,
+    String landmark = '',
     GeoPoint? dropoff,
     String dropoffLabel = '',
   }) async {
@@ -168,6 +174,12 @@ class JobRepository {
       providerKind: resolvedKind,
       specialtyId: specialtyId.trim(),
       specialtyAr: specialtyAr.trim(),
+      oilTypeId: oilTypeId.trim(),
+      oilTypeName: oilTypeName.trim(),
+      cylinders: cylinders,
+      liters: liters,
+      includeOilFilter: includeOilFilter,
+      landmark: landmark.trim(),
     );
     final batch = _db.batch();
     batch.set(ref, job.toCreateMap());
@@ -332,7 +344,8 @@ class JobRepository {
       return;
     }
 
-    final noExpiry = job.isPartsOrder;
+    // قطع الغيار وورش الزيوت: بلا نافذة زمنية — تبقى العروض حتى قبول العميل.
+    final noExpiry = job.isPartsOrder || job.isOilOrder;
     final seconds = job.isEmergency
         ? AppConstants.emergencyOfferSeconds
         : AppConstants.quoteWindowSeconds;
@@ -358,10 +371,18 @@ class JobRepository {
         'partName': job.partName,
         'carMake': job.carMake,
         'carModel': job.carModel,
+        'carYear': job.carYear,
         'providerKind': job.providerKind,
         'specialtyAr':
             t.specialtyAr.isNotEmpty ? t.specialtyAr : job.specialtyAr,
         if (job.partImageUrl.isNotEmpty) 'partImageUrl': job.partImageUrl,
+        if (job.partNote.isNotEmpty) 'partNote': job.partNote,
+        if (job.oilTypeId.isNotEmpty) 'oilTypeId': job.oilTypeId,
+        if (job.oilTypeName.isNotEmpty) 'oilTypeName': job.oilTypeName,
+        if (job.cylinders > 0) 'cylinders': job.cylinders,
+        if (job.liters > 0) 'liters': job.liters,
+        if (job.isOilOrder) 'includeOilFilter': job.includeOilFilter,
+        if (job.landmark.isNotEmpty) 'landmark': job.landmark,
         if (t.oilWorkshopTier.isNotEmpty)
           'oilWorkshopTier': t.oilWorkshopTier,
       });
@@ -558,23 +579,27 @@ class JobRepository {
     final warrantyDays = offer.warrantyDays;
     final warrantyNote = offer.warrantyNote;
     final jobSnap = await _jobs.doc(jobId).get();
-    final isParts = jobSnap.exists && Job.fromDoc(jobSnap).isPartsOrder;
+    final job = jobSnap.exists ? Job.fromDoc(jobSnap) : null;
+    final isParts = job?.isPartsOrder == true;
+    final isOil = job?.isOilOrder == true;
+    final directAssign = isParts || isOil;
     final price = offer.initialPrice;
     GeoPoint? exact;
     var deliveryAddress = '';
-    if (isParts) {
+    if (directAssign) {
       final loc = await _db.collection('jobLocations').doc(jobId).get();
       final data = loc.data();
       exact = data?['exact'] as GeoPoint?;
       deliveryAddress = (data?['label'] as String? ?? '').trim();
     }
-    // قطع الغيار: القبول يُسند الطلب مباشرة للورشة للتجهيز (بدون موافقة سعر أولي/نهائي).
+    // قطع الغيار والزيوت: قبول العميل يُسند الطلب مباشرة (بدون خطوة «قبول السعر»).
     await _jobs.doc(jobId).update({
       'technicianId': offer.technicianId,
-      'technicianName': offer.technicianName ?? 'فني',
+      'technicianName':
+          offer.technicianName ?? (isOil ? 'ورشة زيوت' : (isParts ? 'ورشة' : 'فني')),
       'initialPrice': price,
       if (isParts && price != null) 'finalPrice': price,
-      'status': isParts ? JobStatus.enRoute.name : JobStatus.quoted.name,
+      'status': directAssign ? JobStatus.enRoute.name : JobStatus.quoted.name,
       if (exact != null) 'exactLocation': exact,
       if (deliveryAddress.isNotEmpty) 'deliveryAddress': deliveryAddress,
       if (offer.partCondition.isNotEmpty) 'partCondition': offer.partCondition,
@@ -623,8 +648,8 @@ class JobRepository {
     if (!snap.exists) return;
     final job = Job.fromDoc(snap);
     if (job.status != JobStatus.offerPending) return;
-    // طلبات القطع تبقى مفتوحة حتى القبول أو الإلغاء — بلا نافذة زمنية.
-    if (job.isPartsOrder) return;
+    // طلبات القطع والزيوت تبقى مفتوحة حتى القبول أو الإلغاء — بلا نافذة زمنية.
+    if (job.isPartsOrder || job.isOilOrder) return;
     if (job.isEmergency) {
       await maybeRedispatch(jobId);
       return;

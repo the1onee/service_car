@@ -28,6 +28,14 @@ class JobOffer {
     this.oilWorkshopTier = '',
     this.specialtyAr = '',
     this.partImageUrl = '',
+    this.partNote = '',
+    this.carYear = '',
+    this.oilTypeId = '',
+    this.oilTypeName = '',
+    this.cylinders = 0,
+    this.liters = 0,
+    this.includeOilFilter = false,
+    this.landmark = '',
     this.createdAt,
   });
 
@@ -58,9 +66,43 @@ class JobOffer {
   final String oilWorkshopTier;
   final String specialtyAr;
   final String partImageUrl;
+  final String partNote;
+  final String carYear;
+  final String oilTypeId;
+  final String oilTypeName;
+  final int cylinders;
+  final double liters;
+  final bool includeOilFilter;
+  final String landmark;
 
   bool get isAgencyOilWorkshop => oilWorkshopTier == 'agency';
   bool get isTrustedOilWorkshop => oilWorkshopTier == 'trusted';
+
+  /// عروض بلا مهلة قصيرة (قطع / زيوت) — لا تُغلق بعد دقائق.
+  bool get isOpenEnded =>
+      expiresAt.difference(DateTime.now()).inHours >= 12;
+
+  bool get hasOilDetails =>
+      oilTypeName.isNotEmpty ||
+      partName.isNotEmpty ||
+      cylinders > 0 ||
+      liters > 0 ||
+      partNote.isNotEmpty;
+
+  String get oilDisplayTitle {
+    if (oilTypeName.trim().isNotEmpty) return oilTypeName.trim();
+    if (partName.trim().isNotEmpty) return partName.trim();
+    return serviceTitle ?? 'تبديل زيت';
+  }
+
+  String get carSummary {
+    final parts = <String>[
+      if (carMake.trim().isNotEmpty) carMake.trim(),
+      if (carModel.trim().isNotEmpty) carModel.trim(),
+      if (carYear.trim().isNotEmpty) carYear.trim(),
+    ];
+    return parts.join(' ');
+  }
 
   int remainingSeconds() {
     final s = expiresAt.difference(DateTime.now()).inSeconds;
@@ -99,6 +141,14 @@ class JobOffer {
       oilWorkshopTier: d['oilWorkshopTier'] as String? ?? '',
       specialtyAr: d['specialtyAr'] as String? ?? '',
       partImageUrl: d['partImageUrl'] as String? ?? '',
+      partNote: d['partNote'] as String? ?? '',
+      carYear: d['carYear'] as String? ?? '',
+      oilTypeId: d['oilTypeId'] as String? ?? '',
+      oilTypeName: d['oilTypeName'] as String? ?? '',
+      cylinders: (d['cylinders'] as num?)?.toInt() ?? 0,
+      liters: (d['liters'] as num?)?.toDouble() ?? 0,
+      includeOilFilter: d['includeOilFilter'] == true,
+      landmark: d['landmark'] as String? ?? '',
       createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
     );
   }
