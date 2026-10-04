@@ -19,9 +19,14 @@ class QuoteCompareList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final oil = job.isOilOrder;
-    final emptyLabel =
-        oil ? 'بانتظار عروض ورش الزيوت…' : 'بانتظار العروض';
-    final pickLabel = oil ? 'قبول الطلب' : 'قبول';
+    final wash = job.isWashOrder;
+    final tech = job.isTechnicianJob;
+    final emptyLabel = oil
+        ? 'بانتظار عروض ورش الزيوت…'
+        : wash
+            ? 'بانتظار عروض الغسيل…'
+            : (tech ? 'بانتظار عروض الفنيين…' : 'بانتظار العروض');
+    final pickLabel = (oil || wash || tech) ? 'قبول الطلب' : 'قبول';
 
     return StreamBuilder<List<JobOffer>>(
       stream: AppScope.of(context).jobs.watchJobQuotes(job.id),
@@ -57,7 +62,12 @@ class QuoteCompareList extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              q.technicianName ?? (oil ? 'ورشة زيوت' : 'فني'),
+                              q.technicianName ??
+                                  (oil
+                                      ? 'ورشة زيوت'
+                                      : wash
+                                          ? 'مغسل'
+                                          : 'فني'),
                               style:
                                   const TextStyle(fontWeight: FontWeight.w700),
                             ),

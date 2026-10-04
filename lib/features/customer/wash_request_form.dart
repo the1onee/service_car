@@ -14,43 +14,44 @@ import 'package:barrr/features/shared/osm_map.dart';
 import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/service_item.dart';
+import 'package:barrr/models/vehicle_type.dart';
 
-class _WashVehicleKind {
-  const _WashVehicleKind({
+class WashPackage {
+  const WashPackage({
     required this.id,
-    required this.label,
+    required this.nameAr,
     required this.icon,
   });
 
   final String id;
-  final String label;
+  final String nameAr;
   final IconData icon;
 }
 
-const _washVehicleKinds = <_WashVehicleKind>[
-  _WashVehicleKind(
-    id: 'sedan',
-    label: 'صالون',
-    icon: Icons.directions_car,
+const washPackages = <WashPackage>[
+  WashPackage(
+    id: 'exterior',
+    nameAr: 'غسيل خارجي',
+    icon: Icons.water_drop_outlined,
   ),
-  _WashVehicleKind(
-    id: 'suv',
-    label: 'جيب / SUV',
-    icon: Icons.directions_car_filled,
+  WashPackage(
+    id: 'interior',
+    nameAr: 'غسيل داخلي',
+    icon: Icons.airline_seat_recline_normal_outlined,
   ),
-  _WashVehicleKind(
-    id: 'van',
-    label: 'فان / باص',
-    icon: Icons.airport_shuttle,
+  WashPackage(
+    id: 'full',
+    nameAr: 'غسيل كامل',
+    icon: Icons.local_car_wash_outlined,
   ),
-  _WashVehicleKind(
-    id: 'other',
-    label: 'أخرى',
-    icon: Icons.more_horiz,
+  WashPackage(
+    id: 'polish',
+    nameAr: 'تلميع',
+    icon: Icons.auto_awesome_outlined,
   ),
 ];
 
-/// صفحة طلب غسيل سيارات متنقل.
+/// صفحة طلب غسيل سيارات متنقل — باقات وأنواع مركبات من الكتالوج.
 class WashRequestForm extends StatefulWidget {
   const WashRequestForm({
     super.key,
@@ -60,6 +61,7 @@ class WashRequestForm extends StatefulWidget {
     required this.addressLabel,
     required this.inZone,
     required this.services,
+    required this.vehicleTypes,
     required this.onBack,
     required this.onSubmitted,
   });
@@ -70,6 +72,7 @@ class WashRequestForm extends StatefulWidget {
   final String addressLabel;
   final bool inZone;
   final Stream<List<ServiceItem>> services;
+  final Stream<List<VehicleType>> vehicleTypes;
   final VoidCallback onBack;
   final VoidCallback onSubmitted;
 
@@ -79,18 +82,19 @@ class WashRequestForm extends StatefulWidget {
 
 class _WashRequestFormState extends State<WashRequestForm> {
   final _map = MapController();
-  final _vehicleName = TextEditingController();
-  final _otherKind = TextEditingController();
+  final _vehicle = TextEditingController();
+  final _year = TextEditingController();
+  final _note = TextEditingController();
   final _landmark = TextEditingController();
   final _phone = TextEditingController();
 
   late LatLng _pin;
   late String _addressLabel;
   var _inZone = true;
-
-  var _vehicleKind = _washVehicleKinds.first;
-  var _phoneEditing = false;
+  VehicleType? _vehicleType;
+  WashPackage _package = washPackages[2];
   var _submitting = false;
+  var _seededVehicle = false;
 
   @override
   void initState() {
@@ -103,12 +107,24 @@ class _WashRequestFormState extends State<WashRequestForm> {
 
   @override
   void dispose() {
-    _map.dispose();
-    _vehicleName.dispose();
-    _otherKind.dispose();
+    _vehicle.dispose();
+    _year.dispose();
+    _note.dispose();
     _landmark.dispose();
     _phone.dispose();
+    _map.dispose();
     super.dispose();
+  }
+
+  void _ensureVehicle(List<VehicleType> vehicles) {
+    if (_seededVehicle) return;
+    if (vehicles.isEmpty) return;
+    _seededVehicle = true;
+    final next = _vehicleType ?? vehicles.first;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _vehicleType != null) return;
+      setState(() => _vehicleType = next);
+    });
   }
 
   bool _pointInZone(LatLng p) {
@@ -174,9 +190,10 @@ class _WashRequestFormState extends State<WashRequestForm> {
       );
       return;
     }
-    if (_vehicleKind.id == 'other' && _otherKind.text.trim().isEmpty) {
+    final vehicleType = _vehicleType;
+    if (vehicleType == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('اكتب نوع أو فئة المركبة')),
+        const SnackBar(content: Text('اختر نوع المركبة')),
       );
       return;
     }
@@ -188,7 +205,7 @@ class _WashRequestFormState extends State<WashRequestForm> {
       return;
     }
 
-    final vehicleRaw = _vehicleName.text.trim();
+    final vehicleRaw = _vehicle.text.trim();
     var make = vehicleRaw;
     var model = '';
     final parts = vehicleRaw.split(RegExp(r'\s+'));
@@ -197,15 +214,8 @@ class _WashRequestFormState extends State<WashRequestForm> {
       model = parts.sublist(1).join(' ');
     }
 
-    final kindLabel = _vehicleKind.id == 'other'
-        ? _otherKind.text.trim()
-        : _vehicleKind.label;
     final landmark = _landmark.text.trim();
-    final note = [
-      'طلب غسيل متنقل',
-      'نوع الهيكل: $kindLabel',
-      if (landmark.isNotEmpty) 'علامة دالة: $landmark',
-    ].join('\n');
+    final note = _note.text.trim();
 
     setState(() => _submitting = true);
     try {
@@ -222,17 +232,21 @@ class _WashRequestFormState extends State<WashRequestForm> {
         customerId: widget.profile.id,
         serviceId: washService.id,
         serviceTitle: washService.titleAr,
-        vehicleTypeId: _vehicleKind.id,
-        vehicleTypeTitle: kindLabel,
+        vehicleTypeId: vehicleType.id,
+        vehicleTypeTitle: vehicleType.nameAr,
         exact: geo,
         isEmergency: false,
         commissionRate: washService.commissionRate,
-        partName: 'غسيل',
+        partName: _package.nameAr,
         partNote: note,
         carMake: make,
         carModel: model,
+        carYear: _year.text.trim(),
         customerPhone: phone,
         providerKind: washService.providerKind.firestoreValue,
+        landmark: landmark,
+        washPackageId: _package.id,
+        washPackageName: _package.nameAr,
       );
       var dispatchFailed = false;
       try {
@@ -273,125 +287,344 @@ class _WashRequestFormState extends State<WashRequestForm> {
             child: StreamBuilder<List<ServiceItem>>(
               stream: widget.services,
               builder: (context, serviceSnap) {
-                final raw = (serviceSnap.data == null ||
-                        serviceSnap.data!.isEmpty)
-                    ? seedServices
-                    : serviceSnap.data!;
-                final washService = _resolveWashService(raw);
+                return StreamBuilder<List<VehicleType>>(
+                  stream: widget.vehicleTypes,
+                  builder: (context, vehicleSnap) {
+                    final raw = (serviceSnap.data == null ||
+                            serviceSnap.data!.isEmpty)
+                        ? seedServices
+                        : serviceSnap.data!;
+                    final washService = _resolveWashService(raw);
+                    final vehicles = (vehicleSnap.data == null ||
+                            vehicleSnap.data!.isEmpty)
+                        ? seedVehicleTypes
+                        : vehicleSnap.data!;
+                    _ensureVehicle(vehicles);
 
-                return ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-                  children: [
-                    _SectionHeader(
-                      icon: Icons.directions_car,
-                      title: 'المركبة',
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
+                    return ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                       children: [
-                        for (var i = 0; i < _washVehicleKinds.length; i++) ...[
-                          if (i > 0) const SizedBox(width: 8),
-                          Expanded(
-                            child: _VehicleTile(
-                              kind: _washVehicleKinds[i],
-                              selected:
-                                  _vehicleKind.id == _washVehicleKinds[i].id,
-                              onTap: () => setState(
-                                () => _vehicleKind = _washVehicleKinds[i],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    if (_vehicleKind.id == 'other') ...[
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: _otherKind,
-                        style: const TextStyle(fontSize: 14),
-                        decoration: _fieldDecoration(
-                          hint: 'النوع',
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _vehicleName,
-                      style: const TextStyle(fontSize: 14),
-                      decoration: _fieldDecoration(
-                        hint: 'الموديل',
-                        icon: Icons.commute,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    _SectionHeader(
-                      icon: Icons.location_on,
-                      title: 'الموقع',
-                    ),
-                    const SizedBox(height: 10),
-                    _LocationCard(
-                      map: _map,
-                      pin: _pin,
-                      zone: widget.zone,
-                      addressLabel: _inZone ? _addressLabel : 'خارج التغطية',
-                      city: city,
-                      landmark: _landmark,
-                      onEdit: _pickLocation,
-                    ),
-                    const SizedBox(height: 18),
-                    _SectionHeader(
-                      icon: Icons.call,
-                      title: 'الهاتف',
-                    ),
-                    const SizedBox(height: 10),
-                    _PhoneCard(
-                      controller: _phone,
-                      editing: _phoneEditing,
-                      onToggleEdit: () =>
-                          setState(() => _phoneEditing = !_phoneEditing),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      height: 54,
-                      child: FilledButton(
-                        onPressed:
-                            _submitting ? null : () => _submit(washService),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.slate,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: _submitting
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.4,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                        _Card(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _stepHeader(1, 'المركبة'),
+                              const SizedBox(height: 10),
+                              const _Label('نوع المركبة'),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
                                 children: [
-                                  Flexible(
-                                    child: Text(
-                                      'إرسال الطلب لأقرب فني غسيل',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 14,
+                                  for (final t in vehicles)
+                                    FilterChip(
+                                      label: Text(
+                                        t.nameAr,
+                                        style: const TextStyle(
+                                          color: AppColors.ink,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      selected: _vehicleType?.id == t.id,
+                                      showCheckmark: true,
+                                      checkmarkColor: AppColors.ink,
+                                      backgroundColor: AppColors.recessed,
+                                      selectedColor: AppColors.amber,
+                                      onSelected: (_) =>
+                                          setState(() => _vehicleType = t),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        const _Label('الشركة والموديل'),
+                                        const SizedBox(height: 6),
+                                        _IconField(
+                                          controller: _vehicle,
+                                          icon: Icons.directions_car_outlined,
+                                          hint: 'تويوتا كامري',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        const _Label('سنة الصنع'),
+                                        const SizedBox(height: 6),
+                                        _IconField(
+                                          controller: _year,
+                                          icon: Icons.calendar_today_outlined,
+                                          hint: '2022',
+                                          keyboardType: TextInputType.number,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        _Card(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _stepHeader(2, 'باقة الغسيل'),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  for (final p in washPackages)
+                                    FilterChip(
+                                      avatar: Icon(
+                                        p.icon,
+                                        size: 18,
+                                        color: _package.id == p.id
+                                            ? AppColors.ink
+                                            : AppColors.inkSoft,
+                                      ),
+                                      label: Text(
+                                        p.nameAr,
+                                        style: const TextStyle(
+                                          color: AppColors.ink,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      selected: _package.id == p.id,
+                                      showCheckmark: false,
+                                      backgroundColor: AppColors.recessed,
+                                      selectedColor: AppColors.amber,
+                                      onSelected: (_) =>
+                                          setState(() => _package = p),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              const _Label('ملاحظة اختيارية'),
+                              const SizedBox(height: 6),
+                              TextField(
+                                controller: _note,
+                                maxLines: 3,
+                                style: const TextStyle(fontSize: 14),
+                                decoration: InputDecoration(
+                                  hintText: 'مثلاً: التركيز على الداخلية…',
+                                  hintStyle: const TextStyle(
+                                    color: AppColors.inkSoft,
+                                    fontSize: 12,
+                                  ),
+                                  filled: true,
+                                  fillColor: AppColors.recessed,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.all(12),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        _Card(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(child: _stepHeader(3, 'الموقع')),
+                                  TextButton.icon(
+                                    onPressed: _pickLocation,
+                                    icon: const Icon(Icons.edit_location_alt,
+                                        size: 16),
+                                    label: const Text('تعديل الدبوس'),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: AppColors.amberDeep,
+                                      textStyle: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ),
-                                  SizedBox(width: 8),
-                                  Icon(Icons.bolt, color: AppColors.amber),
                                 ],
                               ),
-                      ),
-                    ),
-                  ],
+                              const SizedBox(height: 8),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: SizedBox(
+                                  height: 140,
+                                  child: Stack(
+                                    children: [
+                                      OsmMap(
+                                        mapController: _map,
+                                        center: _pin,
+                                        zoom: 14,
+                                        showMyLocation: false,
+                                        interactive: false,
+                                        circles: [
+                                          if (widget.zone != null)
+                                            coverageCircle(
+                                              centerLat: widget.zone!.centerLat,
+                                              centerLng: widget.zone!.centerLng,
+                                              radiusKm: widget.zone!.radiusKm,
+                                            ),
+                                        ],
+                                      ),
+                                      const IgnorePointer(
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.location_on,
+                                            color: AppColors.amberDeep,
+                                            size: 38,
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        left: 0,
+                                        right: 0,
+                                        bottom: 0,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              begin: Alignment.topCenter,
+                                              end: Alignment.bottomCenter,
+                                              colors: [
+                                                Colors.transparent,
+                                                AppColors.slate
+                                                    .withValues(alpha: 0.85),
+                                              ],
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              const Icon(Icons.location_on,
+                                                  color: AppColors.amber,
+                                                  size: 18),
+                                              const SizedBox(width: 6),
+                                              Expanded(
+                                                child: Text(
+                                                  _inZone
+                                                      ? _addressLabel
+                                                      : 'خارج التغطية',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              const _Label('علامة دالة'),
+                              const SizedBox(height: 6),
+                              _IconField(
+                                controller: _landmark,
+                                icon: Icons.pin_drop_outlined,
+                                hint: 'بجانب المسجد / بوابة المجمع…',
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        _Card(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _stepHeader(4, 'الهاتف'),
+                              const SizedBox(height: 10),
+                              TextField(
+                                controller: _phone,
+                                keyboardType: TextInputType.phone,
+                                textDirection: TextDirection.ltr,
+                                textAlign: TextAlign.left,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.6,
+                                ),
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: AppColors.recessed,
+                                  prefixIcon: const Icon(Icons.call,
+                                      color: AppColors.amberDeep),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        SizedBox(
+                          height: 54,
+                          child: FilledButton(
+                            onPressed: _submitting || vehicles.isEmpty
+                                ? null
+                                : () => _submit(washService),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.slate,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: _submitting
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.4,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.local_car_wash,
+                                          color: AppColors.amber),
+                                      SizedBox(width: 8),
+                                      Flexible(
+                                        child: Text(
+                                          'إرسال الطلب لأقرب فني غسيل',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 );
               },
             ),
@@ -401,21 +634,34 @@ class _WashRequestFormState extends State<WashRequestForm> {
     );
   }
 
-  InputDecoration _fieldDecoration({required String hint, IconData? icon}) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: const TextStyle(color: AppColors.inkSoft, fontSize: 12),
-      filled: true,
-      fillColor: Colors.white,
-      prefixIcon: icon == null
-          ? null
-          : Icon(icon, size: 20, color: AppColors.inkSoft),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+  Widget _stepHeader(int step, String title) {
+    return Row(
+      children: [
+        Container(
+          width: 26,
+          height: 26,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            color: AppColors.slate,
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            '$step',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -454,25 +700,20 @@ class _TopBar extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.recessed,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              city,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.inkSoft,
-                              ),
-                            ),
-                          ),
-                        ],
+                      const Text(
+                        'طلب غسيل',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        city,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.inkSoft,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
@@ -487,314 +728,74 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.icon,
-    required this.title,
-  });
+class _Card extends StatelessWidget {
+  const _Card({required this.child});
 
-  final IconData icon;
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: AppColors.amberDeep),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _VehicleTile extends StatelessWidget {
-  const _VehicleTile({
-    required this.kind,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final _WashVehicleKind kind;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.slate : AppColors.recessed,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-          child: Column(
-            children: [
-              Icon(
-                kind.icon,
-                size: 22,
-                color: selected ? Colors.white : AppColors.ink,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                kind.label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  height: 1.15,
-                  color: selected ? Colors.white : AppColors.ink,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LocationCard extends StatelessWidget {
-  const _LocationCard({
-    required this.map,
-    required this.pin,
-    required this.zone,
-    required this.addressLabel,
-    required this.city,
-    required this.landmark,
-    required this.onEdit,
-  });
-
-  final MapController map;
-  final LatLng pin;
-  final CityZone? zone;
-  final String addressLabel;
-  final String city;
-  final TextEditingController landmark;
-  final VoidCallback onEdit;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: AppTheme.cardShadow(),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF4FF),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppColors.amber.withValues(alpha: 0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.near_me,
-                      size: 18, color: AppColors.amberDeep),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        city,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                        ),
-                      ),
-                      Text(
-                        addressLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.inkSoft,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                TextButton(
-                  onPressed: onEdit,
-                  style: TextButton.styleFrom(
-                    backgroundColor: AppColors.recessed,
-                    foregroundColor: AppColors.ink,
-                    visualDensity: VisualDensity.compact,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  ),
-                  child: const Text('تعديل',
-                      style:
-                          TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              height: 96,
-              child: Stack(
-                children: [
-                  OsmMap(
-                    mapController: map,
-                    center: pin,
-                    zoom: 14,
-                    showMyLocation: false,
-                    interactive: false,
-                    circles: [
-                      if (zone != null)
-                        coverageCircle(
-                          centerLat: zone!.centerLat,
-                          centerLng: zone!.centerLng,
-                          radiusKm: zone!.radiusKm,
-                        ),
-                    ],
-                  ),
-                  const IgnorePointer(
-                    child: Center(
-                      child: Icon(
-                        Icons.location_on,
-                        color: AppColors.amberDeep,
-                        size: 32,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: landmark,
-            style: const TextStyle(fontSize: 13),
-            decoration: InputDecoration(
-              hintText: 'علامة دالة',
-              hintStyle:
-                  const TextStyle(color: AppColors.inkSoft, fontSize: 12),
-              filled: true,
-              fillColor: const Color(0xFFEFF4FF),
-              prefixIcon: const Icon(Icons.signpost_outlined,
-                  size: 18, color: AppColors.inkSoft),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            ),
-          ),
-        ],
+      child: child,
+    );
+  }
+}
+
+class _Label extends StatelessWidget {
+  const _Label(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: AppColors.inkSoft,
       ),
     );
   }
 }
 
-class _PhoneCard extends StatelessWidget {
-  const _PhoneCard({
+class _IconField extends StatelessWidget {
+  const _IconField({
     required this.controller,
-    required this.editing,
-    required this.onToggleEdit,
+    required this.icon,
+    required this.hint,
+    this.keyboardType,
   });
 
   final TextEditingController controller;
-  final bool editing;
-  final VoidCallback onToggleEdit;
+  final IconData icon;
+  final String hint;
+  final TextInputType? keyboardType;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: AppTheme.cardShadow(),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.recessed,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.phone_iphone, size: 20),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: editing
-                ? TextField(
-                    controller: controller,
-                    autofocus: true,
-                    keyboardType: TextInputType.phone,
-                    textDirection: TextDirection.ltr,
-                    textAlign: TextAlign.left,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                      letterSpacing: 0.4,
-                    ),
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      border: InputBorder.none,
-                    ),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        controller.text.isEmpty
-                            ? 'أدخل رقم الاتصال'
-                            : controller.text,
-                        textDirection: TextDirection.ltr,
-                        textAlign: TextAlign.left,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-          TextButton(
-            onPressed: onToggleEdit,
-            style: TextButton.styleFrom(
-              backgroundColor: AppColors.recessed,
-              foregroundColor: AppColors.ink,
-              visualDensity: VisualDensity.compact,
-            ),
-            child: Text(
-              editing ? 'تم' : 'تغيير',
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-            ),
-          ),
-        ],
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      style: const TextStyle(fontSize: 14),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: AppColors.inkSoft, fontSize: 12),
+        filled: true,
+        fillColor: AppColors.recessed,
+        prefixIcon: Icon(icon, size: 18, color: AppColors.inkSoft),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       ),
     );
   }

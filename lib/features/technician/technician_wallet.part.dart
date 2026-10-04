@@ -77,17 +77,32 @@ class _WalletPageState extends State<_WalletPage> {
                         if (_filter == _LedgerFilter.movements) return true;
                         return entry.type != WalletEntryType.commission;
                       }).toList();
+                      final locked = me.isWalletLocked(min);
+                      final required = me.requiredTopUp(min);
                       return ListView(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                         children: [
                           _BalanceCard(
                             balance: me.walletBalance,
                             minBalance: min,
+                            locked: locked,
                             online: widget.online,
                             dutyHint: widget.dutyHint,
                             city: widget.city,
                             onToggle: widget.onToggle,
                           ),
+                          if (required > 0) ...[
+                            const SizedBox(height: 10),
+                            FieldCard(
+                              child: Text(
+                                'رصيد مطلوب للشحن: ${formatIqd(required)} لتفعيل استقبال الطلبات.',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF92400E),
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 12),
                           _WalletRechargePanel(technicianId: me.id),
                           const SizedBox(height: 12),
@@ -144,8 +159,10 @@ class _WalletPageState extends State<_WalletPage> {
                               ),
                               const SizedBox(height: 8),
                             ],
-                          const SizedBox(height: 4),
-                          _LowBalanceNote(minBalance: min),
+                          if (locked) ...[
+                            const SizedBox(height: 4),
+                            _LowBalanceNote(minBalance: min),
+                          ],
                         ],
                       );
                     },
@@ -164,6 +181,7 @@ class _BalanceCard extends StatelessWidget {
   const _BalanceCard({
     required this.balance,
     required this.minBalance,
+    required this.locked,
     required this.online,
     required this.onToggle,
     this.dutyHint,
@@ -172,6 +190,7 @@ class _BalanceCard extends StatelessWidget {
 
   final double balance;
   final double minBalance;
+  final bool locked;
   final bool online;
   final String? dutyHint;
   final String? city;
@@ -203,7 +222,7 @@ class _BalanceCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'رصيد حساب العمليات الميدانية',
+                            'رصيد محفظة الفني',
                             style: const TextStyle(
                               color: Color(0xFF7C839B),
                               fontSize: 13,
@@ -242,34 +261,47 @@ class _BalanceCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF6FFBBE),
-                        shape: BoxShape.circle,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: locked
+                          ? const Color(0xFFFFDAD6)
+                          : Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      locked ? 'مقفل' : 'نشط',
+                      style: TextStyle(
+                        color: locked
+                            ? const Color(0xFF93000A)
+                            : const Color(0xFF6FFBBE),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'الحد الأدنى: ${formatIqd(minBalance)}',
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      'الحد: ${formatIqd(minBalance)}',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -298,7 +330,9 @@ class _BalanceCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        online ? 'متصل ومتاح لاستقبال الطلبات' : 'غير متصل',
+                        online
+                            ? 'متصل — جاهز لاستقبال الطلبات'
+                            : 'غير متصل',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 13,
@@ -1126,7 +1160,7 @@ class _LowBalanceNote extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'تنبيه إيقاف البلاغات التلقائي',
+                  'تنبيه إيقاف استقبال الطلبات',
                   style: TextStyle(
                     color: AppColors.danger,
                     fontWeight: FontWeight.w700,
@@ -1135,7 +1169,7 @@ class _LowBalanceNote extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'إذا انخفض الرصيد عن ${formatIqd(minBalance)} سيتم تحويل حالتك تلقائياً إلى غير متصل حتى تعيد الشحن عبر كي كارد/سوبر كي وترفع الفاتورة للموافقة.',
+                  'إذا انخفض الرصيد عن ${formatIqd(minBalance)} تتحول حالتك تلقائياً إلى غير متصل حتى تعيد الشحن وترفع فاتورة التحويل للموافقة.',
                   style: const TextStyle(
                     color: Color(0xFF45464D),
                     fontSize: 12,
@@ -1172,31 +1206,6 @@ class _IconBox extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Icon(icon, size: 18, color: foreground),
-    );
-  }
-}
-
-class _Stat extends StatelessWidget {
-  const _Stat({required this.title, required this.value});
-
-  final String title;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return FieldCard(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(value,
-              style:
-                  const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-          const SizedBox(height: 4),
-          Text(title,
-              style: const TextStyle(color: AppColors.inkSoft, fontSize: 11)),
-        ],
-      ),
     );
   }
 }

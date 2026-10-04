@@ -243,6 +243,7 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
         carYear: _year.text.trim(),
         customerPhone: phone,
         providerKind: service.providerKind.firestoreValue,
+        landmark: landmark,
       );
       var dispatchFailed = false;
       try {

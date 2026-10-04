@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -13,6 +14,7 @@ import 'package:barrr/core/theme.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/jobs/orders_screen.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
+import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/shared/osm_map.dart';
 import 'package:barrr/features/technician/offer_overlay.dart';
@@ -26,6 +28,7 @@ import 'package:barrr/models/vehicle_type.dart';
 import 'package:barrr/models/wallet_entry.dart';
 import 'package:barrr/models/wallet_top_up.dart';
 import 'package:barrr/services/fcm_service.dart';
+import 'package:barrr/services/profile_photo_upload.dart';
 import 'package:barrr/services/user_repository.dart';
 import 'package:barrr/services/wallet_top_up_upload.dart';
 
@@ -85,7 +88,9 @@ class _TechnicianHomeState extends State<TechnicianHome> {
     });
     _offersSub = scope.jobs.watchPendingOffers(uid).listen((offers) {
       if (!mounted) return;
-      final live = offers.where((o) => o.remainingSeconds() > 0).toList();
+      final live = offers
+          .where((o) => o.isOpenEnded || o.remainingSeconds() > 0)
+          .toList();
       if (_incoming == null && live.isNotEmpty && _activeJob == null) {
         setState(() {
           _incoming = live.first;
@@ -301,7 +306,12 @@ class _TechnicianHomeState extends State<TechnicianHome> {
     return StreamBuilder<AppUser?>(
       stream: userStream,
       builder: (context, snap) {
-        return _AccountPage(me: snap.data ?? widget.profile);
+        return _AccountPage(
+          me: snap.data ?? widget.profile,
+          city: _zone?.nameAr,
+          onOpenOrders: () => setState(() => _tab = 1),
+          onOpenWallet: () => setState(() => _tab = 2),
+        );
       },
     );
   }
@@ -388,6 +398,7 @@ class _TechnicianMapTab extends StatelessWidget {
                               right: 0,
                               child: FieldTopBar(
                                 city: zone?.nameAr,
+                                caption: 'الفني',
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -427,8 +438,8 @@ class _TechnicianMapTab extends StatelessWidget {
                                             children: [
                                               Text(
                                                 online
-                                                    ? AppStrings.online
-                                                    : AppStrings.offline,
+                                                    ? 'متصل — بانتظار طلبات الخدمة'
+                                                    : 'غير متصل',
                                                 style: const TextStyle(
                                                     fontWeight:
                                                         FontWeight.w700),

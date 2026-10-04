@@ -3,9 +3,11 @@ import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/features/customer/wash_job_details.dart';
 import 'package:barrr/features/jobs/rating_sheet.dart';
 import 'package:barrr/features/oil_workshop/oil_job_details.dart';
 import 'package:barrr/features/shared/field_ui.dart';
+import 'package:barrr/features/technician/tech_job_details.dart';
 import 'package:barrr/features/warranty/warranty_form.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
@@ -69,6 +71,7 @@ class _TechJobPanelState extends State<TechJobPanel> {
   Widget build(BuildContext context) {
     final job = widget.job;
     final oil = job.isOilOrder;
+    final wash = job.isWashOrder;
     return Material(
       color: AppColors.surface,
       elevation: 16,
@@ -81,34 +84,47 @@ class _TechJobPanelState extends State<TechJobPanel> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(_title(job.status, oil),
+              Text(_title(job.status, oil: oil, wash: wash),
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
               Text(
-                oil ? job.oilDisplayTitle : (job.serviceTitle ?? ''),
+                wash
+                    ? job.washDisplayTitle
+                    : (oil ? job.oilDisplayTitle : (job.serviceTitle ?? '')),
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
-                  color: oil ? AppColors.amberDeep : AppColors.ink,
+                  color: (oil || wash) ? AppColors.amberDeep : AppColors.ink,
                 ),
               ),
-              if (!oil &&
-                  job.vehicleTypeTitle != null &&
-                  job.vehicleTypeTitle!.trim().isNotEmpty)
-                Text('نوع السيارة: ${job.vehicleTypeTitle}'),
-              if (oil) ...[
-                const SizedBox(height: 10),
+              const SizedBox(height: 10),
+              if (wash)
+                WashJobDetailsCard.fromJob(
+                  job,
+                  compact: true,
+                  showPhone: job.locationRevealed &&
+                      job.customerPhone.trim().isNotEmpty,
+                )
+              else if (oil)
                 OilJobDetailsCard.fromJob(
                   job,
                   compact: true,
                   showPhone: job.locationRevealed &&
                       job.customerPhone.trim().isNotEmpty,
+                )
+              else
+                TechJobDetailsCard.fromJob(
+                  job,
+                  compact: true,
+                  showPhone: job.locationRevealed &&
+                      job.customerPhone.trim().isNotEmpty,
                 ),
-              ],
               if (job.status == JobStatus.quoted)
                 Text(
                   oil
                       ? 'بانتظار قبول العميل لعرض السعر. موقع الزيارة مخفي.'
-                      : 'بانتظار قبول العميل للسعر المبدئي. الموقع الحقيقي مخفي.',
+                      : wash
+                          ? 'بانتظار قبول العميل لعرض الغسيل. الموقع الحقيقي مخفي.'
+                          : 'بانتظار قبول العميل للسعر. الموقع الحقيقي مخفي.',
                 ),
               if (job.locationRevealed) ...[
                 const SizedBox(height: 8),
@@ -134,28 +150,32 @@ class _TechJobPanelState extends State<TechJobPanel> {
     );
   }
 
-  String _title(JobStatus s, bool oil) {
+  String _title(JobStatus s, {required bool oil, required bool wash}) {
     switch (s) {
       case JobStatus.quoted:
-        return oil
+        return oil || wash
             ? 'تم قبول عرضك — انتظر موافقة العميل'
             : 'تم قبولك — انتظر موافقة العميل';
       case JobStatus.enRoute:
-        return oil ? 'ورشة الزيوت في الطريق' : 'توجه إلى العميل';
+        if (oil) return 'ورشة الزيوت في الطريق';
+        if (wash) return 'مغسل في الطريق';
+        return 'توجه إلى العميل';
       case JobStatus.arrived:
-        return oil
-            ? 'وصلت للموقع — حدّد السعر النهائي'
-            : 'افحص السيارة وحدد السعر النهائي';
+        if (oil) return 'وصلت للموقع — حدّد السعر النهائي';
+        if (wash) return 'وصلت — جهّز الغسيل والسعر النهائي';
+        return 'افحص السيارة وحدد السعر النهائي';
       case JobStatus.finalQuote:
         return 'بانتظار موافقة العميل على السعر النهائي';
       case JobStatus.inProgress:
-        return oil
-            ? 'أكمل تبديل الزيت ثم أكّد استلام المبلغ'
-            : 'يمكنك إنهاء المهمة بعد العمل';
+        if (oil) return 'أكمل تبديل الزيت ثم أكّد استلام المبلغ';
+        if (wash) return 'أكمل الغسيل ثم أكّد استلام المبلغ';
+        return 'يمكنك إنهاء المهمة بعد العمل';
       case JobStatus.completed:
         return 'قيّم العميل';
       default:
-        return oil ? 'طلب زيت جارٍ' : 'مهمة جارية';
+        if (oil) return 'طلب زيت جارٍ';
+        if (wash) return 'طلب غسيل جارٍ';
+        return 'مهمة جارية';
     }
   }
 
@@ -203,7 +223,9 @@ class _TechJobPanelState extends State<TechJobPanel> {
           FilledButton(
             onPressed: () => jobs.markArrived(job.id),
             child: Text(
-              job.isOilOrder ? 'وصلت لموقع العميل' : AppStrings.arrived,
+              job.isOilOrder || job.isWashOrder
+                  ? 'وصلت لموقع العميل'
+                  : AppStrings.arrived,
             ),
           ),
         ];
@@ -257,7 +279,9 @@ class _TechJobPanelState extends State<TechJobPanel> {
             child: Text(
               job.isOilOrder
                   ? 'إرسال السعر النهائي لتبديل الزيت'
-                  : 'إرسال السعر النهائي',
+                  : job.isWashOrder
+                      ? 'إرسال السعر النهائي للغسيل'
+                      : 'إرسال السعر النهائي',
             ),
           ),
         ];
@@ -267,7 +291,9 @@ class _TechJobPanelState extends State<TechJobPanel> {
           Text(
             job.isOilOrder
                 ? 'بعد إكمال تبديل الزيت أكّد المبلغ المستلم نقداً.'
-                : AppStrings.cashNote,
+                : job.isWashOrder
+                    ? 'بعد إكمال الغسيل أكّد المبلغ المستلم نقداً.'
+                    : AppStrings.cashNote,
           ),
           const SizedBox(height: 8),
           if (job.billAmount > 0)
@@ -329,7 +355,9 @@ class _TechJobPanelState extends State<TechJobPanel> {
                   ? 'جارٍ الإنهاء…'
                   : (job.isOilOrder
                       ? 'تأكيد استلام المبلغ وإكمال تبديل الزيت'
-                      : AppStrings.endJob),
+                      : job.isWashOrder
+                          ? 'تأكيد استلام المبلغ وإكمال الغسيل'
+                          : AppStrings.endJob),
             ),
           ),
         ];

@@ -1,9 +1,9 @@
-# نشر دالة إشعارات الأدمن فقط — شغّله بعد تفعيل خطة Blaze
+# نشر دوال الإشعارات عبر Firebase (FCM من Cloud Functions)
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot\..
 
-Write-Host "Deploying onAdminNotificationCreated to car-services-iraq..."
-npx -y firebase-tools@latest deploy --only functions:onAdminNotificationCreated --project car-services-iraq
+Write-Host "Deploying notification functions to car-services-iraq..."
+npx -y firebase-tools@latest deploy --only functions:onAdminNotificationCreated,functions:onJobStatus --project car-services-iraq
 
 if ($LASTEXITCODE -ne 0) {
   Write-Host ""
@@ -13,4 +13,4 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host ""
-Write-Host "تم. جرّب إرسال إشعار من لوحة الإدارة."
+Write-Host "تم. الإرسال من لوحة الإدارة يمر عبر Firestore → Cloud Functions → FCM."

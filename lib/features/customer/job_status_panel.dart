@@ -4,6 +4,7 @@ import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/customer/parts_offers_section.dart';
 import 'package:barrr/features/customer/quote_compare_list.dart';
+import 'package:barrr/features/customer/wash_job_details.dart';
 import 'package:barrr/features/jobs/rating_sheet.dart';
 import 'package:barrr/features/oil_workshop/oil_job_details.dart';
 import 'package:barrr/features/shared/field_ui.dart';
@@ -48,18 +49,24 @@ class CustomerJobPanel extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 4),
               Text(
-                job.isOilOrder
-                    ? job.oilDisplayTitle
-                    : (job.serviceTitle ?? job.serviceId),
+                job.isWashOrder
+                    ? job.washDisplayTitle
+                    : job.isOilOrder
+                        ? job.oilDisplayTitle
+                        : (job.serviceTitle ?? job.serviceId),
                 style: TextStyle(
-                  color: job.isOilOrder
+                  color: (job.isOilOrder || job.isWashOrder)
                       ? AppColors.amberDeep
                       : AppColors.inkSoft,
-                  fontWeight:
-                      job.isOilOrder ? FontWeight.w700 : FontWeight.w400,
+                  fontWeight: (job.isOilOrder || job.isWashOrder)
+                      ? FontWeight.w700
+                      : FontWeight.w400,
                 ),
               ),
-              if (job.isOilOrder) ...[
+              if (job.isWashOrder) ...[
+                const SizedBox(height: 10),
+                WashJobDetailsCard.fromJob(job, compact: true, showPhone: true),
+              ] else if (job.isOilOrder) ...[
                 const SizedBox(height: 10),
                 OilJobDetailsCard.fromJob(job, compact: true, showPhone: true),
               ] else if (job.vehicleTypeTitle != null &&
@@ -100,25 +107,30 @@ class CustomerJobPanel extends StatelessWidget {
   String _title(JobStatus s) {
     final parts = job.isPartsOrder;
     final oil = job.isOilOrder;
+    final wash = job.isWashOrder;
     switch (s) {
       case JobStatus.dispatching:
       case JobStatus.offerPending:
+        if (wash) return 'بانتظار عروض الغسيل';
         return job.isEmergency
             ? AppStrings.searching
             : AppStrings.collectingQuotes;
       case JobStatus.comparing:
-        return AppStrings.compareQuotes;
+        return wash ? 'بانتظار عروض الغسيل' : AppStrings.compareQuotes;
       case JobStatus.quoted:
         if (parts) return 'الورشة تجهّز طلبك';
         if (oil) return 'ورشة الزيوت قبلت الطلب';
+        if (wash) return 'مغسل قبل الطلب';
         return 'فني قبل الطلب';
       case JobStatus.enRoute:
         if (parts) return 'الورشة تجهّز القطعة';
         if (oil) return 'ورشة الزيوت في الطريق إليك';
+        if (wash) return 'مغسل في الطريق';
         return 'الفني في الطريق إليك';
       case JobStatus.arrived:
         if (parts) return 'الورشة بصدد الإرسال';
         if (oil) return 'ورشة الزيوت وصلت — جاري التبديل';
+        if (wash) return 'المغسل وصل — جاري الغسيل';
         return 'الفني وصل — جاري الفحص';
       case JobStatus.finalQuote:
         if (parts) return 'القطعة في الطريق إليك';
@@ -126,14 +138,17 @@ class CustomerJobPanel extends StatelessWidget {
       case JobStatus.inProgress:
         if (parts) return 'القطعة في الطريق — أكّد الاستلام';
         if (oil) return 'جاري تبديل الزيت';
+        if (wash) return 'جاري الغسيل';
         return 'جاري العمل';
       case JobStatus.completed:
         if (parts) return 'تم استلام القطعة';
         if (oil) return 'تم تبديل الزيت';
+        if (wash) return 'تم الغسيل';
         return 'انتهت المهمة';
       case JobStatus.noTechnician:
         if (parts) return 'لم تُعثر على ورشة';
         if (oil) return 'لم تُعثر على ورشة زيوت';
+        if (wash) return 'لم يُعثر على مغسل';
         return 'لم يُعثر على فني';
       case JobStatus.cancelled:
         return 'تم إلغاء الطلب';
@@ -219,6 +234,26 @@ class CustomerJobPanel extends StatelessWidget {
             QuoteCompareList(job: job, selectable: true),
           ];
         }
+        if (job.isWashOrder) {
+          return [
+            const Text(
+              'اختر عرض الغسيل عندما يصل — بدون مهلة زمنية.',
+              style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            QuoteCompareList(job: job, selectable: true),
+          ];
+        }
+        if (job.isTechnicianJob) {
+          return [
+            const Text(
+              'اختر عرض الفني عندما يصل — بدون مهلة زمنية.',
+              style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            QuoteCompareList(job: job, selectable: true),
+          ];
+        }
         return [
           const LinearProgressIndicator(),
           const SizedBox(height: 12),
@@ -247,7 +282,9 @@ class CustomerJobPanel extends StatelessWidget {
           FilledButton(
             onPressed: () => jobs.customerAcceptQuote(job.id),
             child: Text(
-              job.isOilOrder ? 'قبول الطلب وبدء التوجه' : 'قبول السعر',
+              job.isOilOrder || job.isWashOrder
+                  ? 'قبول الطلب وبدء التوجه'
+                  : 'قبول السعر',
             ),
           ),
         ];
@@ -259,7 +296,9 @@ class CustomerJobPanel extends StatelessWidget {
           _liveCard(
             job.isOilOrder
                 ? 'ورشة الزيوت في الطريق'
-                : 'الفني في الطريق',
+                : job.isWashOrder
+                    ? 'مغسل في الطريق'
+                    : 'الفني في الطريق',
           ),
           const SizedBox(height: 10),
           _techLine(),
@@ -271,7 +310,13 @@ class CustomerJobPanel extends StatelessWidget {
           return _partsPreparing(jobs);
         }
         return [
-          _liveCard(job.isOilOrder ? 'جاري تبديل الزيت' : 'جاري الفحص'),
+          _liveCard(
+            job.isOilOrder
+                ? 'جاري تبديل الزيت'
+                : job.isWashOrder
+                    ? 'جاري الغسيل'
+                    : 'جاري الفحص',
+          ),
           const SizedBox(height: 10),
           _techLine(),
         ];
@@ -319,7 +364,13 @@ class CustomerJobPanel extends StatelessWidget {
           return _partsReceive(context, jobs);
         }
         return [
-          _liveCard('العمل جارٍ'),
+          _liveCard(
+            job.isOilOrder
+                ? 'جاري تبديل الزيت'
+                : job.isWashOrder
+                    ? 'جاري الغسيل'
+                    : 'العمل جارٍ',
+          ),
           if (job.warranty.enabled) ...[
             const SizedBox(height: 10),
             StatusPill(
@@ -346,7 +397,9 @@ class CustomerJobPanel extends StatelessWidget {
                   context,
                   title: job.isOilOrder
                       ? 'قيّم ورشة الزيوت'
-                      : (job.isPartsOrder ? 'قيّم الورشة' : 'قيّم الفني'),
+                      : job.isWashOrder
+                          ? 'قيّم المغسل'
+                          : (job.isPartsOrder ? 'قيّم الورشة' : 'قيّم الفني'),
                 );
                 if (stars == null || !context.mounted) return;
                 await jobs.rateAsCustomer(job.id, stars);
@@ -358,16 +411,20 @@ class CustomerJobPanel extends StatelessWidget {
               child: Text(
                 job.isOilOrder
                     ? 'تقييم ورشة الزيوت'
-                    : (job.isPartsOrder ? 'تقييم الورشة' : 'تقييم الفني'),
+                    : job.isWashOrder
+                        ? 'تقييم المغسل'
+                        : (job.isPartsOrder ? 'تقييم الورشة' : 'تقييم الفني'),
               ),
             )
           else
             Text(
               job.isOilOrder
                   ? 'تم إرسال تقييمك لورشة الزيوت.'
-                  : (job.isPartsOrder
-                      ? 'تم إرسال تقييمك للورشة.'
-                      : 'تم إرسال تقييمك للفني.'),
+                  : job.isWashOrder
+                      ? 'تم إرسال تقييمك للمغسل.'
+                      : (job.isPartsOrder
+                          ? 'تم إرسال تقييمك للورشة.'
+                          : 'تم إرسال تقييمك للفني.'),
             ),
         ];
       case JobStatus.noTechnician:
@@ -375,9 +432,11 @@ class CustomerJobPanel extends StatelessWidget {
           Text(
             job.isOilOrder
                 ? 'لم تتوفر ورشة زيوت الآن. حاول مرة أخرى.'
-                : (job.isPartsOrder
-                    ? 'لم تتوفر ورشة الآن. حاول مرة أخرى.'
-                    : 'لم يتوفر فني الآن. حاول مرة أخرى.'),
+                : job.isWashOrder
+                    ? 'لم يتوفر مغسل الآن. حاول مرة أخرى.'
+                    : (job.isPartsOrder
+                        ? 'لم تتوفر ورشة الآن. حاول مرة أخرى.'
+                        : 'لم يتوفر فني الآن. حاول مرة أخرى.'),
           ),
           const SizedBox(height: 12),
           FilledButton(
@@ -446,7 +505,11 @@ class CustomerJobPanel extends StatelessWidget {
     final name = job.technicianName ??
         (job.isPartsOrder
             ? 'ورشة'
-            : (job.isOilOrder ? 'ورشة زيوت' : 'فني'));
+            : job.isOilOrder
+                ? 'ورشة زيوت'
+                : job.isWashOrder
+                    ? 'مغسل'
+                    : 'فني');
     return FieldCard(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       child: Row(

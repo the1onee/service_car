@@ -4,6 +4,7 @@ import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/customer/parts_offers_section.dart';
 import 'package:barrr/features/customer/quote_compare_list.dart';
+import 'package:barrr/features/customer/wash_job_details.dart';
 import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/jobs/rating_sheet.dart';
 import 'package:barrr/features/oil_workshop/oil_job_details.dart';
@@ -102,6 +103,7 @@ class _BodyState extends State<_Body> {
   Widget build(BuildContext context) {
     final parts = job.isPartsOrder;
     final oil = job.isOilOrder;
+    final wash = job.isWashOrder;
     final colors = jobStatusColors(job.status, isParts: parts);
     final price = job.receivedAmount ?? job.finalPrice ?? job.initialPrice;
     final customer = !profile.isTechnician &&
@@ -140,9 +142,11 @@ class _BodyState extends State<_Body> {
                   children: [
                     Expanded(
                       child: Text(
-                        oil
-                            ? job.oilDisplayTitle
-                            : (job.serviceTitle ?? 'طلب خدمة'),
+                        wash
+                            ? job.washDisplayTitle
+                            : oil
+                                ? job.oilDisplayTitle
+                                : (job.serviceTitle ?? 'طلب خدمة'),
                         style: const TextStyle(
                             fontWeight: FontWeight.w700, fontSize: 18),
                       ),
@@ -177,7 +181,15 @@ class _BodyState extends State<_Body> {
               ],
             ),
           ),
-          if (oil) ...[
+          if (wash) ...[
+            const SizedBox(height: 12),
+            WashJobDetailsCard.fromJob(
+              job,
+              showPhone: (customer || profile.isTechnician) &&
+                  job.customerPhone.trim().isNotEmpty &&
+                  (job.locationRevealed || customer),
+            ),
+          ] else if (oil) ...[
             const SizedBox(height: 12),
             OilJobDetailsCard.fromJob(
               job,
@@ -240,13 +252,21 @@ class _BodyState extends State<_Body> {
                           job.technicianName ??
                               (parts
                                   ? 'ورشة'
-                                  : (oil ? 'ورشة زيوت' : 'فني')),
+                                  : oil
+                                      ? 'ورشة زيوت'
+                                      : wash
+                                          ? 'مغسل'
+                                          : 'فني'),
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                         Text(
                           parts
                               ? 'الورشة المعيّنة'
-                              : (oil ? 'ورشة الزيوت المعيّنة' : 'الفني المعيّن'),
+                              : oil
+                                  ? 'ورشة الزيوت المعيّنة'
+                                  : wash
+                                      ? 'المغسل المعيّن'
+                                      : 'الفني المعيّن',
                           style: const TextStyle(
                               color: AppColors.inkSoft, fontSize: 12),
                         ),
@@ -275,7 +295,7 @@ class _BodyState extends State<_Body> {
             ),
           ],
           if (customer &&
-              oil &&
+              (oil || job.isTechnicianJob) &&
               (job.status == JobStatus.offerPending ||
                   job.status == JobStatus.comparing)) ...[
             const SizedBox(height: 12),
@@ -283,9 +303,14 @@ class _BodyState extends State<_Body> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    'عروض ورش الزيوت',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  Text(
+                    oil
+                        ? 'عروض ورش الزيوت'
+                        : wash
+                            ? 'عروض الغسيل'
+                            : 'عروض الفنيين',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 16),
                   ),
                   const SizedBox(height: 10),
                   QuoteCompareList(job: job, selectable: true),
@@ -293,7 +318,9 @@ class _BodyState extends State<_Body> {
               ),
             ),
           ],
-          if (customer && oil && job.status == JobStatus.quoted) ...[
+          if (customer &&
+              (oil || job.isTechnicianJob) &&
+              job.status == JobStatus.quoted) ...[
             const SizedBox(height: 12),
             FieldCard(
               child: Column(
@@ -438,7 +465,15 @@ class _BodyState extends State<_Body> {
             const SizedBox(height: 16),
             FilledButton(
               onPressed: () => _rate(context),
-              child: Text(parts ? 'تقييم الورشة' : 'تقييم الفني'),
+              child: Text(
+                parts
+                    ? 'تقييم الورشة'
+                    : oil
+                        ? 'تقييم ورشة الزيوت'
+                        : wash
+                            ? 'تقييم المغسل'
+                            : 'تقييم الفني',
+              ),
             ),
           ],
           if (job.ratings.customerToTech != null) ...[
@@ -530,7 +565,13 @@ class _BodyState extends State<_Body> {
     final users = AppScope.of(context).users;
     final stars = await showRatingSheet(
       context,
-      title: job.isPartsOrder ? 'قيّم الورشة' : 'قيّم الفني',
+      title: job.isPartsOrder
+          ? 'قيّم الورشة'
+          : job.isOilOrder
+              ? 'قيّم ورشة الزيوت'
+              : job.isWashOrder
+                  ? 'قيّم المغسل'
+                  : 'قيّم الفني',
     );
     if (stars == null || !context.mounted) return;
     await jobs.rateAsCustomer(job.id, stars);

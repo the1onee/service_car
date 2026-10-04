@@ -36,6 +36,8 @@ class JobOffer {
     this.liters = 0,
     this.includeOilFilter = false,
     this.landmark = '',
+    this.washPackageId = '',
+    this.washPackageName = '',
     this.createdAt,
   });
 
@@ -74,6 +76,8 @@ class JobOffer {
   final double liters;
   final bool includeOilFilter;
   final String landmark;
+  final String washPackageId;
+  final String washPackageName;
 
   bool get isAgencyOilWorkshop => oilWorkshopTier == 'agency';
   bool get isTrustedOilWorkshop => oilWorkshopTier == 'trusted';
@@ -84,10 +88,19 @@ class JobOffer {
 
   bool get hasOilDetails =>
       oilTypeName.isNotEmpty ||
-      partName.isNotEmpty ||
+      oilTypeId.isNotEmpty ||
       cylinders > 0 ||
-      liters > 0 ||
-      partNote.isNotEmpty;
+      liters > 0;
+
+  bool get hasWashDetails =>
+      washPackageName.isNotEmpty ||
+      washPackageId.isNotEmpty;
+
+  String get washDisplayTitle {
+    if (washPackageName.trim().isNotEmpty) return washPackageName.trim();
+    if (partName.trim().isNotEmpty) return partName.trim();
+    return serviceTitle ?? 'غسيل سيارات';
+  }
 
   String get oilDisplayTitle {
     if (oilTypeName.trim().isNotEmpty) return oilTypeName.trim();
@@ -149,6 +162,8 @@ class JobOffer {
       liters: (d['liters'] as num?)?.toDouble() ?? 0,
       includeOilFilter: d['includeOilFilter'] == true,
       landmark: d['landmark'] as String? ?? '',
+      washPackageId: d['washPackageId'] as String? ?? '',
+      washPackageName: d['washPackageName'] as String? ?? '',
       createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
     );
   }

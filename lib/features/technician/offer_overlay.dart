@@ -4,7 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
+import 'package:barrr/core/theme.dart';
+import 'package:barrr/features/customer/wash_job_details.dart';
 import 'package:barrr/features/oil_workshop/oil_job_details.dart';
+import 'package:barrr/features/shared/field_ui.dart';
+import 'package:barrr/features/technician/tech_job_details.dart';
 import 'package:barrr/models/job_offer.dart';
 
 class OfferOverlay extends StatefulWidget {
@@ -29,11 +33,14 @@ class _OfferOverlayState extends State<OfferOverlay> {
   final _price = TextEditingController();
   bool _busy = false;
   String? _error;
+  late final bool _openEnded;
 
   @override
   void initState() {
     super.initState();
+    _openEnded = widget.offer.isOpenEnded;
     _left = widget.offer.remainingSeconds();
+    if (_openEnded) return;
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       final n = widget.offer.remainingSeconds();
       if (n <= 0) {
@@ -55,26 +62,27 @@ class _OfferOverlayState extends State<OfferOverlay> {
     final parsed = double.tryParse(_price.text.replaceAll(',', '').trim());
     final amountError = AppConstants.serviceAmountError(parsed);
     if (amountError != null || parsed == null) {
-      setState(() => _error = amountError ?? 'أدخل مبلغاً ينتهي بـ 000، والحد الأدنى 3000');
+      setState(() => _error =
+          amountError ?? 'أدخل مبلغاً ينتهي بـ 000، والحد الأدنى 3000');
       return;
     }
-    final value = parsed;
     setState(() {
       _busy = true;
       _error = null;
     });
-    final scope = AppScope.of(context);
-    final ok = await scope.dispatch.acceptOffer(
-      offerId: widget.offer.id,
-      technicianId: widget.offer.technicianId,
-      technicianName: widget.technicianName,
-      initialPrice: value,
-    );
+    final ok = await AppScope.of(context).dispatch.acceptOffer(
+          offerId: widget.offer.id,
+          technicianId: widget.offer.technicianId,
+          technicianName: widget.technicianName,
+          initialPrice: parsed,
+        );
     if (!mounted) return;
     if (!ok) {
       setState(() {
         _busy = false;
-        _error = 'فاتك الطلب أو انتهت المهلة.';
+        _error = _openEnded
+            ? 'تعذر إرسال العرض. قد يكون العميل قبل عرضاً آخر.'
+            : 'فاتك الطلب أو انتهت المهلة.';
       });
       widget.onDone();
       return;
@@ -84,73 +92,128 @@ class _OfferOverlayState extends State<OfferOverlay> {
 
   @override
   Widget build(BuildContext context) {
+    final offer = widget.offer;
+    final wash = offer.hasWashDetails;
+    final oil = !wash && offer.hasOilDetails;
     return Material(
       color: Colors.black54,
       child: Center(
-        child: Card(
-          margin: const EdgeInsets.all(24),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  widget.offer.hasOilDetails ? 'طلب تبديل زيت' : 'طلب جديد',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 8),
-                if (widget.offer.hasOilDetails) ...[
-                  OilJobDetailsCard.fromOffer(widget.offer, compact: true),
-                ] else ...[
-                  Text(widget.offer.serviceTitle ?? 'خدمة'),
-                  if (widget.offer.vehicleTypeTitle != null &&
-                      widget.offer.vehicleTypeTitle!.trim().isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text('نوع السيارة: ${widget.offer.vehicleTypeTitle}'),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420, maxHeight: 640),
+          child: Card(
+            margin: const EdgeInsets.all(20),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            wash
+                                ? 'طلب غسيل'
+                                : (oil ? 'طلب تبديل زيت' : 'طلب خدمة جديد'),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        if (!_openEnded)
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundColor: AppColors.amberTint,
+                            child: Text(
+                              '$_left',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.amberDeep,
+                              ),
+                            ),
+                          )
+                        else
+                          const StatusPill(
+                            label: 'بدون مهلة',
+                            color: AppColors.emeraldDeep,
+                            background: AppColors.emeraldTint,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (wash)
+                      WashJobDetailsCard.fromOffer(offer, compact: true)
+                    else if (oil)
+                      OilJobDetailsCard.fromOffer(offer, compact: true)
+                    else
+                      TechJobDetailsCard.fromOffer(offer, compact: true),
+                    const SizedBox(height: 10),
+                    Text(
+                      _openEnded
+                          ? 'أرسل سعرك متى جاهز. الموقع والهاتف يظهران بعد قبول العميل.'
+                          : 'الموقع تقريبي ورقم الهاتف مخفي حتى يقبل العميل.',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.inkSoft,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _price,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: AppStrings.initialPrice,
+                        hintText: '5000',
+                        helperText: 'الحد الأدنى 3000 وينتهي بـ 000',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(color: AppColors.danger),
+                        ),
+                      ),
+                    const SizedBox(height: 14),
+                    FilledButton(
+                      onPressed: _busy ? null : _accept,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                        backgroundColor: AppColors.slate,
+                      ),
+                      child: Text(
+                        _busy
+                            ? 'جارٍ الإرسال…'
+                            : (oil ? 'تقديم عرض السعر' : 'تقديم عرض السعر'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: _busy
+                          ? null
+                          : () async {
+                              await AppScope.of(context)
+                                  .jobs
+                                  .rejectOffer(offer.id);
+                              widget.onDone();
+                            },
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 44),
+                      ),
+                      child: const Text(AppStrings.reject),
+                    ),
                   ],
-                ],
-                const SizedBox(height: 8),
-                const Text('الموقع تقريبي ورقم الهاتف مخفي حتى يقبل العميل'),
-                const SizedBox(height: 12),
-                CircleAvatar(
-                  radius: 28,
-                  child: Text('$_left', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _price,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: AppStrings.initialPrice,
-                    hintText: '5000',
-                    helperText: 'الحد الأدنى 3000 وينتهي بـ 000',
-                  ),
-                ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(_error!, style: const TextStyle(color: Colors.red)),
-                  ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: _busy ? null : _accept,
-                  child: Text(
-                    widget.offer.hasOilDetails
-                        ? 'تقديم عرض السعر'
-                        : AppStrings.accept,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton(
-                  onPressed: _busy
-                      ? null
-                      : () async {
-                          await AppScope.of(context).jobs.rejectOffer(widget.offer.id);
-                          widget.onDone();
-                        },
-                  child: const Text(AppStrings.reject),
-                ),
-              ],
+              ),
             ),
           ),
         ),

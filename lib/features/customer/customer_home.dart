@@ -574,6 +574,7 @@ class _CustomerHomeState extends State<CustomerHome> {
             addressLabel: _addressLabel,
             inZone: _pinInZone(),
             services: catalog,
+            vehicleTypes: vehicles,
             onBack: clearCompose,
             onSubmitted: clearCompose,
           );

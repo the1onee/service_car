@@ -132,6 +132,8 @@ class JobRepository {
     double liters = 0,
     bool includeOilFilter = false,
     String landmark = '',
+    String washPackageId = '',
+    String washPackageName = '',
     GeoPoint? dropoff,
     String dropoffLabel = '',
   }) async {
@@ -180,6 +182,8 @@ class JobRepository {
       liters: liters,
       includeOilFilter: includeOilFilter,
       landmark: landmark.trim(),
+      washPackageId: washPackageId.trim(),
+      washPackageName: washPackageName.trim(),
     );
     final batch = _db.batch();
     batch.set(ref, job.toCreateMap());
@@ -344,8 +348,8 @@ class JobRepository {
       return;
     }
 
-    // قطع الغيار وورش الزيوت: بلا نافذة زمنية — تبقى العروض حتى قبول العميل.
-    final noExpiry = job.isPartsOrder || job.isOilOrder;
+    // قطع / زيوت / فني: بلا نافذة زمنية — تبقى العروض حتى قبول العميل.
+    final noExpiry = job.isOpenEndedDispatch;
     final seconds = job.isEmergency
         ? AppConstants.emergencyOfferSeconds
         : AppConstants.quoteWindowSeconds;
@@ -383,6 +387,9 @@ class JobRepository {
         if (job.liters > 0) 'liters': job.liters,
         if (job.isOilOrder) 'includeOilFilter': job.includeOilFilter,
         if (job.landmark.isNotEmpty) 'landmark': job.landmark,
+        if (job.washPackageId.isNotEmpty) 'washPackageId': job.washPackageId,
+        if (job.washPackageName.isNotEmpty)
+          'washPackageName': job.washPackageName,
         if (t.oilWorkshopTier.isNotEmpty)
           'oilWorkshopTier': t.oilWorkshopTier,
       });
@@ -470,7 +477,7 @@ class JobRepository {
         'technicianId': technicianId,
         'technicianName': technicianName,
         'initialPrice': initialPrice,
-        'status': JobStatus.quoted.name,
+        'status': JobStatus.enRoute.name,
       });
       tx.update(offerRef, {'status': 'accepted', 'initialPrice': initialPrice});
       return true;
@@ -478,8 +485,12 @@ class JobRepository {
       if (!won) return false;
       final offerSnap = await _offers.doc(offerId).get();
       final jobId = offerSnap.data()?['jobId'] as String?;
-      if (jobId != null) {
-        await expireOpenOffers(jobId);
+      if (jobId == null) return true;
+      await expireOpenOffers(jobId);
+      final loc = await _db.collection('jobLocations').doc(jobId).get();
+      final exact = loc.data()?['exact'] as GeoPoint?;
+      if (exact != null) {
+        await _jobs.doc(jobId).update({'exactLocation': exact});
       }
       return true;
     });
@@ -582,7 +593,8 @@ class JobRepository {
     final job = jobSnap.exists ? Job.fromDoc(jobSnap) : null;
     final isParts = job?.isPartsOrder == true;
     final isOil = job?.isOilOrder == true;
-    final directAssign = isParts || isOil;
+    final isTech = job?.isTechnicianJob == true;
+    final directAssign = isParts || isOil || isTech;
     final price = offer.initialPrice;
     GeoPoint? exact;
     var deliveryAddress = '';
@@ -592,11 +604,11 @@ class JobRepository {
       exact = data?['exact'] as GeoPoint?;
       deliveryAddress = (data?['label'] as String? ?? '').trim();
     }
-    // قطع الغيار والزيوت: قبول العميل يُسند الطلب مباشرة (بدون خطوة «قبول السعر»).
+    // قطع / زيوت / فني: قبول العميل يُسند الطلب مباشرة (بدون خطوة «قبول السعر»).
     await _jobs.doc(jobId).update({
       'technicianId': offer.technicianId,
-      'technicianName':
-          offer.technicianName ?? (isOil ? 'ورشة زيوت' : (isParts ? 'ورشة' : 'فني')),
+      'technicianName': offer.technicianName ??
+          (isOil ? 'ورشة زيوت' : (isParts ? 'ورشة' : 'فني')),
       'initialPrice': price,
       if (isParts && price != null) 'finalPrice': price,
       'status': directAssign ? JobStatus.enRoute.name : JobStatus.quoted.name,
@@ -648,8 +660,8 @@ class JobRepository {
     if (!snap.exists) return;
     final job = Job.fromDoc(snap);
     if (job.status != JobStatus.offerPending) return;
-    // طلبات القطع والزيوت تبقى مفتوحة حتى القبول أو الإلغاء — بلا نافذة زمنية.
-    if (job.isPartsOrder || job.isOilOrder) return;
+    // قطع / زيوت / فني تبقى مفتوحة حتى القبول أو الإلغاء — بلا نافذة زمنية.
+    if (job.isOpenEndedDispatch) return;
     if (job.isEmergency) {
       await maybeRedispatch(jobId);
       return;

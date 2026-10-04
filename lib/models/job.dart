@@ -84,6 +84,8 @@ class Job {
     this.liters = 0,
     this.includeOilFilter = false,
     this.landmark = '',
+    this.washPackageId = '',
+    this.washPackageName = '',
   });
 
   final String id;
@@ -141,6 +143,8 @@ class Job {
   final double liters;
   final bool includeOilFilter;
   final String landmark;
+  final String washPackageId;
+  final String washPackageName;
 
   bool get isPartsOrder =>
       serviceId == 'parts' || providerKind == 'workshop';
@@ -148,10 +152,18 @@ class Job {
   bool get isOilOrder =>
       serviceId == 'oil' || providerKind == 'oilWorkshop';
 
+  bool get isWashOrder => serviceId == 'wash';
+
   String get oilDisplayTitle {
     if (oilTypeName.trim().isNotEmpty) return oilTypeName.trim();
     if (partName.trim().isNotEmpty) return partName.trim();
     return serviceTitle ?? 'تبديل زيت';
+  }
+
+  String get washDisplayTitle {
+    if (washPackageName.trim().isNotEmpty) return washPackageName.trim();
+    if (partName.trim().isNotEmpty) return partName.trim();
+    return serviceTitle ?? 'غسيل سيارات';
   }
 
   String get carSummary {
@@ -167,6 +179,14 @@ class Job {
       serviceId == 'paint' ||
       providerKind == 'paintShop' ||
       providerKind == 'paint_shop';
+
+  /// طلب فني ميداني (ليس قطع / زيوت / دهان).
+  bool get isTechnicianJob =>
+      !isPartsOrder && !isOilOrder && !isPaintOrder;
+
+  /// عروض بلا نافذة زمنية قصيرة.
+  bool get isOpenEndedDispatch =>
+      isPartsOrder || isOilOrder || isTechnicianJob;
 
   bool get isEmergency => matchingMode == MatchingMode.emergency;
 
@@ -264,6 +284,8 @@ class Job {
         if (liters > 0) 'liters': liters,
         if (isOilOrder) 'includeOilFilter': includeOilFilter,
         if (landmark.isNotEmpty) 'landmark': landmark,
+        if (washPackageId.isNotEmpty) 'washPackageId': washPackageId,
+        if (washPackageName.isNotEmpty) 'washPackageName': washPackageName,
         'createdAt': FieldValue.serverTimestamp(),
       };
 
@@ -316,6 +338,8 @@ class Job {
       liters: (d['liters'] as num?)?.toDouble() ?? 0,
       includeOilFilter: d['includeOilFilter'] == true,
       landmark: d['landmark'] as String? ?? '',
+      washPackageId: d['washPackageId'] as String? ?? '',
+      washPackageName: d['washPackageName'] as String? ?? '',
     );
   }
 }

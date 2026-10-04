@@ -70,6 +70,49 @@ async function notify(tokens, title, body, data) {
   return { successCount, failureCount };
 }
 
+/** صندوق وارد داخل التطبيق — مستندات notifications مع userId. */
+async function writeInbox(userIds, payload) {
+  const ids = [...new Set((userIds || []).filter(Boolean))];
+  if (!ids.length) return;
+  const col = db.collection("notifications");
+  for (let i = 0; i < ids.length; i += 400) {
+    const chunk = ids.slice(i, i + 400);
+    const batch = db.batch();
+    for (const uid of chunk) {
+      batch.set(col.doc(), {
+        userId: uid,
+        title: payload.title,
+        body: payload.body,
+        type: payload.type || "system",
+        jobId: payload.jobId || null,
+        audience: payload.audience || null,
+        read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+}
+
+/** FCM + تسجيل في صندوق الوارد عبر Firebase. */
+async function notifyUsers(userIds, title, body, data = {}) {
+  const ids = [...new Set((userIds || []).filter(Boolean))];
+  const tokens = [];
+  for (const uid of ids) {
+    const snap = await db.collection("users").doc(uid).get();
+    const token = snap.data()?.fcmToken;
+    if (typeof token === "string" && token.trim()) tokens.push(token.trim());
+  }
+  const result = await notify(tokens, title, body, data);
+  await writeInbox(ids, {
+    title,
+    body,
+    type: data.type,
+    jobId: data.jobId,
+  });
+  return result;
+}
+
 function audienceRoles(audience) {
   if (audience === "customers") return ["customer"];
   if (audience === "technicians") {
@@ -78,16 +121,20 @@ function audienceRoles(audience) {
   return ["customer", "technician", "workshop", "oilWorkshop", "paintShop"];
 }
 
-async function collectFcmTokensForRoles(roles) {
-  const tokens = [];
+async function collectUsersForRoles(roles) {
+  /** @type {{uid: string, token: string|null}[]} */
+  const users = [];
   for (const role of roles) {
     const snap = await db.collection("users").where("role", "==", role).get();
     snap.docs.forEach((d) => {
       const token = d.data().fcmToken;
-      if (typeof token === "string" && token.trim()) tokens.push(token.trim());
+      users.push({
+        uid: d.id,
+        token: typeof token === "string" && token.trim() ? token.trim() : null,
+      });
     });
   }
-  return tokens;
+  return users;
 }
 
 async function expirePending(jobId) {
@@ -110,7 +157,12 @@ async function assignOffer(jobRef, offerSnap) {
     job.serviceId === "parts" || job.providerKind === "workshop";
   const isOil =
     job.serviceId === "oil" || job.providerKind === "oilWorkshop";
-  const directAssign = isParts || isOil;
+  const isPaint =
+    job.serviceId === "paint" ||
+    job.providerKind === "paintShop" ||
+    job.providerKind === "paint_shop";
+  const isTech = !isParts && !isOil && !isPaint;
+  const directAssign = isParts || isOil || isTech;
   const price = Number(offer.initialPrice || 0);
   const patch = {
     technicianId: offer.technicianId,
@@ -186,15 +238,14 @@ async function closeQuoteWindow(jobId) {
   if (submitted.size === 1) {
     await assignOffer(jobRef, submitted.docs[0]);
     const customer = await db.collection("users").doc(job.customerId).get();
-    await notify([customer.data()?.fcmToken], "عرض واحد", "تم تعيين الفني تلقائياً", {
+    await notifyUsers([job.customerId], "عرض واحد", "تم تعيين الفني تلقائياً", {
       jobId,
       type: "quoted",
     });
     return { ok: true, action: "auto" };
   }
   await jobRef.update({ status: "comparing" });
-  const customer = await db.collection("users").doc(job.customerId).get();
-  await notify([customer.data()?.fcmToken], "قارن العروض", "اختر الفني المناسب", {
+  await notifyUsers([job.customerId], "قارن العروض", "اختر الفني المناسب", {
     jobId,
     type: "comparing",
   });
@@ -217,8 +268,10 @@ async function maybeRedispatchInternal(jobId, expire = true) {
   const next = job.status === "dispatching" ? round : round + 1;
   if (next > MAX_ROUNDS) {
     await jobRef.update({ status: "noTechnician" });
-    const customer = await db.collection("users").doc(job.customerId).get();
-    await notify([customer.data()?.fcmToken], "لا يوجد فني", "لم يصل عرض مناسب", { jobId });
+    await notifyUsers([job.customerId], "لا يوجد فني", "لم يصل عرض مناسب", {
+      jobId,
+      type: "noTechnician",
+    });
     return;
   }
   await jobRef.update({ dispatchRound: next, status: "dispatching" });
@@ -356,7 +409,9 @@ async function dispatchJobInternal(jobId) {
     return { ok: false, reason: "none" };
   }
 
-  const noExpiry = isParts || isOil;
+  // قطع / زيوت / فني: بلا نافذة زمنية.
+  const isTech = !isParts && !isOil && !isPaint;
+  const noExpiry = isParts || isOil || isTech;
   const seconds = emergency ? EMERGENCY_SECONDS : QUOTE_SECONDS;
   const expires = noExpiry
     ? null
@@ -391,6 +446,8 @@ async function dispatchJobInternal(jobId) {
     if (job.liters) offer.liters = job.liters;
     if (isOil) offer.includeOilFilter = !!job.includeOilFilter;
     if (job.landmark) offer.landmark = job.landmark;
+    if (job.washPackageId) offer.washPackageId = job.washPackageId;
+    if (job.washPackageName) offer.washPackageName = job.washPackageName;
     if (t.oilWorkshopTier) offer.oilWorkshopTier = t.oilWorkshopTier;
     batch.set(db.collection("jobOffers").doc(), offer);
   }
@@ -403,17 +460,24 @@ async function dispatchJobInternal(jobId) {
   else jobUpdate.expiresAt = FieldValue.delete();
   batch.update(jobRef, jobUpdate);
   await batch.commit();
+  const offerBody = emergency
+    ? "طلب طارئ — اقبل وأدخل السعر المبدئي (أول قبول يفوز)"
+    : isParts
+      ? "طلب قطع غيار ضمن اختصاصك — أرسل سعرك متى توفرت القطعة"
+      : isOil
+        ? "طلب تبديل زيت — أرسل سعرك متى جاهز (بدون مهلة)"
+        : job.serviceId === "wash"
+          ? "طلب غسيل سيارات — أرسل سعرك متى جاهز (بدون مهلة)"
+          : "طلب خدمة — أرسل سعرك متى جاهز (بدون مهلة)";
   await notify(
     ranked.map((t) => t.token),
     "طلب جديد",
-    emergency
-      ? "لديك 30 ثانية لقبول الطلب وإدخال السعر المبدئي"
-      : isParts
-        ? "طلب قطع غيار ضمن اختصاصك — أرسل سعرك متى توفرت القطعة"
-        : isOil
-          ? "طلب تبديل زيت — أرسل سعرك متى جاهز (بدون مهلة)"
-          : "أرسل سعراً مبدئياً خلال دقائق ليراه العميل",
+    offerBody,
     { jobId, type: "offer" },
+  );
+  await writeInbox(
+    ranked.map((t) => t.id),
+    { title: "طلب جديد", body: offerBody, type: "offer", jobId },
   );
   return { ok: true, count: ranked.length };
 }
@@ -435,8 +499,13 @@ exports.onWindowExpired = onCall(async (request) => {
     job.serviceId === "parts" || job.providerKind === "workshop";
   const isOil =
     job.serviceId === "oil" || job.providerKind === "oilWorkshop";
-  // طلبات القطع والزيوت تبقى مفتوحة حتى القبول أو الإلغاء.
-  if (isParts || isOil) return { ok: true, skipped: true };
+  const isPaint =
+    job.serviceId === "paint" ||
+    job.providerKind === "paintShop" ||
+    job.providerKind === "paint_shop";
+  const isTech = !isParts && !isOil && !isPaint;
+  // قطع / زيوت / فني تبقى مفتوحة حتى القبول أو الإلغاء.
+  if (isParts || isOil || isTech) return { ok: true, skipped: true };
   if (isEmergencyJob(job)) {
     await maybeRedispatchInternal(jobId);
     return { ok: true };
@@ -511,8 +580,13 @@ exports.onQuoteWindow = onDocumentUpdated(
       after.serviceId === "parts" || after.providerKind === "workshop";
     const isOil =
       after.serviceId === "oil" || after.providerKind === "oilWorkshop";
-    // طلبات القطع والزيوت بلا نافذة زمنية.
-    if (isParts || isOil || !after.expiresAt) return;
+    const isPaint =
+      after.serviceId === "paint" ||
+      after.providerKind === "paintShop" ||
+      after.providerKind === "paint_shop";
+    const isTech = !isParts && !isOil && !isPaint;
+    // قطع / زيوت / فني بلا نافذة زمنية.
+    if (isParts || isOil || isTech || !after.expiresAt) return;
     if (before.status === "offerPending") return;
     const exp = after.expiresAt?.toDate?.() || new Date(Date.now() + QUOTE_SECONDS * 1000);
     const wait = exp.getTime() - Date.now() + 1000;
@@ -593,20 +667,24 @@ exports.acceptOffer = onCall(async (request) => {
         technicianId: uid,
         technicianName,
         initialPrice: Number(initialPrice),
-        status: "quoted",
+        status: "enRoute",
       });
       tx.update(offerRef, { status: "accepted", initialPrice: Number(initialPrice) });
       return o.jobId;
     });
     if (!won) return { ok: false };
     await expirePending(won);
+    const loc = await db.collection("jobLocations").doc(won).get();
+    const exact = loc.data()?.exact;
+    if (exact) {
+      await db.collection("jobs").doc(won).update({ exactLocation: exact });
+    }
     const latest = (await db.collection("jobs").doc(won).get()).data();
-    const customer = await db.collection("users").doc(latest.customerId).get();
-    await notify(
-      [customer.data()?.fcmToken],
-      "فني قبل الطلب",
-      `${technicianName} عرض سعراً مبدئياً ${initialPrice}`,
-      { jobId: won, type: "quoted" }
+    await notifyUsers(
+      [latest.customerId],
+      "فني في الطريق",
+      `${technicianName} قبل الطلب وهو في الطريق`,
+      { jobId: won, type: "enRoute" }
     );
     return { ok: true };
   }
@@ -647,9 +725,8 @@ exports.acceptOffer = onCall(async (request) => {
   if (!isParts && submitted.size >= MAX_QUOTES) {
     await closeQuoteWindow(offer.jobId);
   } else {
-    const customer = await db.collection("users").doc(job.customerId).get();
-    await notify(
-      [customer.data()?.fcmToken],
+    await notifyUsers(
+      [job.customerId],
       "عرض جديد",
       `${technicianName} أرسل سعراً مبدئياً`,
       { jobId: offer.jobId, type: "quote" }
@@ -687,14 +764,24 @@ exports.onJobStatus = onDocumentUpdated("jobs/{jobId}", async (event) => {
   const msg = messages[after.status];
   if (!msg) return;
   if (msg.to === "both") {
-    await notify([cToken, tToken], msg.title, msg.body, { jobId, type: after.status });
+    await notifyUsers(
+      [after.customerId, after.technicianId].filter(Boolean),
+      msg.title,
+      msg.body,
+      { jobId, type: after.status },
+    );
     return;
   }
-  const token = msg.to === "tech" ? tToken : cToken;
-  await notify([token], msg.title, msg.body, { jobId, type: after.status });
+  const uid = msg.to === "tech" ? after.technicianId : after.customerId;
+  if (uid) {
+    await notifyUsers([uid], msg.title, msg.body, { jobId, type: after.status });
+  } else {
+    const token = msg.to === "tech" ? tToken : cToken;
+    await notify([token], msg.title, msg.body, { jobId, type: after.status });
+  }
 });
 
-/** بث إشعار أدمن: يُفعَّل عند إنشاء مستند notifications بدون userId ومع audience. */
+/** بث إشعار أدمن: يُفعَّل عند إنشاء مستند notifications بدون userId ومع audience=pending. */
 exports.onAdminNotificationCreated = onDocumentCreated(
   "notifications/{id}",
   async (event) => {
@@ -719,8 +806,11 @@ exports.onAdminNotificationCreated = onDocumentCreated(
     }
 
     try {
-      const tokens = await collectFcmTokensForRoles(audienceRoles(data.audience));
-      if (!tokens.length) {
+      await snap.ref.update({ status: "sending" });
+      const users = await collectUsersForRoles(audienceRoles(data.audience));
+      const tokens = users.map((u) => u.token).filter(Boolean);
+      const userIds = users.map((u) => u.uid);
+      if (!userIds.length) {
         await snap.ref.update({
           status: "empty",
           sentAt: Timestamp.now(),
@@ -732,6 +822,12 @@ exports.onAdminNotificationCreated = onDocumentCreated(
       const result = await notify(tokens, title, body, {
         type: "admin",
         notificationId: event.params.id,
+        audience: data.audience,
+      });
+      await writeInbox(userIds, {
+        title,
+        body,
+        type: "admin",
         audience: data.audience,
       });
       await snap.ref.update({
