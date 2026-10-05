@@ -25,12 +25,25 @@ class _WalletPage extends StatefulWidget {
 
 class _WalletPageState extends State<_WalletPage> {
   var _filter = _LedgerFilter.movements;
+  Stream<AppSettings>? _settingsStream;
+  Stream<List<Job>>? _jobsStream;
+  Stream<List<WalletEntry>>? _entriesStream;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final scope = AppScope.of(context);
+    _settingsStream ??= scope.settings.watchSettings();
+    _jobsStream ??= scope.jobs.watchRecentForTechnician(widget.me.id);
+    _entriesStream ??= scope.users.watchWalletEntries(widget.me.id);
+  }
 
   @override
   Widget build(BuildContext context) {
     final me = widget.me;
-    final scope = AppScope.of(context);
-    return Column(
+    return ColoredBox(
+      color: AppColors.canvas,
+      child: Column(
       children: [
         FieldTopBar(
           city: widget.city,
@@ -57,17 +70,17 @@ class _WalletPageState extends State<_WalletPage> {
         ),
         Expanded(
           child: StreamBuilder(
-            stream: scope.settings.watchSettings(),
+            stream: _settingsStream,
             builder: (context, settingsSnap) {
               final min = settingsSnap.data?.minWalletBalance ??
                   AppConstants.minWalletBalance;
               return StreamBuilder<List<Job>>(
-                stream: scope.jobs.watchRecentForTechnician(me.id),
+                stream: _jobsStream,
                 builder: (context, jobSnap) {
                   final jobs = jobSnap.data ?? const <Job>[];
                   final jobsById = {for (final job in jobs) job.id: job};
                   return StreamBuilder<List<WalletEntry>>(
-                    stream: scope.users.watchWalletEntries(me.id),
+                    stream: _entriesStream,
                     builder: (context, entrySnap) {
                       final entries = entrySnap.data ?? const <WalletEntry>[];
                       final waiting = entrySnap.connectionState ==
@@ -173,6 +186,7 @@ class _WalletPageState extends State<_WalletPage> {
           ),
         ),
       ],
+      ),
     );
   }
 }
@@ -425,6 +439,13 @@ class _WalletRechargePanelState extends State<_WalletRechargePanel> {
   XFile? _receipt;
   var _busy = false;
   String? _error;
+  Stream<AppSettings>? _settingsStream;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _settingsStream ??= AppScope.of(context).settings.watchSettings();
+  }
 
   @override
   void dispose() {
@@ -521,9 +542,8 @@ class _WalletRechargePanelState extends State<_WalletRechargePanel> {
 
   @override
   Widget build(BuildContext context) {
-    final scope = AppScope.of(context);
     return StreamBuilder<AppSettings>(
-      stream: scope.settings.watchSettings(),
+      stream: _settingsStream,
       builder: (context, settingsSnap) {
         final settings = settingsSnap.data ?? const AppSettings();
         final card = settings.topUpCardNumber.trim().isEmpty

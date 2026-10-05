@@ -385,8 +385,10 @@ class JobRepository {
       towPickupExact = locSnap.data()?['exact'] as GeoPoint?;
     }
     final batch = _db.batch();
+    final offerIds = <String>[];
     for (final t in chosen) {
       final offer = _offers.doc();
+      offerIds.add(offer.id);
       batch.set(offer, {
         'jobId': jobId,
         'technicianId': t.id,
@@ -432,6 +434,7 @@ class JobRepository {
     }
     batch.update(_jobs.doc(jobId), {
       'status': JobStatus.offerPending.name,
+      'offerIds': offerIds,
       if (expires != null) 'expiresAt': Timestamp.fromDate(expires),
       if (noExpiry) 'expiresAt': FieldValue.delete(),
     });
@@ -522,12 +525,14 @@ class JobRepository {
       final offerSnap = await _offers.doc(offerId).get();
       final jobId = offerSnap.data()?['jobId'] as String?;
       if (jobId == null) return true;
-      await expireOpenOffers(jobId);
-      final loc = await _db.collection('jobLocations').doc(jobId).get();
-      final exact = loc.data()?['exact'] as GeoPoint?;
-      if (exact != null) {
-        await _jobs.doc(jobId).update({'exactLocation': exact});
-      }
+      await closeSiblingOffers(jobId, offerId);
+      try {
+        final loc = await _db.collection('jobLocations').doc(jobId).get();
+        final exact = loc.data()?['exact'] as GeoPoint?;
+        if (exact != null) {
+          await _jobs.doc(jobId).update({'exactLocation': exact});
+        }
+      } catch (_) {}
       return true;
     });
   }
@@ -676,6 +681,84 @@ class JobRepository {
 
   Future<void> rejectOffer(String offerId) {
     return _offers.doc(offerId).update({'status': 'rejected'});
+  }
+
+  /// يغلق عروض باقي الفنيين بعد فوز أحدهم. معرفات العروض محفوظة على الطلب
+  /// لأن الفني لا يستطيع قراءة عروض غيره.
+  Future<void> closeSiblingOffers(String jobId, String keepOfferId) async {
+    final ids = <String>{};
+    try {
+      final jobSnap = await _jobs.doc(jobId).get();
+      final raw = jobSnap.data()?['offerIds'];
+      if (raw is List) {
+        for (final id in raw) {
+          if (id is String && id.isNotEmpty && id != keepOfferId) ids.add(id);
+        }
+      }
+    } catch (_) {}
+    if (ids.isEmpty) {
+      try {
+        await expireOpenOffers(jobId);
+      } catch (_) {}
+      return;
+    }
+    for (final id in ids) {
+      try {
+        await _offers.doc(id).update({'status': 'expired'});
+      } catch (_) {}
+    }
+  }
+
+  /// يُخفي العرض عند الفني إذا أُسند الطلب لغيره أو أُغلق، ثم يعلّم عرضه منتهياً.
+  /// يعيد دالة لإيقاف المتابعة.
+  void Function() watchLostOffer({
+    required String jobId,
+    required String offerId,
+    required String technicianId,
+    required void Function() onLost,
+  }) {
+    var closed = false;
+    Future<void> lose() async {
+      if (closed) return;
+      closed = true;
+      try {
+        final ref = _offers.doc(offerId);
+        final snap = await ref.get();
+        final data = snap.data();
+        final status = data?['status'];
+        if (snap.exists &&
+            data?['technicianId'] == technicianId &&
+            (status == 'pending' || status == 'submitted')) {
+          await ref.update({'status': 'expired'});
+        }
+      } catch (_) {}
+      onLost();
+    }
+
+    const open = {
+      'dispatching',
+      'offerPending',
+      'comparing',
+      'noTechnician',
+    };
+    final sub = _jobs.doc(jobId).snapshots().listen((snap) {
+      if (closed) return;
+      if (!snap.exists) {
+        lose();
+        return;
+      }
+      final data = snap.data() ?? {};
+      final tech = data['technicianId'];
+      final status = data['status'] as String? ?? '';
+      final takenByOther =
+          tech is String && tech.isNotEmpty && tech != technicianId;
+      final closedWithoutWinner =
+          (tech == null || tech == '') && !open.contains(status);
+      if (takenByOther || closedWithoutWinner) lose();
+    }, onError: (Object e) {
+      if (e is FirebaseException && e.code == 'permission-denied') lose();
+    });
+    return sub.cancel;
   }
 
   Future<void> expireOpenOffers(String jobId) async {

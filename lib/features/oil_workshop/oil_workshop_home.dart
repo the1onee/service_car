@@ -48,6 +48,7 @@ class _OilWorkshopHomeState extends State<OilWorkshopHome> {
   StreamSubscription<Job?>? _activeJobSub;
   late final ValueNotifier<LatLng> _meNotifier;
   JobOffer? _incoming;
+  final Set<String> _closedOffers = {};
   Job? _activeJob;
   CityZone? _zone;
   var _booted = false;
@@ -90,6 +91,7 @@ class _OilWorkshopHomeState extends State<OilWorkshopHome> {
     _offersSub = scope.jobs.watchPendingOffers(uid).listen((offers) {
       if (!mounted) return;
       final live = offers
+          .where((o) => !_closedOffers.contains(o.id))
           .where((o) => o.isOpenEnded || o.remainingSeconds() > 0)
           .toList();
       if (_incoming != null &&
@@ -263,7 +265,11 @@ class _OilWorkshopHomeState extends State<OilWorkshopHome> {
           dutyHint: _dutyHint,
           incoming: _incoming,
           onToggle: _toggleOnline,
-          onClearIncoming: () => setState(() => _incoming = null),
+          onClearIncoming: () => setState(() {
+            final id = _incoming?.id;
+            if (id != null) _closedOffers.add(id);
+            _incoming = null;
+          }),
           onLocated: (point) => _meNotifier.value = point,
         ),
     };

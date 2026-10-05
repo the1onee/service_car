@@ -235,7 +235,18 @@ service cloud.firestore {
           || (isProviderRole()
             && isOwner(request.resource.data.technicianId))
         );
-      allow update: if isOwner(resource.data.technicianId) || isOwner(jobCustomerId());
+      // الفني الفائز يغلق عروض الباقين (حالة فقط) بعد ما يُسند الطلب له.
+      function winnerClosingOffer() {
+        return isProviderRole()
+          && resource.data.status in ['pending', 'submitted']
+          && request.resource.data.status == 'expired'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && existingOfferJob().technicianId == request.auth.uid;
+      }
+
+      allow update: if isOwner(resource.data.technicianId)
+        || isOwner(jobCustomerId())
+        || winnerClosingOffer();
     }
 
     // ---------------------------------------------------------------

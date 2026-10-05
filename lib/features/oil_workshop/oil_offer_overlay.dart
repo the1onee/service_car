@@ -29,10 +29,28 @@ class OilOfferOverlay extends StatefulWidget {
 class _OilOfferOverlayState extends State<OilOfferOverlay> {
   late int _left;
   Timer? _timer;
+  void Function()? _stopLostWatch;
+  var _watching = false;
   final _price = TextEditingController();
   bool _busy = false;
   String? _error;
   late final bool _openEnded;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_watching) return;
+    _watching = true;
+    _stopLostWatch = AppScope.of(context).jobs.watchLostOffer(
+      jobId: widget.offer.jobId,
+      offerId: widget.offer.id,
+      technicianId: widget.offer.technicianId,
+      onLost: () {
+        if (!mounted) return;
+        widget.onDone();
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -52,6 +70,7 @@ class _OilOfferOverlayState extends State<OilOfferOverlay> {
 
   @override
   void dispose() {
+    _stopLostWatch?.call();
     _timer?.cancel();
     _price.dispose();
     super.dispose();

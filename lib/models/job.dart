@@ -192,9 +192,9 @@ class Job {
   bool get isTechnicianJob =>
       !isPartsOrder && !isOilOrder && !isPaintOrder;
 
-  /// عروض بلا نافذة زمنية قصيرة.
+  /// عروض بلا نافذة زمنية قصيرة. الطوارئ (سطحة وغيرها) أول قبول يفوز وبنوافذ قصيرة.
   bool get isOpenEndedDispatch =>
-      isPartsOrder || isOilOrder || isTechnicianJob;
+      !isEmergency && (isPartsOrder || isOilOrder || isTechnicianJob);
 
   bool get isEmergency => matchingMode == MatchingMode.emergency;
 
