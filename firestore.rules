@@ -96,6 +96,9 @@ service cloud.firestore {
             || (request.resource.data.role == 'oilWorkshop'
               && request.resource.data.verified == false
               && request.resource.data.verificationStatus == 'pending')
+            || (request.resource.data.role == 'paintShop'
+              && request.resource.data.verified == false
+              && request.resource.data.verificationStatus == 'pending')
           ));
 
       allow update: if isAdmin()
@@ -376,6 +379,11 @@ service cloud.firestore {
       allow update: if isOwner(resource.data.userId)
         && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['read', 'readAt']);
+    }
+
+    // جلسات OTP — Admin SDK فقط (السيرفر على VPS). حتى الأدمن لا يحتاجها من العميل.
+    match /otpSessions/{id} {
+      allow read, write: if false;
     }
 
     // مجموعات إدارية بحتة (adminLogs...) تكفيها القاعدة العامة أعلاه.

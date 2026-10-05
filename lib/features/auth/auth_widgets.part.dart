@@ -754,7 +754,7 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
   Widget build(BuildContext context) {
     return _SheetShell(
       title: AppStrings.resetPassword,
-      subtitle: 'سنرسل رمز تحقق إلى رقمك لتعيين كلمة مرور جديدة.',
+      subtitle: 'سنرسل رمز تحقق عبر واتساب إلى رقمك لتعيين كلمة مرور جديدة.',
       child: Form(
         key: _form,
         child: Column(

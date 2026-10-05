@@ -44,7 +44,7 @@ class JobRepository {
         .orderBy('createdAt', descending: true)
         .limit(8)
         .snapshots()
-        .map(_firstActive);
+        .map(_firstActiveForCustomer);
   }
 
   Stream<Job?> watchActiveForTechnician(String uid) {
@@ -53,7 +53,7 @@ class JobRepository {
         .orderBy('createdAt', descending: true)
         .limit(8)
         .snapshots()
-        .map(_firstActive);
+        .map(_firstActiveForTechnician);
   }
 
   Stream<List<Job>> watchRecentForCustomer(String uid) {
@@ -88,20 +88,32 @@ class JobRepository {
     });
   }
 
-  Job? _firstActive(QuerySnapshot<Map<String, dynamic>> snap) {
-    final active = {
-      JobStatus.dispatching,
-      JobStatus.offerPending,
-      JobStatus.comparing,
-      JobStatus.quoted,
-      JobStatus.enRoute,
-      JobStatus.arrived,
-      JobStatus.finalQuote,
-      JobStatus.inProgress,
-    };
+  static const _liveJobStatuses = {
+    JobStatus.dispatching,
+    JobStatus.offerPending,
+    JobStatus.comparing,
+    JobStatus.quoted,
+    JobStatus.enRoute,
+    JobStatus.arrived,
+    JobStatus.finalQuote,
+    JobStatus.inProgress,
+  };
+
+  /// طلب العميل النشط — بلا مكتمل حتى لا يعود الطلب بعد إنهائه.
+  Job? _firstActiveForCustomer(QuerySnapshot<Map<String, dynamic>> snap) {
     for (final d in snap.docs) {
       final job = Job.fromDoc(d);
-      if (active.contains(job.status)) return job;
+      if (_liveJobStatuses.contains(job.status)) return job;
+      if (job.status == JobStatus.noTechnician) return job;
+    }
+    return null;
+  }
+
+  /// مهمة الفني النشطة — لا تُعاد بعد الإكمال.
+  Job? _firstActiveForTechnician(QuerySnapshot<Map<String, dynamic>> snap) {
+    for (final d in snap.docs) {
+      final job = Job.fromDoc(d);
+      if (_liveJobStatuses.contains(job.status)) return job;
     }
     return null;
   }
@@ -134,6 +146,7 @@ class JobRepository {
     String landmark = '',
     String washPackageId = '',
     String washPackageName = '',
+    String pickupLabel = '',
     GeoPoint? dropoff,
     String dropoffLabel = '',
   }) async {
@@ -165,6 +178,8 @@ class JobRepository {
       matchingMode: emergency ? MatchingMode.emergency : MatchingMode.quotes,
       commissionRate: rate,
       approxLocation: approximate(exact),
+      // سطحة: الإحداثيات الدقيقة على الطلب لخريطة التحميل/التنزيل.
+      exactLocation: dropoff != null ? exact : null,
       createdAt: DateTime.now(),
       partName: partName,
       partNote: partNote,
@@ -184,13 +199,21 @@ class JobRepository {
       landmark: landmark.trim(),
       washPackageId: washPackageId.trim(),
       washPackageName: washPackageName.trim(),
+      pickupLabel: pickupLabel.trim().isNotEmpty
+          ? pickupLabel.trim()
+          : deliveryAddress.trim(),
+      dropoffLocation: dropoff,
+      dropoffLabel: dropoffLabel.trim(),
     );
     final batch = _db.batch();
     batch.set(ref, job.toCreateMap());
     final locPayload = <String, dynamic>{
       'customerId': customerId,
       'exact': exact,
-      if (deliveryAddress.trim().isNotEmpty) 'label': deliveryAddress.trim(),
+      if (deliveryAddress.trim().isNotEmpty)
+        'label': deliveryAddress.trim()
+      else if (pickupLabel.trim().isNotEmpty)
+        'label': pickupLabel.trim(),
     };
     if (dropoff != null) {
       locPayload['dropoff'] = dropoff;
@@ -355,6 +378,12 @@ class JobRepository {
         : AppConstants.quoteWindowSeconds;
     final expires =
         noExpiry ? null : DateTime.now().add(Duration(seconds: seconds));
+    GeoPoint? towPickupExact = job.exactLocation;
+    if (job.isTowOrder && towPickupExact == null) {
+      final locSnap =
+          await _db.collection('jobLocations').doc(jobId).get();
+      towPickupExact = locSnap.data()?['exact'] as GeoPoint?;
+    }
     final batch = _db.batch();
     for (final t in chosen) {
       final offer = _offers.doc();
@@ -390,6 +419,13 @@ class JobRepository {
         if (job.washPackageId.isNotEmpty) 'washPackageId': job.washPackageId,
         if (job.washPackageName.isNotEmpty)
           'washPackageName': job.washPackageName,
+        if (job.pickupLabel.isNotEmpty) 'pickupLabel': job.pickupLabel,
+        // سطحة: نقاط التحميل/التنزيل الدقيقة على الخريطة.
+        if (job.isTowOrder && towPickupExact != null)
+          'pickupLocation': towPickupExact,
+        if (job.dropoffLocation != null)
+          'dropoffLocation': job.dropoffLocation,
+        if (job.dropoffLabel.isNotEmpty) 'dropoffLabel': job.dropoffLabel,
         if (t.oilWorkshopTier.isNotEmpty)
           'oilWorkshopTier': t.oilWorkshopTier,
       });
@@ -787,8 +823,20 @@ class JobRepository {
     });
   }
 
-  Future<void> markArrived(String jobId) {
-    return _jobs.doc(jobId).update({'status': JobStatus.arrived.name});
+  Future<void> markArrived(String jobId) async {
+    final snap = await _jobs.doc(jobId).get();
+    if (!snap.exists) return;
+    final job = Job.fromDoc(snap);
+    // غسيل / سطحة: بعد الوصول مباشرة للعمل واستلام المبلغ — بلا سعر نهائي/ضمان.
+    if (job.isWashOrder || job.isTowOrder) {
+      await _jobs.doc(jobId).update({
+        'status': JobStatus.inProgress.name,
+        if (job.finalPrice == null && job.initialPrice != null)
+          'finalPrice': job.initialPrice,
+      });
+      return;
+    }
+    await _jobs.doc(jobId).update({'status': JobStatus.arrived.name});
   }
 
   /// ورشة قطع الغيار: تأكيد تجهيز/إرسال القطعة للعميل.
@@ -993,6 +1041,7 @@ class JobRepository {
         if (next < min) 'isOnline': false,
       });
     });
+    await expireOpenOffers(jobId);
     if (customerId.isEmpty || (!useWallet && receivedAmount <= bill)) return;
     await _settleCustomerChange(
       jobId: jobId,

@@ -353,12 +353,20 @@ class _AuthScreenState extends State<AuthScreen> {
         return 'محاولات كثيرة. انتظر قليلاً ثم أعد المحاولة.';
       case 'quota-exceeded':
         return 'تم تجاوز حد رسائل التحقق اليوم. حاول لاحقاً.';
+      case 'whatsapp_not_configured':
+        return 'خدمة واتساب غير مفعّلة على السيرفر حالياً.';
       case 'operation-not-allowed':
         return 'مزوّد الدخول غير مفعّل في Firebase.';
       case 'network-request-failed':
-        return 'لا يوجد اتصال بالإنترنت.';
+        return e.message?.trim().isNotEmpty == true
+            ? e.message!
+            : 'لا يوجد اتصال بالإنترنت.';
       case 'weak-password':
         return 'كلمة المرور ضعيفة، استخدم ٦ أحرف على الأقل.';
+      case 'internal-error':
+        return e.message?.trim().isNotEmpty == true
+            ? e.message!
+            : 'تعذر إكمال العملية. حاول مرة أخرى.';
       default:
         // بعض أخطاء المنصّة تعيد رسالة عامة مثل "Error"، فنعرض بديلاً مفهوماً.
         final message = e.message?.trim() ?? '';
@@ -906,8 +914,8 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
             const Spacer(),
             const _Pill(
-              icon: Icons.verified_user_outlined,
-              label: 'تحقق آمن',
+              icon: Icons.chat_rounded,
+              label: 'رمز واتساب',
               color: AppColors.azure,
               tint: AppColors.azureTint,
             ),

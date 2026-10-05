@@ -5,6 +5,7 @@ import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/features/customer/tow_job_details.dart';
 import 'package:barrr/features/customer/wash_job_details.dart';
 import 'package:barrr/features/oil_workshop/oil_job_details.dart';
 import 'package:barrr/features/shared/field_ui.dart';
@@ -93,8 +94,9 @@ class _OfferOverlayState extends State<OfferOverlay> {
   @override
   Widget build(BuildContext context) {
     final offer = widget.offer;
-    final wash = offer.hasWashDetails;
-    final oil = !wash && offer.hasOilDetails;
+    final tow = offer.hasTowDetails;
+    final wash = !tow && offer.hasWashDetails;
+    final oil = !tow && !wash && offer.hasOilDetails;
     return Material(
       color: Colors.black54,
       child: Center(
@@ -116,9 +118,13 @@ class _OfferOverlayState extends State<OfferOverlay> {
                       children: [
                         Expanded(
                           child: Text(
-                            wash
-                                ? 'طلب غسيل'
-                                : (oil ? 'طلب تبديل زيت' : 'طلب خدمة جديد'),
+                            tow
+                                ? 'طلب سطحة'
+                                : wash
+                                    ? 'طلب غسيل'
+                                    : (oil
+                                        ? 'طلب تبديل زيت'
+                                        : 'طلب خدمة جديد'),
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
@@ -147,7 +153,9 @@ class _OfferOverlayState extends State<OfferOverlay> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    if (wash)
+                    if (tow)
+                      TowJobDetailsCard.fromOffer(offer, compact: true)
+                    else if (wash)
                       WashJobDetailsCard.fromOffer(offer, compact: true)
                     else if (oil)
                       OilJobDetailsCard.fromOffer(offer, compact: true)

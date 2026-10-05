@@ -404,7 +404,11 @@ class _FeaturedJob extends StatelessWidget {
                 ),
               ),
               StatusPill(
-                label: jobStatusLabel(job.status, isParts: job.isPartsOrder),
+                label: jobStatusLabel(
+                  job.status,
+                  isParts: job.isPartsOrder,
+                  isWash: job.isWashOrder,
+                ),
                 color: colors.$1,
                 background: colors.$2,
               ),
@@ -537,7 +541,11 @@ class _OrderTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   StatusPill(
-                    label: jobStatusLabel(job.status, isParts: job.isPartsOrder),
+                    label: jobStatusLabel(
+                  job.status,
+                  isParts: job.isPartsOrder,
+                  isWash: job.isWashOrder,
+                ),
                     color: colors.$1,
                     background: colors.$2,
                   ),

@@ -321,7 +321,11 @@ String formatWhen(DateTime? date) {
   return '${date.day} ${months[date.month - 1]} · $h:$m';
 }
 
-String jobStatusLabel(JobStatus status, {bool isParts = false}) {
+String jobStatusLabel(
+  JobStatus status, {
+  bool isParts = false,
+  bool isWash = false,
+}) {
   if (isParts) {
     switch (status) {
       case JobStatus.dispatching:
@@ -342,6 +346,30 @@ String jobStatusLabel(JobStatus status, {bool isParts = false}) {
         return 'مقيَّم';
       case JobStatus.noTechnician:
         return 'لا توجد ورشة';
+      case JobStatus.cancelled:
+        return 'ملغى';
+    }
+  }
+  if (isWash) {
+    switch (status) {
+      case JobStatus.dispatching:
+      case JobStatus.offerPending:
+      case JobStatus.comparing:
+        return 'بانتظار عروض الغسيل';
+      case JobStatus.quoted:
+        return 'بانتظار التوجه';
+      case JobStatus.enRoute:
+        return 'مغسل في الطريق';
+      case JobStatus.arrived:
+      case JobStatus.finalQuote:
+      case JobStatus.inProgress:
+        return 'جاري الغسيل';
+      case JobStatus.completed:
+        return 'تم الغسيل';
+      case JobStatus.rated:
+        return 'مقيَّم';
+      case JobStatus.noTechnician:
+        return 'لا يوجد مغسل';
       case JobStatus.cancelled:
         return 'ملغى';
     }

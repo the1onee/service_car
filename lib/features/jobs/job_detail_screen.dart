@@ -152,7 +152,11 @@ class _BodyState extends State<_Body> {
                       ),
                     ),
                     StatusPill(
-                      label: jobStatusLabel(job.status, isParts: parts),
+                      label: jobStatusLabel(
+                        job.status,
+                        isParts: parts,
+                        isWash: wash,
+                      ),
                       color: colors.$1,
                       background: colors.$2,
                     ),
@@ -176,7 +180,11 @@ class _BodyState extends State<_Body> {
                 ],
                 if (jobIsOpen(job)) ...[
                   const SizedBox(height: 14),
-                  _Progress(status: job.status, isParts: parts),
+                  _Progress(
+                    status: job.status,
+                    isParts: parts,
+                    isWash: wash,
+                  ),
                 ],
               ],
             ),
@@ -360,6 +368,15 @@ class _BodyState extends State<_Body> {
                       label: 'المبلغ عند الاستلام',
                       value: job.receivedAmount,
                     ),
+                ] else if (wash) ...[
+                  _MoneyRow(
+                    label: 'السعر المتفق',
+                    value: job.finalPrice ?? job.initialPrice,
+                  ),
+                  _MoneyRow(
+                    label: 'المبلغ المستلم نقداً',
+                    value: job.receivedAmount,
+                  ),
                 ] else ...[
                   _MoneyRow(label: 'السعر المبدئي', value: job.initialPrice),
                   _MoneyRow(label: 'السعر النهائي', value: job.finalPrice),
@@ -683,26 +700,33 @@ String _initial(String? name) {
 }
 
 class _Progress extends StatelessWidget {
-  const _Progress({required this.status, this.isParts = false});
+  const _Progress({
+    required this.status,
+    this.isParts = false,
+    this.isWash = false,
+  });
 
   final JobStatus status;
   final bool isParts;
+  final bool isWash;
 
   @override
   Widget build(BuildContext context) {
     final labels = isParts
         ? const ['القبول', 'التجهيز', 'الإرسال', 'الاستلام']
-        : const ['القبول', 'الطريق', 'الفحص', 'العمل'];
+        : isWash
+            ? const ['القبول', 'الطريق', 'الغسيل']
+            : const ['القبول', 'الطريق', 'الفحص', 'العمل'];
     final active = switch (status) {
       JobStatus.dispatching ||
       JobStatus.offerPending ||
       JobStatus.comparing =>
         0,
-      JobStatus.quoted || JobStatus.enRoute => isParts ? 1 : 0,
-      JobStatus.arrived => isParts ? 2 : 2,
-      JobStatus.finalQuote => isParts ? 2 : 2,
-      JobStatus.inProgress => 3,
-      _ => 3,
+      JobStatus.quoted || JobStatus.enRoute => isParts ? 1 : (isWash ? 1 : 0),
+      JobStatus.arrived => isWash ? 2 : 2,
+      JobStatus.finalQuote => isWash ? 2 : 2,
+      JobStatus.inProgress => isWash ? 2 : 3,
+      _ => isWash ? 2 : 3,
     };
     return Row(
       children: [

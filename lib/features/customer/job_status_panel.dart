@@ -4,6 +4,7 @@ import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/customer/parts_offers_section.dart';
 import 'package:barrr/features/customer/quote_compare_list.dart';
+import 'package:barrr/features/customer/tow_job_details.dart';
 import 'package:barrr/features/customer/wash_job_details.dart';
 import 'package:barrr/features/jobs/rating_sheet.dart';
 import 'package:barrr/features/oil_workshop/oil_job_details.dart';
@@ -49,21 +50,30 @@ class CustomerJobPanel extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 4),
               Text(
-                job.isWashOrder
-                    ? job.washDisplayTitle
-                    : job.isOilOrder
-                        ? job.oilDisplayTitle
-                        : (job.serviceTitle ?? job.serviceId),
+                job.isTowOrder
+                    ? (job.serviceTitle ?? 'سطحة')
+                    : job.isWashOrder
+                        ? job.washDisplayTitle
+                        : job.isOilOrder
+                            ? job.oilDisplayTitle
+                            : (job.serviceTitle ?? job.serviceId),
                 style: TextStyle(
-                  color: (job.isOilOrder || job.isWashOrder)
+                  color: (job.isOilOrder ||
+                          job.isWashOrder ||
+                          job.isTowOrder)
                       ? AppColors.amberDeep
                       : AppColors.inkSoft,
-                  fontWeight: (job.isOilOrder || job.isWashOrder)
+                  fontWeight: (job.isOilOrder ||
+                          job.isWashOrder ||
+                          job.isTowOrder)
                       ? FontWeight.w700
                       : FontWeight.w400,
                 ),
               ),
-              if (job.isWashOrder) ...[
+              if (job.isTowOrder) ...[
+                const SizedBox(height: 10),
+                TowJobDetailsCard.fromJob(job, compact: true, showPhone: true),
+              ] else if (job.isWashOrder) ...[
                 const SizedBox(height: 10),
                 WashJobDetailsCard.fromJob(job, compact: true, showPhone: true),
               ] else if (job.isOilOrder) ...[
@@ -79,7 +89,12 @@ class CustomerJobPanel extends StatelessWidget {
               ],
               if (_showSteps(job.status)) ...[
                 const SizedBox(height: 14),
-                _Steps(status: job.status, isParts: job.isPartsOrder),
+                _Steps(
+                  status: job.status,
+                  isParts: job.isPartsOrder,
+                  isWash: job.isWashOrder,
+                  isTow: job.isTowOrder,
+                ),
               ],
               const SizedBox(height: 14),
               ..._body(context),
@@ -97,6 +112,12 @@ class CustomerJobPanel extends StatelessWidget {
           s == JobStatus.arrived ||
           s == JobStatus.inProgress;
     }
+    if (job.isWashOrder || job.isTowOrder) {
+      return s == JobStatus.quoted ||
+          s == JobStatus.enRoute ||
+          s == JobStatus.arrived ||
+          s == JobStatus.inProgress;
+    }
     return s == JobStatus.quoted ||
         s == JobStatus.enRoute ||
         s == JobStatus.arrived ||
@@ -108,47 +129,59 @@ class CustomerJobPanel extends StatelessWidget {
     final parts = job.isPartsOrder;
     final oil = job.isOilOrder;
     final wash = job.isWashOrder;
+    final tow = job.isTowOrder;
     switch (s) {
       case JobStatus.dispatching:
       case JobStatus.offerPending:
         if (wash) return 'بانتظار عروض الغسيل';
+        if (tow) return 'بانتظار عروض السطحة';
         return job.isEmergency
             ? AppStrings.searching
             : AppStrings.collectingQuotes;
       case JobStatus.comparing:
-        return wash ? 'بانتظار عروض الغسيل' : AppStrings.compareQuotes;
+        if (wash) return 'بانتظار عروض الغسيل';
+        if (tow) return 'بانتظار عروض السطحة';
+        return AppStrings.compareQuotes;
       case JobStatus.quoted:
         if (parts) return 'الورشة تجهّز طلبك';
         if (oil) return 'ورشة الزيوت قبلت الطلب';
         if (wash) return 'مغسل قبل الطلب';
+        if (tow) return 'سطحة قبلت الطلب';
         return 'فني قبل الطلب';
       case JobStatus.enRoute:
         if (parts) return 'الورشة تجهّز القطعة';
         if (oil) return 'ورشة الزيوت في الطريق إليك';
         if (wash) return 'مغسل في الطريق';
+        if (tow) return 'سطحة في الطريق';
         return 'الفني في الطريق إليك';
       case JobStatus.arrived:
         if (parts) return 'الورشة بصدد الإرسال';
         if (oil) return 'ورشة الزيوت وصلت — جاري التبديل';
         if (wash) return 'المغسل وصل — جاري الغسيل';
+        if (tow) return 'السطحة وصلت — جاري النقل';
         return 'الفني وصل — جاري الفحص';
       case JobStatus.finalQuote:
         if (parts) return 'القطعة في الطريق إليك';
+        if (wash) return 'جاري الغسيل';
+        if (tow) return 'جاري النقل';
         return 'السعر النهائي بانتظار موافقتك';
       case JobStatus.inProgress:
         if (parts) return 'القطعة في الطريق — أكّد الاستلام';
         if (oil) return 'جاري تبديل الزيت';
         if (wash) return 'جاري الغسيل';
+        if (tow) return 'جاري النقل';
         return 'جاري العمل';
       case JobStatus.completed:
         if (parts) return 'تم استلام القطعة';
         if (oil) return 'تم تبديل الزيت';
         if (wash) return 'تم الغسيل';
+        if (tow) return 'تم النقل';
         return 'انتهت المهمة';
       case JobStatus.noTechnician:
         if (parts) return 'لم تُعثر على ورشة';
         if (oil) return 'لم تُعثر على ورشة زيوت';
         if (wash) return 'لم يُعثر على مغسل';
+        if (tow) return 'لم يُعثر على سطحة';
         return 'لم يُعثر على فني';
       case JobStatus.cancelled:
         return 'تم إلغاء الطلب';
@@ -282,7 +315,7 @@ class CustomerJobPanel extends StatelessWidget {
           FilledButton(
             onPressed: () => jobs.customerAcceptQuote(job.id),
             child: Text(
-              job.isOilOrder || job.isWashOrder
+              job.isOilOrder || job.isWashOrder || job.isTowOrder
                   ? 'قبول الطلب وبدء التوجه'
                   : 'قبول السعر',
             ),
@@ -298,7 +331,9 @@ class CustomerJobPanel extends StatelessWidget {
                 ? 'ورشة الزيوت في الطريق'
                 : job.isWashOrder
                     ? 'مغسل في الطريق'
-                    : 'الفني في الطريق',
+                    : job.isTowOrder
+                        ? 'سطحة في الطريق'
+                        : 'الفني في الطريق',
           ),
           const SizedBox(height: 10),
           _techLine(),
@@ -315,7 +350,9 @@ class CustomerJobPanel extends StatelessWidget {
                 ? 'جاري تبديل الزيت'
                 : job.isWashOrder
                     ? 'جاري الغسيل'
-                    : 'جاري الفحص',
+                    : job.isTowOrder
+                        ? 'جاري النقل'
+                        : 'جاري الفحص',
           ),
           const SizedBox(height: 10),
           _techLine(),
@@ -323,6 +360,19 @@ class CustomerJobPanel extends StatelessWidget {
       case JobStatus.finalQuote:
         if (job.isPartsOrder) {
           return _partsReceive(context, jobs);
+        }
+        // غسيل / سطحة: لا موافقة على سعر نهائي.
+        if (job.isWashOrder || job.isTowOrder) {
+          return [
+            _liveCard(job.isTowOrder ? 'جاري النقل' : 'جاري الغسيل'),
+            const SizedBox(height: 10),
+            _techLine(),
+            const SizedBox(height: 8),
+            _priceLine(
+              'السعر المتفق',
+              job.billAmount > 0 ? job.billAmount : job.initialPrice,
+            ),
+          ];
         }
         return [
           _techLine(),
@@ -369,9 +419,19 @@ class CustomerJobPanel extends StatelessWidget {
                 ? 'جاري تبديل الزيت'
                 : job.isWashOrder
                     ? 'جاري الغسيل'
-                    : 'العمل جارٍ',
+                    : job.isTowOrder
+                        ? 'جاري النقل'
+                        : 'العمل جارٍ',
           ),
-          if (job.warranty.enabled) ...[
+          if (job.isWashOrder || job.isTowOrder) ...[
+            const SizedBox(height: 10),
+            _techLine(),
+            const SizedBox(height: 8),
+            _priceLine(
+              'السعر المتفق',
+              job.billAmount > 0 ? job.billAmount : job.initialPrice,
+            ),
+          ] else if (job.warranty.enabled) ...[
             const SizedBox(height: 10),
             StatusPill(
                 label: warrantyLabel(job.warranty),
@@ -399,7 +459,11 @@ class CustomerJobPanel extends StatelessWidget {
                       ? 'قيّم ورشة الزيوت'
                       : job.isWashOrder
                           ? 'قيّم المغسل'
-                          : (job.isPartsOrder ? 'قيّم الورشة' : 'قيّم الفني'),
+                          : job.isTowOrder
+                              ? 'قيّم السطحة'
+                              : (job.isPartsOrder
+                                  ? 'قيّم الورشة'
+                                  : 'قيّم الفني'),
                 );
                 if (stars == null || !context.mounted) return;
                 await jobs.rateAsCustomer(job.id, stars);
@@ -413,7 +477,11 @@ class CustomerJobPanel extends StatelessWidget {
                     ? 'تقييم ورشة الزيوت'
                     : job.isWashOrder
                         ? 'تقييم المغسل'
-                        : (job.isPartsOrder ? 'تقييم الورشة' : 'تقييم الفني'),
+                        : job.isTowOrder
+                            ? 'تقييم السطحة'
+                            : (job.isPartsOrder
+                                ? 'تقييم الورشة'
+                                : 'تقييم الفني'),
               ),
             )
           else
@@ -422,9 +490,11 @@ class CustomerJobPanel extends StatelessWidget {
                   ? 'تم إرسال تقييمك لورشة الزيوت.'
                   : job.isWashOrder
                       ? 'تم إرسال تقييمك للمغسل.'
-                      : (job.isPartsOrder
-                          ? 'تم إرسال تقييمك للورشة.'
-                          : 'تم إرسال تقييمك للفني.'),
+                      : job.isTowOrder
+                          ? 'تم إرسال تقييمك للسطحة.'
+                          : (job.isPartsOrder
+                              ? 'تم إرسال تقييمك للورشة.'
+                              : 'تم إرسال تقييمك للفني.'),
             ),
         ];
       case JobStatus.noTechnician:
@@ -434,9 +504,11 @@ class CustomerJobPanel extends StatelessWidget {
                 ? 'لم تتوفر ورشة زيوت الآن. حاول مرة أخرى.'
                 : job.isWashOrder
                     ? 'لم يتوفر مغسل الآن. حاول مرة أخرى.'
-                    : (job.isPartsOrder
-                        ? 'لم تتوفر ورشة الآن. حاول مرة أخرى.'
-                        : 'لم يتوفر فني الآن. حاول مرة أخرى.'),
+                    : job.isTowOrder
+                        ? 'لم تتوفر سطحة الآن. حاول مرة أخرى.'
+                        : (job.isPartsOrder
+                            ? 'لم تتوفر ورشة الآن. حاول مرة أخرى.'
+                            : 'لم يتوفر فني الآن. حاول مرة أخرى.'),
           ),
           const SizedBox(height: 12),
           FilledButton(
@@ -562,23 +634,35 @@ class CustomerJobPanel extends StatelessWidget {
 }
 
 class _Steps extends StatelessWidget {
-  const _Steps({required this.status, this.isParts = false});
+  const _Steps({
+    required this.status,
+    this.isParts = false,
+    this.isWash = false,
+    this.isTow = false,
+  });
 
   final JobStatus status;
   final bool isParts;
+  final bool isWash;
+  final bool isTow;
 
   @override
   Widget build(BuildContext context) {
+    final simple = isWash || isTow;
     final labels = isParts
         ? const ['القبول', 'التجهيز', 'الإرسال', 'الاستلام']
-        : const ['القبول', 'في الطريق', 'الفحص', 'العمل'];
+        : isWash
+            ? const ['القبول', 'في الطريق', 'الغسيل']
+            : isTow
+                ? const ['القبول', 'في الطريق', 'النقل']
+                : const ['القبول', 'في الطريق', 'الفحص', 'العمل'];
     final active = switch (status) {
       JobStatus.quoted => 0,
       JobStatus.enRoute => 1,
-      JobStatus.arrived => isParts ? 2 : 2,
-      JobStatus.finalQuote => isParts ? 2 : 2,
-      JobStatus.inProgress => 3,
-      _ => 3,
+      JobStatus.arrived => simple ? 2 : 2,
+      JobStatus.finalQuote => simple ? 2 : 2,
+      JobStatus.inProgress => simple ? 2 : 3,
+      _ => simple ? 2 : 3,
     };
     return Row(
       children: [

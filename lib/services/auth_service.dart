@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:barrr/core/api_config.dart';
 import 'package:barrr/core/phone.dart';
 import 'package:barrr/data/collections.dart';
 import 'package:barrr/models/app_user.dart';
@@ -14,27 +17,23 @@ enum OtpPurpose { register, resetPassword }
 /// المصادقة تعتمد رقم الهاتف + كلمة المرور.
 ///
 /// Firebase لا يدعم كلمة مرور لمزوّد الهاتف، لذلك يُربط كل رقم ببريد داخلي
-/// ثابت ([phoneAuthEmail]) يحمل كلمة المرور، بينما يُستخدم رمز SMS لإثبات
-/// ملكية الرقم عند إنشاء الحساب أو استعادة كلمة المرور.
+/// ثابت ([phoneAuthEmail]) يحمل كلمة المرور، بينما يُستخدم رمز واتساب لإثبات
+/// ملكية الرقم عند إنشاء الحساب أو استعادة كلمة المرور (عبر سيرفر VPS).
 ///
-/// ترتيب إنشاء الحساب مقصود: يُنشأ الحساب أولاً بالبريد الداخلي وكلمة المرور،
-/// ثم يُربط الهاتف بعد تأكيد الرمز. العكس مستحيل لأن حماية تعداد البُرَيد في
-/// Firebase ترفض إضافة بريد إلى حساب هاتف قائم قبل التحقق من البريد، والبريد
-/// الداخلي لا يستقبل رسائل فلا يمكن التحقق منه أبداً.
+/// ترتيب إنشاء الحساب: يُنشأ الحساب أولاً بالبريد الداخلي وكلمة المرور،
+/// ثم يُرسل رمز واتساب، وبعد التأكيد يُكتب ملف المستخدم في Firestore.
 class AuthService {
-  AuthService({FirebaseAuth? auth, FirebaseFirestore? db})
+  AuthService({FirebaseAuth? auth, FirebaseFirestore? db, http.Client? httpClient})
       : _authOr = auth,
-        _dbOr = db;
+        _dbOr = db,
+        _http = httpClient ?? http.Client();
 
   final FirebaseAuth? _authOr;
   final FirebaseFirestore? _dbOr;
+  final http.Client _http;
 
   FirebaseAuth get _auth => _authOr ?? FirebaseAuth.instance;
   FirebaseFirestore get _db => _dbOr ?? FirebaseFirestore.instance;
-
-  String? _verificationId;
-  int? _resendToken;
-  ConfirmationResult? _webConfirmation;
 
   /// الرقم بصيغة E.164 الذي أُرسل إليه آخر رمز تحقق.
   String? pendingPhone;
@@ -43,7 +42,7 @@ class AuthService {
   final ValueNotifier<bool> registering = ValueNotifier(false);
 
   /// جلسة صالحة إذا رُبط الرقم، أو إذا وُجد ملف في Firestore
-  /// (حسابات تُنشئها لوحة التحكم بالبريد الداخلي دون Phone Auth).
+  /// (حسابات واتساب/لوحة التحكم بلا Phone Auth).
   Stream<String?> get uidChanges => _auth.userChanges().asyncMap((u) async {
         if (u == null) return null;
         if (u.phoneNumber != null) return u.uid;
@@ -64,8 +63,7 @@ class AuthService {
     );
   }
 
-  /// الخطوة الأولى لإنشاء الحساب: يُنشأ الحساب بكلمة المرور ثم يُرسل رمز تحقق
-  /// لربط الرقم به. يُستأنف تسجيل ناقص سابقاً بنفس كلمة المرور إن وُجد.
+  /// الخطوة الأولى: إنشاء الحساب بكلمة المرور ثم إرسال رمز واتساب.
   Future<void> startRegistration({
     required String phone,
     required String password,
@@ -75,9 +73,8 @@ class AuthService {
     registering.value = true;
     final email = phoneAuthEmail(e164);
 
-    // بقايا محاولة سابقة لم تكتمل على هذا الجهاز.
     final leftover = _auth.currentUser;
-    if (leftover != null && leftover.phoneNumber == null) {
+    if (leftover != null && !await _hasProfile(leftover.uid)) {
       await _discardIncompleteAccount(leftover);
     }
 
@@ -93,7 +90,7 @@ class AuthService {
         if (e.code != 'email-already-in-use') rethrow;
         user = await _resumeIncompleteRegistration(email, password);
       }
-      await _sendPhoneOtp(e164, linkToCurrentUser: true);
+      await _sendWhatsAppOtp(e164, OtpPurpose.register);
     } catch (_) {
       if (user != null) await _discardIncompleteAccount(user);
       registering.value = false;
@@ -101,7 +98,7 @@ class AuthService {
     }
   }
 
-  /// الخطوة الثانية: تأكيد الرمز، ربط الرقم بالحساب، وكتابة ملف المستخدم.
+  /// تأكيد رمز واتساب وكتابة ملف المستخدم (بدون ربط Phone Auth).
   Future<void> completeRegistration({
     required String smsCode,
     required String name,
@@ -152,24 +149,15 @@ class AuthService {
     };
 
     try {
-      if (kIsWeb) {
-        await _requireWebConfirmation().confirm(code);
-      } else {
-        await user.linkWithCredential(
-          PhoneAuthProvider.credential(
-            verificationId: _requireVerificationId(),
-            smsCode: code,
-          ),
-        );
-      }
+      await _verifyWhatsAppOtp(e164, code);
     } on FirebaseAuthException catch (e) {
-      // رمز خاطئ ليس سبباً لحذف الحساب، المستخدم قد يعيد المحاولة.
       if (e.code == 'invalid-verification-code' ||
-          e.code == 'invalid-verification-id') {
+          e.code == 'session-expired' ||
+          e.code == 'too-many-requests') {
         rethrow;
       }
       await _discardIncompleteAccount(user);
-      throw _mapLinkError(e);
+      rethrow;
     }
 
     try {
@@ -198,23 +186,21 @@ class AuthService {
               ? VerificationStatus.pending
               : VerificationStatus.approved,
         ).toMap(),
-        // تحتاجه لوحة التحكم لترتيب الحسابات بتاريخ التسجيل.
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      // لا نترك حساباً بلا ملف تعريف.
       await _discardIncompleteAccount(user);
-      throw _mapLinkError(e);
+      rethrow;
     }
     registering.value = false;
   }
 
-  /// إرسال رمز تحقق لاستعادة كلمة المرور لرقم مسجّل مسبقاً.
+  /// إرسال رمز واتساب لاستعادة كلمة المرور لرقم مسجّل مسبقاً.
   Future<void> sendResetOtp(String rawPhone) async {
     final e164 = _requireIraqiMobile(rawPhone);
     pendingPhone = e164;
     if (_auth.currentUser != null) await _auth.signOut();
-    await _sendPhoneOtp(e164, linkToCurrentUser: false);
+    await _sendWhatsAppOtp(e164, OtpPurpose.resetPassword);
   }
 
   /// إعادة إرسال الرمز حسب سياق الطلب الحالي.
@@ -226,51 +212,41 @@ class AuthService {
         message: 'أعد طلب رمز التحقق.',
       );
     }
-    await _sendPhoneOtp(
-      e164,
-      linkToCurrentUser: purpose == OtpPurpose.register,
-    );
+    await _sendWhatsAppOtp(e164, purpose);
   }
 
-  /// تعيين كلمة مرور جديدة بعد تأكيد الرقم برمز SMS.
+  /// تعيين كلمة مرور جديدة بعد تأكيد الرقم برمز واتساب (على السيرفر).
   Future<void> resetPassword({
     required String smsCode,
     required String newPassword,
   }) async {
+    final e164 = pendingPhone;
+    if (e164 == null) {
+      throw FirebaseAuthException(
+        code: 'session-expired',
+        message: 'أعد طلب رمز التحقق.',
+      );
+    }
     final code = _requireCode(smsCode);
-    final credential = kIsWeb
-        ? await _requireWebConfirmation().confirm(code)
-        : await _auth.signInWithCredential(
-            PhoneAuthProvider.credential(
-              verificationId: _requireVerificationId(),
-              smsCode: code,
-            ),
-          );
+    if (newPassword.length < 6) {
+      throw FirebaseAuthException(
+        code: 'weak-password',
+        message: 'كلمة المرور ضعيفة، استخدم ٦ أحرف على الأقل.',
+      );
+    }
 
-    final user = credential.user!;
-    final isNew = credential.additionalUserInfo?.isNewUser ?? false;
-    if (isNew) {
-      // الاستعادة لا تُنشئ حسابات، نحذف ما أنشأه تسجيل الدخول بالهاتف.
-      await _discardIncompleteAccount(user);
-      throw FirebaseAuthException(
-        code: 'user-not-found',
-        message: 'لا يوجد حساب بهذا الرقم. أنشئ حساباً جديداً.',
-      );
-    }
-    if (!user.providerData.any((p) => p.providerId == 'password')) {
-      await _auth.signOut();
-      throw FirebaseAuthException(
-        code: 'user-not-found',
-        message: 'لا يوجد حساب بهذا الرقم. أنشئ حساباً جديداً.',
-      );
-    }
-    await user.updatePassword(newPassword);
+    await _apiPost(
+      '/api/auth/reset-password',
+      body: {
+        'phone': e164,
+        'code': code,
+        'newPassword': newPassword,
+      },
+      auth: false,
+    );
   }
 
   Future<void> signOut() async {
-    _verificationId = null;
-    _resendToken = null;
-    _webConfirmation = null;
     pendingPhone = null;
     registering.value = false;
     await clearCachedProfile();
@@ -280,56 +256,125 @@ class AuthService {
   /// إلغاء تسجيل لم يكتمل عند تراجع المستخدم عن شاشة التحقق.
   Future<void> cancelRegistration() async {
     final user = _auth.currentUser;
-    if (user != null && user.phoneNumber == null) {
+    if (user != null && !await _hasProfile(user.uid)) {
       await _discardIncompleteAccount(user);
     }
-    _webConfirmation = null;
-    _verificationId = null;
     registering.value = false;
   }
 
-  /// إرسال الرمز: ربطاً بالحساب الحالي عند التسجيل، أو تسجيل دخول عند الاستعادة.
-  Future<void> _sendPhoneOtp(
-    String e164, {
-    required bool linkToCurrentUser,
-  }) async {
-    if (kIsWeb) {
-      // على الويب يُستخدم reCAPTCHA غير مرئي.
-      _webConfirmation = linkToCurrentUser
-          ? await _auth.currentUser!.linkWithPhoneNumber(e164)
-          : await _auth.signInWithPhoneNumber(e164);
-      return;
-    }
-
-    // منع مسار reCAPTCHA على أندرويد والاعتماد على Play Integrity.
-    try {
-      await _auth.setSettings(forceRecaptchaFlow: false);
-    } catch (e) {
-      debugPrint('setSettings: $e');
-    }
-
-    final completer = Completer<void>();
-    await _auth.verifyPhoneNumber(
-      phoneNumber: e164,
-      timeout: const Duration(seconds: 60),
-      forceResendingToken: _resendToken,
-      verificationCompleted: (_) {},
-      verificationFailed: (e) {
-        if (!completer.isCompleted) completer.completeError(e);
+  Future<void> _sendWhatsAppOtp(String e164, OtpPurpose purpose) async {
+    final needAuth = purpose == OtpPurpose.register;
+    await _apiPost(
+      '/api/auth/otp/send',
+      body: {
+        'phone': e164,
+        'purpose':
+            purpose == OtpPurpose.resetPassword ? 'resetPassword' : 'register',
       },
-      codeSent: (verificationId, resendToken) {
-        _verificationId = verificationId;
-        _resendToken = resendToken;
-        if (!completer.isCompleted) completer.complete();
-      },
-      codeAutoRetrievalTimeout: (verificationId) {
-        _verificationId = verificationId;
-      },
+      auth: needAuth,
     );
-    await completer.future;
   }
 
-  /// حساب موجود بنفس البريد الداخلي: نتابعه إن كان تسجيلاً ناقصاً بلا رقم مربوط.
+  Future<void> _verifyWhatsAppOtp(String e164, String code) async {
+    await _apiPost(
+      '/api/auth/otp/verify',
+      body: {
+        'phone': e164,
+        'code': code,
+      },
+      auth: true,
+    );
+  }
+
+  Future<Map<String, dynamic>> _apiPost(
+    String path, {
+    required Map<String, dynamic> body,
+    required bool auth,
+  }) async {
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+    };
+    if (auth) {
+      final user = _auth.currentUser;
+      if (user == null) {
+        throw FirebaseAuthException(
+          code: 'session-expired',
+          message: 'انتهت الجلسة، أعد طلب رمز التحقق.',
+        );
+      }
+      final idToken = await user.getIdToken();
+      headers['Authorization'] = 'Bearer $idToken';
+    }
+
+    late http.Response res;
+    try {
+      res = await _http
+          .post(
+            ApiConfig.uri(path),
+            headers: headers,
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 30));
+    } on TimeoutException {
+      throw FirebaseAuthException(
+        code: 'network-request-failed',
+        message: 'انتهت مهلة الاتصال بسيرفر التحقق.',
+      );
+    } catch (e) {
+      debugPrint('auth api error: $e');
+      throw FirebaseAuthException(
+        code: 'network-request-failed',
+        message:
+            'تعذّر الاتصال بسيرفر التحقق. تأكد أن السيرفر يعمل على ${ApiConfig.baseUrl}',
+      );
+    }
+
+    Map<String, dynamic> data = {};
+    try {
+      final decoded = jsonDecode(res.body);
+      if (decoded is Map<String, dynamic>) data = decoded;
+    } catch (_) {}
+
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      return data;
+    }
+
+    final code = (data['error'] as String?)?.trim();
+    final message = (data['message'] as String?)?.trim();
+    throw FirebaseAuthException(
+      code: _mapApiErrorCode(code, res.statusCode),
+      message: (message != null && message.isNotEmpty)
+          ? message
+          : 'تعذّر إكمال التحقق (${res.statusCode}).',
+    );
+  }
+
+  String _mapApiErrorCode(String? code, int status) {
+    switch (code) {
+      case 'invalid-verification-code':
+      case 'session-expired':
+      case 'too-many-requests':
+      case 'quota-exceeded':
+      case 'user-not-found':
+      case 'invalid-phone-number':
+      case 'phone-already-registered':
+      case 'weak-password':
+      case 'whatsapp_not_configured':
+        return code!;
+      default:
+        if (status == 429) return 'too-many-requests';
+        if (status == 404) return 'user-not-found';
+        if (status == 401 || status == 403) return 'session-expired';
+        return code?.isNotEmpty == true ? code! : 'internal-error';
+    }
+  }
+
+  Future<bool> _hasProfile(String uid) async {
+    final doc = await _db.collection(Cols.users).doc(uid).get();
+    return doc.exists;
+  }
+
+  /// حساب موجود بنفس البريد الداخلي: نتابعه إن كان تسجيلاً ناقصاً بلا ملف.
   Future<User> _resumeIncompleteRegistration(
     String email,
     String password,
@@ -350,7 +395,7 @@ class AuthService {
       throw alreadyRegistered;
     }
 
-    if (user.phoneNumber != null) {
+    if (user.phoneNumber != null || await _hasProfile(user.uid)) {
       await _auth.signOut();
       throw alreadyRegistered;
     }
@@ -366,28 +411,6 @@ class AuthService {
       );
     }
     return code;
-  }
-
-  ConfirmationResult _requireWebConfirmation() {
-    final confirmation = _webConfirmation;
-    if (confirmation == null) {
-      throw FirebaseAuthException(
-        code: 'session-expired',
-        message: 'أعد طلب رمز التحقق.',
-      );
-    }
-    return confirmation;
-  }
-
-  String _requireVerificationId() {
-    final id = _verificationId;
-    if (id == null) {
-      throw FirebaseAuthException(
-        code: 'session-expired',
-        message: 'أعد طلب رمز التحقق.',
-      );
-    }
-    return id;
   }
 
   String _requireIraqiMobile(String rawPhone) {
@@ -407,20 +430,5 @@ class AuthService {
     } catch (_) {
       await _auth.signOut();
     }
-  }
-
-  Object _mapLinkError(Object e) {
-    if (e is FirebaseAuthException &&
-        const {
-          'provider-already-linked',
-          'email-already-in-use',
-          'credential-already-in-use',
-        }.contains(e.code)) {
-      return FirebaseAuthException(
-        code: 'phone-already-registered',
-        message: 'هذا الرقم مسجّل مسبقاً. سجّل الدخول بكلمة المرور.',
-      );
-    }
-    return e;
   }
 }

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/geo.dart';
@@ -9,47 +10,13 @@ import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/features/shared/field_ui.dart';
+import 'package:barrr/features/shared/osm_map.dart';
 import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/service_item.dart';
+import 'package:barrr/models/vehicle_type.dart';
 
-class _TowVehicleKind {
-  const _TowVehicleKind({
-    required this.id,
-    required this.label,
-    required this.icon,
-  });
-
-  final String id;
-  final String label;
-  final IconData icon;
-}
-
-/// أنواع هيكل ثابتة لطلب السطحة (بدون كهربائية وبدون كتالوج الأدمن).
-const _towVehicleKinds = <_TowVehicleKind>[
-  _TowVehicleKind(
-    id: 'sedan',
-    label: 'صالون',
-    icon: Icons.directions_car,
-  ),
-  _TowVehicleKind(
-    id: 'suv',
-    label: 'جيب / SUV',
-    icon: Icons.directions_car_filled,
-  ),
-  _TowVehicleKind(
-    id: 'pickup',
-    label: 'بيك آب',
-    icon: Icons.airport_shuttle,
-  ),
-  _TowVehicleKind(
-    id: 'other',
-    label: 'أخرى',
-    icon: Icons.rv_hookup,
-  ),
-];
-
-/// صفحة طلب سطحة ونقل مركبة.
+/// صفحة طلب سطحة ونقل مركبة — أنواع المركبات من كتالوج الإدارة.
 class TowRequestForm extends StatefulWidget {
   const TowRequestForm({
     super.key,
@@ -59,6 +26,7 @@ class TowRequestForm extends StatefulWidget {
     required this.addressLabel,
     required this.inZone,
     required this.services,
+    required this.vehicleTypes,
     required this.onBack,
     required this.onSubmitted,
   });
@@ -69,6 +37,7 @@ class TowRequestForm extends StatefulWidget {
   final String addressLabel;
   final bool inZone;
   final Stream<List<ServiceItem>> services;
+  final Stream<List<VehicleType>> vehicleTypes;
   final VoidCallback onBack;
   final VoidCallback onSubmitted;
 
@@ -78,7 +47,7 @@ class TowRequestForm extends StatefulWidget {
 
 class _TowRequestFormState extends State<TowRequestForm> {
   final _landmark = TextEditingController();
-  final _vehicleName = TextEditingController();
+  final _note = TextEditingController();
   final _phone = TextEditingController();
 
   late LatLng _pickup;
@@ -88,7 +57,8 @@ class _TowRequestFormState extends State<TowRequestForm> {
   LatLng? _dropoff;
   String _dropoffLabel = '';
 
-  var _vehicleKind = _towVehicleKinds.first;
+  VehicleType? _vehicleType;
+  var _seededVehicle = false;
   var _phoneEditing = false;
   var _submitting = false;
 
@@ -104,9 +74,20 @@ class _TowRequestFormState extends State<TowRequestForm> {
   @override
   void dispose() {
     _landmark.dispose();
-    _vehicleName.dispose();
+    _note.dispose();
     _phone.dispose();
     super.dispose();
+  }
+
+  void _ensureVehicle(List<VehicleType> vehicles) {
+    if (_seededVehicle) return;
+    if (vehicles.isEmpty) return;
+    _seededVehicle = true;
+    final next = _vehicleType ?? vehicles.first;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _vehicleType != null) return;
+      setState(() => _vehicleType = next);
+    });
   }
 
   bool _pointInZone(LatLng p) {
@@ -182,6 +163,13 @@ class _TowRequestFormState extends State<TowRequestForm> {
       );
       return;
     }
+    final vehicleType = _vehicleType;
+    if (vehicleType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('اختر نوع المركبة')),
+      );
+      return;
+    }
     final dropoff = _dropoff;
     if (dropoff == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -197,24 +185,8 @@ class _TowRequestFormState extends State<TowRequestForm> {
       return;
     }
 
-    final vehicleRaw = _vehicleName.text.trim();
-    var make = vehicleRaw;
-    var model = '';
-    final parts = vehicleRaw.split(RegExp(r'\s+'));
-    if (parts.length >= 2) {
-      make = parts.first;
-      model = parts.sublist(1).join(' ');
-    }
-
     final landmark = _landmark.text.trim();
-    final note = [
-      'طلب سطحة',
-      'نوع الهيكل: ${_vehicleKind.label}',
-      'تحميل: $_pickupLabel',
-      if (landmark.isNotEmpty) 'علامة دالة: $landmark',
-      'تنزيل: $_dropoffLabel',
-      'إحداثيات التنزيل: ${dropoff.latitude.toStringAsFixed(5)}, ${dropoff.longitude.toStringAsFixed(5)}',
-    ].join('\n');
+    final note = _note.text.trim();
 
     setState(() => _submitting = true);
     try {
@@ -232,17 +204,17 @@ class _TowRequestFormState extends State<TowRequestForm> {
         customerId: widget.profile.id,
         serviceId: towService.id,
         serviceTitle: towService.titleAr,
-        vehicleTypeId: _vehicleKind.id,
-        vehicleTypeTitle: _vehicleKind.label,
+        vehicleTypeId: vehicleType.id,
+        vehicleTypeTitle: vehicleType.nameAr,
         exact: pickupGeo,
         isEmergency: true,
         commissionRate: towService.commissionRate,
         partName: 'سطحة',
         partNote: note,
-        carMake: make,
-        carModel: model,
         customerPhone: phone,
         providerKind: towService.providerKind.firestoreValue,
+        landmark: landmark,
+        pickupLabel: _pickupLabel,
         dropoff: dropoffGeo,
         dropoffLabel: _dropoffLabel,
       );
@@ -285,79 +257,93 @@ class _TowRequestFormState extends State<TowRequestForm> {
             child: StreamBuilder<List<ServiceItem>>(
               stream: widget.services,
               builder: (context, serviceSnap) {
-                final rawServices = (serviceSnap.data == null ||
-                        serviceSnap.data!.isEmpty)
-                    ? seedServices
-                    : serviceSnap.data!;
-                final towService = _resolveTowService(rawServices);
+                return StreamBuilder<List<VehicleType>>(
+                  stream: widget.vehicleTypes,
+                  builder: (context, vehicleSnap) {
+                    final rawServices = (serviceSnap.data == null ||
+                            serviceSnap.data!.isEmpty)
+                        ? seedServices
+                        : serviceSnap.data!;
+                    final towService = _resolveTowService(rawServices);
+                    final vehicles = (vehicleSnap.data == null ||
+                            vehicleSnap.data!.isEmpty)
+                        ? seedVehicleTypes
+                        : vehicleSnap.data!;
+                    _ensureVehicle(vehicles);
 
-                return ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-                  children: [
-                    _RouteCard(
-                      pickupLabel:
-                          _pickupInZone ? _pickupLabel : 'خارج التغطية',
-                      landmark: _landmark,
-                      dropoffLabel: _dropoffLabel,
-                      hasDropoff: _dropoff != null,
-                      onEditPickup: _pickPickup,
-                      onPickDropoff: _pickDropoff,
-                    ),
-                    const SizedBox(height: 18),
-                    _VehicleCard(
-                      selectedId: _vehicleKind.id,
-                      nameController: _vehicleName,
-                      onSelect: (k) => setState(() => _vehicleKind = k),
-                    ),
-                    const SizedBox(height: 18),
-                    _PhoneCard(
-                      controller: _phone,
-                      editing: _phoneEditing,
-                      onToggleEdit: () =>
-                          setState(() => _phoneEditing = !_phoneEditing),
-                    ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      height: 54,
-                      child: FilledButton(
-                        onPressed:
-                            _submitting ? null : () => _submit(towService),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.slate,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                    return ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                      children: [
+                        _RouteCard(
+                          pickup: _pickup,
+                          pickupLabel:
+                              _pickupInZone ? _pickupLabel : 'خارج التغطية',
+                          landmark: _landmark,
+                          dropoff: _dropoff,
+                          dropoffLabel: _dropoffLabel,
+                          hasDropoff: _dropoff != null,
+                          onEditPickup: _pickPickup,
+                          onPickDropoff: _pickDropoff,
+                        ),
+                        const SizedBox(height: 18),
+                        _VehicleCard(
+                          vehicles: vehicles,
+                          selected: _vehicleType,
+                          noteController: _note,
+                          onSelect: (t) => setState(() => _vehicleType = t),
+                        ),
+                        const SizedBox(height: 18),
+                        _PhoneCard(
+                          controller: _phone,
+                          editing: _phoneEditing,
+                          onToggleEdit: () =>
+                              setState(() => _phoneEditing = !_phoneEditing),
+                        ),
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          height: 54,
+                          child: FilledButton(
+                            onPressed: _submitting || vehicles.isEmpty
+                                ? null
+                                : () => _submit(towService),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.slate,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: _submitting
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.4,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.bolt, color: AppColors.amber),
+                                      SizedBox(width: 8),
+                                      Flexible(
+                                        child: Text(
+                                          'إرسال الطلب لأقرب سطحة متاحة',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                           ),
                         ),
-                        child: _submitting
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.4,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.bolt, color: AppColors.amber),
-                                  SizedBox(width: 8),
-                                  Flexible(
-                                    child: Text(
-                                      'إرسال الطلب لأقرب سطحة متاحة',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                      ),
-                    ),
-                  ],
+                      ],
+                    );
+                  },
                 );
               },
             ),
@@ -437,16 +423,20 @@ class _TopBar extends StatelessWidget {
 
 class _RouteCard extends StatelessWidget {
   const _RouteCard({
+    required this.pickup,
     required this.pickupLabel,
     required this.landmark,
+    required this.dropoff,
     required this.dropoffLabel,
     required this.hasDropoff,
     required this.onEditPickup,
     required this.onPickDropoff,
   });
 
+  final LatLng pickup;
   final String pickupLabel;
   final TextEditingController landmark;
+  final LatLng? dropoff;
   final String dropoffLabel;
   final bool hasDropoff;
   final VoidCallback onEditPickup;
@@ -477,6 +467,8 @@ class _RouteCard extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          _RoutePreviewMap(pickup: pickup, dropoff: dropoff),
           const SizedBox(height: 14),
           Stack(
             children: [
@@ -635,6 +627,125 @@ class _RouteCard extends StatelessWidget {
   }
 }
 
+class _RoutePreviewMap extends StatelessWidget {
+  const _RoutePreviewMap({required this.pickup, required this.dropoff});
+
+  final LatLng pickup;
+  final LatLng? dropoff;
+
+  @override
+  Widget build(BuildContext context) {
+    final to = dropoff;
+    final center = to == null
+        ? pickup
+        : LatLng(
+            (pickup.latitude + to.latitude) / 2,
+            (pickup.longitude + to.longitude) / 2,
+          );
+    double zoom = 14;
+    if (to != null) {
+      final dLat = (pickup.latitude - to.latitude).abs();
+      final dLng = (pickup.longitude - to.longitude).abs();
+      final span = dLat > dLng ? dLat : dLng;
+      if (span < 0.005) {
+        zoom = 15;
+      } else if (span < 0.02) {
+        zoom = 13;
+      } else if (span < 0.05) {
+        zoom = 12;
+      } else if (span < 0.1) {
+        zoom = 11;
+      } else {
+        zoom = 10;
+      }
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        height: 170,
+        child: Stack(
+          children: [
+            OsmMap(
+              key: ValueKey(
+                '${pickup.latitude},${pickup.longitude},'
+                '${to?.latitude},${to?.longitude}',
+              ),
+              center: center,
+              zoom: zoom,
+              showMyLocation: false,
+              interactive: true,
+              markers: [
+                Marker(
+                  point: pickup,
+                  width: 40,
+                  height: 40,
+                  child: const Icon(
+                    Icons.trip_origin,
+                    color: AppColors.amberDeep,
+                    size: 32,
+                  ),
+                ),
+                if (to != null)
+                  Marker(
+                    point: to,
+                    width: 40,
+                    height: 40,
+                    child: const Icon(
+                      Icons.flag,
+                      color: AppColors.slate,
+                      size: 32,
+                    ),
+                  ),
+              ],
+            ),
+            Positioned(
+              left: 8,
+              bottom: 8,
+              child: Row(
+                children: [
+                  _LegendChip(color: AppColors.amberDeep, label: 'تحميل'),
+                  const SizedBox(width: 6),
+                  _LegendChip(color: AppColors.slate, label: 'تنزيل'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LegendChip extends StatelessWidget {
+  const _LegendChip({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.circle, size: 10, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RouteStop extends StatelessWidget {
   const _RouteStop({
     required this.icon,
@@ -707,14 +818,16 @@ class _RouteStop extends StatelessWidget {
 
 class _VehicleCard extends StatelessWidget {
   const _VehicleCard({
-    required this.selectedId,
-    required this.nameController,
+    required this.vehicles,
+    required this.selected,
+    required this.noteController,
     required this.onSelect,
   });
 
-  final String selectedId;
-  final TextEditingController nameController;
-  final ValueChanged<_TowVehicleKind> onSelect;
+  final List<VehicleType> vehicles;
+  final VehicleType? selected;
+  final TextEditingController noteController;
+  final ValueChanged<VehicleType> onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -734,32 +847,42 @@ class _VehicleCard extends StatelessWidget {
               Icon(Icons.directions_car, size: 20, color: AppColors.amberDeep),
               SizedBox(width: 6),
               Text(
-                'نوع السيارة',
+                'نوع المركبة',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              for (var i = 0; i < _towVehicleKinds.length; i++) ...[
-                if (i > 0) const SizedBox(width: 8),
-                Expanded(
-                  child: _VehicleKindTile(
-                    kind: _towVehicleKinds[i],
-                    selected: selectedId == _towVehicleKinds[i].id,
-                    onTap: () => onSelect(_towVehicleKinds[i]),
+              for (final t in vehicles)
+                FilterChip(
+                  label: Text(
+                    t.nameAr,
+                    style: const TextStyle(
+                      color: AppColors.ink,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
                   ),
+                  selected: selected?.id == t.id,
+                  showCheckmark: true,
+                  checkmarkColor: AppColors.ink,
+                  backgroundColor: AppColors.recessed,
+                  selectedColor: AppColors.amber,
+                  onSelected: (_) => onSelect(t),
                 ),
-              ],
             ],
           ),
           const SizedBox(height: 12),
           TextField(
-            controller: nameController,
+            controller: noteController,
+            maxLines: 2,
             style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
-              hintText: 'الموديل',
+              hintText: 'ملاحظة اختيارية',
               hintStyle:
                   const TextStyle(color: AppColors.inkSoft, fontSize: 12),
               filled: true,
@@ -768,82 +891,10 @@ class _VehicleCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              contentPadding: const EdgeInsets.all(12),
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _VehicleKindTile extends StatelessWidget {
-  const _VehicleKindTile({
-    required this.kind,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final _TowVehicleKind kind;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.slate : const Color(0xFFEFF4FF),
-      borderRadius: BorderRadius.circular(12),
-      elevation: selected ? 2 : 0,
-      shadowColor: Colors.black26,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected ? AppColors.slate : Colors.transparent,
-              width: 1.5,
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? Colors.white.withValues(alpha: 0.14)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  kind.icon,
-                  size: 22,
-                  color: selected ? AppColors.amber : AppColors.ink,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                kind.label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  height: 1.2,
-                  fontWeight: FontWeight.w700,
-                  color: selected ? Colors.white : AppColors.ink,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

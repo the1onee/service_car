@@ -14,7 +14,7 @@ class AppStrings {
   static const welcomeBack = 'أهلاً بعودتك';
   static const loginHint = 'سجّل بالهاتف وكلمة المرور للمتابعة';
   static const registerTitle = 'إنشاء حساب';
-  static const registerHint = 'اختر نوع الحساب، أكمل البيانات، ثم أكّد رقم هاتفك';
+  static const registerHint = 'اختر نوع الحساب، أكمل البيانات، ثم أكّد رقمك عبر واتساب';
   static const customerAccountNote =
       'حساب العميل جاهز فوراً بعد التأكيد.';
   static const technicianAccountNote =
@@ -44,7 +44,7 @@ class AppStrings {
   static const haveAccount = 'لديك حساب بالفعل؟';
   static const continueLabel = 'متابعة';
   static const verifyPhone = 'تأكيد رقم الهاتف';
-  static const otpSentTo = 'أدخل الرمز المرسل إلى';
+  static const otpSentTo = 'أدخل رمز واتساب المرسل إلى';
   static const verifyOtp = 'تأكيد الرمز';
   static const resendOtp = 'إعادة إرسال الرمز';
   static const resendIn = 'إعادة الإرسال بعد';

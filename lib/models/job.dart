@@ -86,6 +86,9 @@ class Job {
     this.landmark = '',
     this.washPackageId = '',
     this.washPackageName = '',
+    this.pickupLabel = '',
+    this.dropoffLocation,
+    this.dropoffLabel = '',
   });
 
   final String id;
@@ -145,6 +148,9 @@ class Job {
   final String landmark;
   final String washPackageId;
   final String washPackageName;
+  final String pickupLabel;
+  final GeoPoint? dropoffLocation;
+  final String dropoffLabel;
 
   bool get isPartsOrder =>
       serviceId == 'parts' || providerKind == 'workshop';
@@ -153,6 +159,8 @@ class Job {
       serviceId == 'oil' || providerKind == 'oilWorkshop';
 
   bool get isWashOrder => serviceId == 'wash';
+
+  bool get isTowOrder => serviceId == 'towing';
 
   String get oilDisplayTitle {
     if (oilTypeName.trim().isNotEmpty) return oilTypeName.trim();
@@ -286,6 +294,9 @@ class Job {
         if (landmark.isNotEmpty) 'landmark': landmark,
         if (washPackageId.isNotEmpty) 'washPackageId': washPackageId,
         if (washPackageName.isNotEmpty) 'washPackageName': washPackageName,
+        if (pickupLabel.isNotEmpty) 'pickupLabel': pickupLabel,
+        if (dropoffLocation != null) 'dropoffLocation': dropoffLocation,
+        if (dropoffLabel.isNotEmpty) 'dropoffLabel': dropoffLabel,
         'createdAt': FieldValue.serverTimestamp(),
       };
 
@@ -340,6 +351,9 @@ class Job {
       landmark: d['landmark'] as String? ?? '',
       washPackageId: d['washPackageId'] as String? ?? '',
       washPackageName: d['washPackageName'] as String? ?? '',
+      pickupLabel: d['pickupLabel'] as String? ?? '',
+      dropoffLocation: d['dropoffLocation'] as GeoPoint?,
+      dropoffLabel: d['dropoffLabel'] as String? ?? '',
     );
   }
 }

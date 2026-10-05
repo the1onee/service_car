@@ -38,6 +38,10 @@ class JobOffer {
     this.landmark = '',
     this.washPackageId = '',
     this.washPackageName = '',
+    this.pickupLabel = '',
+    this.pickupLocation,
+    this.dropoffLocation,
+    this.dropoffLabel = '',
     this.createdAt,
   });
 
@@ -78,6 +82,11 @@ class JobOffer {
   final String landmark;
   final String washPackageId;
   final String washPackageName;
+  final String pickupLabel;
+  /// نقطة التحميل الدقيقة (سطحة) — للخريطة قبل قبول العميل.
+  final GeoPoint? pickupLocation;
+  final GeoPoint? dropoffLocation;
+  final String dropoffLabel;
 
   bool get isAgencyOilWorkshop => oilWorkshopTier == 'agency';
   bool get isTrustedOilWorkshop => oilWorkshopTier == 'trusted';
@@ -95,6 +104,12 @@ class JobOffer {
   bool get hasWashDetails =>
       washPackageName.isNotEmpty ||
       washPackageId.isNotEmpty;
+
+  bool get hasTowDetails =>
+      dropoffLabel.isNotEmpty ||
+      dropoffLocation != null ||
+      pickupLabel.isNotEmpty ||
+      partName.contains('سطحة');
 
   String get washDisplayTitle {
     if (washPackageName.trim().isNotEmpty) return washPackageName.trim();
@@ -164,6 +179,10 @@ class JobOffer {
       landmark: d['landmark'] as String? ?? '',
       washPackageId: d['washPackageId'] as String? ?? '',
       washPackageName: d['washPackageName'] as String? ?? '',
+      pickupLabel: d['pickupLabel'] as String? ?? '',
+      pickupLocation: d['pickupLocation'] as GeoPoint?,
+      dropoffLocation: d['dropoffLocation'] as GeoPoint?,
+      dropoffLabel: d['dropoffLabel'] as String? ?? '',
       createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
     );
   }

@@ -84,13 +84,24 @@ class _TechnicianHomeState extends State<TechnicianHome> {
     _booted = true;
     _activeJobSub = scope.jobs.watchActiveForTechnician(uid).listen((job) {
       if (!mounted) return;
-      setState(() => _activeJob = job);
+      setState(() {
+        // بعد إنهاء المهمة أزل أي عرض قديم حتى لا يعود الطلب المكتمل.
+        if (job == null && _activeJob != null) {
+          _incoming = null;
+        }
+        _activeJob = job;
+      });
     });
     _offersSub = scope.jobs.watchPendingOffers(uid).listen((offers) {
       if (!mounted) return;
       final live = offers
           .where((o) => o.isOpenEnded || o.remainingSeconds() > 0)
           .toList();
+      if (_incoming != null &&
+          live.every((o) => o.id != _incoming!.id)) {
+        setState(() => _incoming = null);
+        return;
+      }
       if (_incoming == null && live.isNotEmpty && _activeJob == null) {
         setState(() {
           _incoming = live.first;

@@ -1,7 +1,7 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { getApps, initializeApp } = require("firebase-admin/app");
-const { getFirestore, Timestamp, FieldValue } = require("firebase-admin/firestore");
+const { getFirestore, Timestamp, FieldValue, GeoPoint } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 
 if (getApps().length === 0) initializeApp();
@@ -417,6 +417,18 @@ async function dispatchJobInternal(jobId) {
     ? null
     : Timestamp.fromDate(new Date(Date.now() + seconds * 1000));
   const batch = db.batch();
+  let towPickupExact = null;
+  if (job.serviceId === "towing") {
+    towPickupExact = job.exactLocation || null;
+    if (!towPickupExact) {
+      try {
+        const locSnap = await db.collection("jobLocations").doc(jobId).get();
+        towPickupExact = locSnap.data()?.exact || null;
+      } catch (_) {
+        towPickupExact = null;
+      }
+    }
+  }
   for (const t of ranked) {
     const offer = {
       jobId,
@@ -448,6 +460,13 @@ async function dispatchJobInternal(jobId) {
     if (job.landmark) offer.landmark = job.landmark;
     if (job.washPackageId) offer.washPackageId = job.washPackageId;
     if (job.washPackageName) offer.washPackageName = job.washPackageName;
+    if (job.pickupLabel) offer.pickupLabel = job.pickupLabel;
+    if (job.dropoffLocation) {
+      // سطحة: نقطة التنزيل دقيقة على الخريطة.
+      offer.dropoffLocation = job.dropoffLocation;
+    }
+    if (job.dropoffLabel) offer.dropoffLabel = job.dropoffLabel;
+    if (towPickupExact) offer.pickupLocation = towPickupExact;
     if (t.oilWorkshopTier) offer.oilWorkshopTier = t.oilWorkshopTier;
     batch.set(db.collection("jobOffers").doc(), offer);
   }
@@ -468,7 +487,9 @@ async function dispatchJobInternal(jobId) {
         ? "طلب تبديل زيت — أرسل سعرك متى جاهز (بدون مهلة)"
         : job.serviceId === "wash"
           ? "طلب غسيل سيارات — أرسل سعرك متى جاهز (بدون مهلة)"
-          : "طلب خدمة — أرسل سعرك متى جاهز (بدون مهلة)";
+          : job.serviceId === "towing"
+            ? "طلب سطحة — اقبل وأدخل السعر (أول قبول يفوز)"
+            : "طلب خدمة — أرسل سعرك متى جاهز (بدون مهلة)";
   await notify(
     ranked.map((t) => t.token),
     "طلب جديد",
