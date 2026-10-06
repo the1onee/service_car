@@ -6,9 +6,15 @@ import 'package:barrr/core/phone.dart';
 void main() {
   group('ApiConfig', () {
     test('uri joins path to base', () {
-      final u = ApiConfig.uri('/api/auth/otp/send');
-      expect(u.path, '/api/auth/otp/send');
+      final u = ApiConfig.uri('/api/health');
+      expect(u.path, '/api/health');
       expect(u.host.isNotEmpty, isTrue);
+    });
+
+    test('notifications path joins correctly', () {
+      final u = ApiConfig.uri('/api/notifications/send');
+      expect(u.path, '/api/notifications/send');
+      expect(u.isScheme('http') || u.isScheme('https'), isTrue);
     });
 
     test('baseUrl has no trailing slash', () {
@@ -16,7 +22,6 @@ void main() {
     });
 
     test('android emulator host when no dart-define', () {
-      // في اختبارات الوحدة غالباً ليست أندرويد؛ نتحقق أن القيمة غير فارغة فقط.
       expect(ApiConfig.baseUrl, isNotEmpty);
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
         expect(ApiConfig.baseUrl, contains('10.0.2.2'));
@@ -24,7 +29,7 @@ void main() {
     });
   });
 
-  group('phone auth email', () {
+  group('phone auth email contract with server', () {
     test('matches server convention', () {
       expect(phoneAuthEmail('+9647701234567'), '9647701234567@phone.barrr.app');
       expect(looksLikeIraqiMobile(normalizeIraqiPhone('07701234567')), isTrue);

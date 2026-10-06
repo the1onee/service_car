@@ -217,186 +217,6 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _RolePicker extends StatelessWidget {
-  const _RolePicker({required this.role, required this.onChanged});
-
-  final UserRole role;
-  final ValueChanged<UserRole> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _roleTile(
-                label: AppStrings.customer,
-                selected: role == UserRole.customer,
-                onTap: () => onChanged(UserRole.customer),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _roleTile(
-                label: AppStrings.technician,
-                selected: role == UserRole.technician,
-                onTap: () => onChanged(UserRole.technician),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _roleTile(
-                label: AppStrings.workshop,
-                selected: role == UserRole.workshop,
-                onTap: () => onChanged(UserRole.workshop),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _roleTile(
-                label: AppStrings.oilWorkshop,
-                selected: role == UserRole.oilWorkshop,
-                onTap: () => onChanged(UserRole.oilWorkshop),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _roleTile(
-                label: AppStrings.paintShop,
-                selected: role == UserRole.paintShop,
-                onTap: () => onChanged(UserRole.paintShop),
-              ),
-            ),
-            const Expanded(child: SizedBox()),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _roleTile({
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.petrolTint : AppColors.canvas,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: selected ? AppColors.petrol : AppColors.outline,
-            width: selected ? 1.6 : 1,
-          ),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              color: selected ? AppColors.petrolDark : AppColors.inkSoft,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RoleNotice extends StatelessWidget {
-  const _RoleNotice({required this.role});
-
-  final UserRole role;
-
-  @override
-  Widget build(BuildContext context) {
-    final isTech = role == UserRole.technician;
-    final isWorkshop = role == UserRole.workshop;
-    final isOilWorkshop = role == UserRole.oilWorkshop;
-    final isPaintShop = role == UserRole.paintShop;
-    final tint = isOilWorkshop || isPaintShop
-        ? AppColors.amberTint
-        : (isWorkshop
-            ? AppColors.recessed
-            : (isTech ? AppColors.amberTint : AppColors.petrolTint));
-    final badge = isOilWorkshop || isPaintShop
-        ? AppColors.amber
-        : (isWorkshop
-            ? AppColors.slate
-            : (isTech ? AppColors.amber : AppColors.petrol));
-    final note = isPaintShop
-        ? AppStrings.paintShopAccountNote
-        : (isOilWorkshop
-            ? AppStrings.oilWorkshopAccountNote
-            : (isWorkshop
-                ? AppStrings.workshopAccountNote
-                : (isTech
-                    ? AppStrings.technicianAccountNote
-                    : AppStrings.customerAccountNote)));
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: tint,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Container(
-            height: 34,
-            width: 34,
-            decoration: BoxDecoration(
-              color: badge,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isPaintShop
-                  ? Icons.format_paint_rounded
-                  : (isOilWorkshop
-                      ? Icons.oil_barrel_rounded
-                      : (isWorkshop
-                          ? Icons.storefront_rounded
-                          : (isTech
-                              ? Icons.handyman_rounded
-                              : Icons.person_rounded))),
-              color: isTech || isOilWorkshop || isPaintShop
-                  ? AppColors.ink
-                  : Colors.white,
-              size: 19,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              note,
-              style: TextStyle(
-                fontSize: 12.5,
-                height: 1.5,
-                color: isTech || isOilWorkshop || isPaintShop
-                    ? AppColors.ink
-                    : AppColors.petrolDark,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _Pill extends StatelessWidget {
   const _Pill({
     required this.icon,
@@ -437,10 +257,9 @@ class _Pill extends StatelessWidget {
 }
 
 class _PhoneField extends StatelessWidget {
-  const _PhoneField({required this.controller, this.onSubmitted});
+  const _PhoneField({required this.controller});
 
   final TextEditingController controller;
-  final ValueChanged<String>? onSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -455,7 +274,6 @@ class _PhoneField extends StatelessWidget {
         FilteringTextInputFormatter.allow(RegExp(r'[0-9+\u0660-\u0669 ]')),
         LengthLimitingTextInputFormatter(16),
       ],
-      onFieldSubmitted: onSubmitted,
       decoration: const InputDecoration(
         labelText: AppStrings.phone,
         hintText: '07701234567',
@@ -641,6 +459,100 @@ class _OtpBoxesState extends State<_OtpBoxes> {
           color: AppColors.petrolDark,
         ),
       ),
+    );
+  }
+}
+
+class _GoogleCircleButton extends StatelessWidget {
+  const _GoogleCircleButton({required this.busy, required this.onPressed});
+
+  final bool busy;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Material(
+          color: Colors.white,
+          shape: const CircleBorder(
+            side: BorderSide(color: Color(0xFFD0D7E2)),
+          ),
+          elevation: 2,
+          shadowColor: Colors.black26,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: busy ? null : onPressed,
+            child: SizedBox(
+              width: 72,
+              height: 72,
+              child: Center(
+                child: busy
+                    ? const SizedBox(
+                        width: 26,
+                        height: 26,
+                        child: CircularProgressIndicator(strokeWidth: 2.4),
+                      )
+                    : const Text(
+                        'G',
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF4285F4),
+                          height: 1,
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          AppStrings.continueWithGoogle,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppColors.inkSoft,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _IdentifierField extends StatelessWidget {
+  const _IdentifierField({
+    required this.controller,
+    this.onSubmitted,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String>? onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller,
+      textInputAction: TextInputAction.next,
+      keyboardType: TextInputType.emailAddress,
+      autofillHints: const [AutofillHints.username, AutofillHints.email],
+      textDirection: TextDirection.ltr,
+      decoration: const InputDecoration(
+        labelText: AppStrings.phoneOrEmail,
+        hintText: AppStrings.phoneOrEmailHint,
+        prefixIcon: Icon(Icons.person_outline_rounded),
+      ),
+      validator: (v) {
+        final raw = (v ?? '').trim();
+        if (raw.isEmpty) return 'أدخل رقم الهاتف أو البريد.';
+        try {
+          resolveAuthEmail(raw);
+        } on FormatException catch (e) {
+          return e.message;
+        }
+        return null;
+      },
+      onFieldSubmitted: onSubmitted,
     );
   }
 }

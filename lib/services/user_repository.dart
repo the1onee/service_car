@@ -1,8 +1,10 @@
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:barrr/core/constants.dart';
+import 'package:barrr/core/phone.dart';
 import 'package:barrr/data/collections.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/models/app_user.dart';
@@ -34,9 +36,14 @@ class OnlineResult {
 }
 
 class UserRepository {
-  UserRepository({FirebaseFirestore? db}) : _injected = db;
+  UserRepository({
+    FirebaseFirestore? db,
+    Stream<AppUser?> Function(String uid)? watchOverride,
+  })  : _injected = db,
+        _watchOverride = watchOverride;
 
   final FirebaseFirestore? _injected;
+  final Stream<AppUser?> Function(String uid)? _watchOverride;
   FirebaseFirestore get _db => _injected ?? FirebaseFirestore.instance;
   final _userStreams = <String, Stream<AppUser?>>{};
   final _walletStreams = <String, Stream<List<WalletEntry>>>{};
@@ -46,6 +53,8 @@ class UserRepository {
       _db.collection(Cols.users).doc(uid);
 
   Stream<AppUser?> watch(String uid) {
+    final override = _watchOverride;
+    if (override != null) return override(uid);
     return _userStreams.putIfAbsent(
       uid,
       () => _userRef(uid).snapshots().map((d) {
@@ -155,6 +164,28 @@ class UserRepository {
     }
     if (patch.isEmpty) return Future.value();
     return _userRef(uid).set(patch, SetOptions(merge: true));
+  }
+
+  /// يحفظ رقم هاتف عراقي بعد التسجيل (Google/بريد بلا رقم).
+  Future<void> updatePhone(String uid, String rawPhone) async {
+    final e164 = normalizeIraqiPhone(rawPhone);
+    if (!looksLikeIraqiMobile(e164)) {
+      throw const FormatException('رقم الهاتف غير صالح. مثال: 07701234567');
+    }
+
+    final taken = await _db
+        .collection(Cols.users)
+        .where('phone', isEqualTo: e164)
+        .limit(1)
+        .get();
+    if (taken.docs.isNotEmpty && taken.docs.first.id != uid) {
+      throw FirebaseAuthException(
+        code: 'phone-already-registered',
+        message: 'هذا الرقم مستخدم لحساب آخر.',
+      );
+    }
+
+    await _userRef(uid).set({'phone': e164}, SetOptions(merge: true));
   }
 
   Future<void> setServiceIds(String uid, List<String> ids) {

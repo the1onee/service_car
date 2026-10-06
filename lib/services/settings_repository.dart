@@ -3,9 +3,10 @@ import 'package:barrr/data/collections.dart';
 import 'package:barrr/models/app_settings.dart';
 
 class SettingsRepository {
-  SettingsRepository({FirebaseFirestore? db}) : _db = db ?? FirebaseFirestore.instance;
+  SettingsRepository({FirebaseFirestore? db}) : _injected = db;
 
-  final FirebaseFirestore _db;
+  final FirebaseFirestore? _injected;
+  FirebaseFirestore get _db => _injected ?? FirebaseFirestore.instance;
   Stream<AppSettings>? _settingsStream;
   Stream<CityZone?>? _cityStream;
 

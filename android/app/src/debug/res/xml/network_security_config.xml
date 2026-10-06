@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- أثناء التطوير: السماح بـ HTTP لعنوان السيرفر المحلي/الشبكة. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

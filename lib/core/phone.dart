@@ -34,3 +34,32 @@ String prettyIraqiPhone(String e164) {
 /// البريد الداخلي المقابل للرقم، لتخزين كلمة المرور في Firebase Auth.
 String phoneAuthEmail(String e164) =>
     '${e164.replaceAll('+', '')}@$_authEmailDomain';
+
+bool looksLikeEmail(String raw) {
+  final v = raw.trim();
+  return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v);
+}
+
+/// يحوّل إدخال المستخدم (هاتف عراقي أو بريد) إلى بريد Firebase Auth.
+String resolveAuthEmail(String raw) {
+  final v = raw.trim();
+  if (v.contains('@')) {
+    if (!looksLikeEmail(v)) {
+      throw FormatException('بريد إلكتروني غير صالح.');
+    }
+    return v.toLowerCase();
+  }
+  final e164 = normalizeIraqiPhone(v);
+  if (!looksLikeIraqiMobile(e164)) {
+    throw FormatException('أدخل رقماً عراقياً أو بريداً إلكترونياً صالحاً.');
+  }
+  return phoneAuthEmail(e164);
+}
+
+/// إن كان الإدخال هاتفاً يُرجع E.164، وإلا سلسلة فارغة.
+String phoneFromIdentifier(String raw) {
+  final v = raw.trim();
+  if (v.contains('@')) return '';
+  final e164 = normalizeIraqiPhone(v);
+  return looksLikeIraqiMobile(e164) ? e164 : '';
+}

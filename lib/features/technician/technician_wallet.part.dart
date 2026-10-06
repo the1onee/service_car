@@ -715,7 +715,7 @@ class _WalletRechargePanelState extends State<_WalletRechargePanel> {
             ),
             const SizedBox(height: 12),
             StreamBuilder<List<WalletTopUp>>(
-              stream: scope.users.watchWalletTopUps(widget.technicianId),
+              stream: AppScope.of(context).users.watchWalletTopUps(widget.technicianId),
               builder: (context, snap) {
                 if (snap.hasError) {
                   return Text(

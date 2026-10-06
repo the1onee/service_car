@@ -29,6 +29,8 @@ class FcmService {
 
   Future<void> init(String uid) async {
     if (kIsWeb) return;
+    // في اختبارات الوحدة لا تُهيَّأ Firebase — تجنّب لمس Messaging.
+    if (Firebase.apps.isEmpty) return;
     try {
       final messaging = FirebaseMessaging.instance;
 

@@ -12,11 +12,18 @@ class AppStrings {
   static const phone = 'رقم الهاتف';
   static const address = 'العنوان';
   static const welcomeBack = 'أهلاً بعودتك';
-  static const loginHint = 'سجّل بالهاتف وكلمة المرور للمتابعة';
+  static const loginHint = 'سجّل عبر Google أو بالهاتف/البريد وكلمة المرور';
   static const registerTitle = 'إنشاء حساب';
-  static const registerHint = 'اختر نوع الحساب، أكمل البيانات، ثم أكّد رقمك عبر واتساب';
+  static const registerHint = 'Google أو رقم الهاتف/البريد مع كلمة المرور';
+  static const continueWithGoogle = 'Google';
+  static const phoneOrEmail = 'رقم الهاتف أو البريد الإلكتروني';
+  static const phoneOrEmailHint = '0770… أو name@email.com';
+  static const addPhoneTitle = 'أضف رقم هاتفك';
+  static const addPhoneHint =
+      'لإكمال حسابك نحتاج رقم هاتف عراقي صالح للتواصل.';
+  static const savePhone = 'حفظ الرقم والمتابعة';
   static const customerAccountNote =
-      'حساب العميل جاهز فوراً بعد التأكيد.';
+      'حساب العميل جاهز فوراً بعد التسجيل.';
   static const technicianAccountNote =
       'حساب الفني يُرسل لطلب انضمام، ويُفعَّل بعد موافقة الإدارة.';
   static const workshopAccountNote =
@@ -43,7 +50,6 @@ class AppStrings {
   static const noAccount = 'ليس لديك حساب؟';
   static const haveAccount = 'لديك حساب بالفعل؟';
   static const continueLabel = 'متابعة';
-  static const verifyPhone = 'تأكيد رقم الهاتف';
   static const otpSentTo = 'أدخل رمز واتساب المرسل إلى';
   static const verifyOtp = 'تأكيد الرمز';
   static const resendOtp = 'إعادة إرسال الرمز';

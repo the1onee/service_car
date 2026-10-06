@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/features/auth/add_phone_screen.dart';
 import 'package:barrr/features/auth/auth_screen.dart';
 import 'package:barrr/features/shell/role_home.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/services/user_repository.dart';
 
 class AuthGate extends StatefulWidget {
-  const AuthGate({super.key});
+  const AuthGate({super.key, this.roleHomeBuilder});
+
+  /// للاختبارات: يستبدل شاشات الأدوار داخل [RoleHome].
+  final Widget Function(AppUser profile, String roleKey)? roleHomeBuilder;
 
   @override
   State<AuthGate> createState() => _AuthGateState();
@@ -43,7 +47,11 @@ class _AuthGateState extends State<AuthGate> {
               cached.id == currentUid &&
               (snap.connectionState == ConnectionState.waiting ||
                   snap.data == currentUid)) {
-            return _HomeFromProfile(seed: cached, uid: currentUid);
+            return _HomeFromProfile(
+              seed: cached,
+              uid: currentUid,
+              roleHomeBuilder: widget.roleHomeBuilder,
+            );
           }
           // الجلسة تنتظر قراءة الملف؛ لا نعرض الدخول قبل أن يصدر البث قيمة.
           if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
@@ -51,7 +59,10 @@ class _AuthGateState extends State<AuthGate> {
           }
           final uid = snap.data;
           if (uid == null) return const AuthScreen();
-          return _HomeFromProfile(uid: uid);
+          return _HomeFromProfile(
+            uid: uid,
+            roleHomeBuilder: widget.roleHomeBuilder,
+          );
         },
       ),
     );
@@ -59,10 +70,15 @@ class _AuthGateState extends State<AuthGate> {
 }
 
 class _HomeFromProfile extends StatelessWidget {
-  const _HomeFromProfile({required this.uid, this.seed});
+  const _HomeFromProfile({
+    required this.uid,
+    this.seed,
+    this.roleHomeBuilder,
+  });
 
   final String uid;
   final AppUser? seed;
+  final Widget Function(AppUser profile, String roleKey)? roleHomeBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +94,13 @@ class _HomeFromProfile extends StatelessWidget {
           }
           return const _MissingProfile();
         }
-        return RoleHome(profile: appUser);
+        if (appUser.phone.trim().isEmpty) {
+          return AddPhoneScreen(profile: appUser);
+        }
+        return RoleHome(
+          profile: appUser,
+          homeBuilder: roleHomeBuilder,
+        );
       },
     );
   }

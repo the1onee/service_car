@@ -46,3 +46,10 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Firestore rules tests
+rules-test/node_modules/
+rules-test/package-lock.json
+
+# Editor
+.vscode/
