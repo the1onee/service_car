@@ -98,6 +98,18 @@ flowchart LR
 ### د) الإشعارات / Express
 
 - [`../barrr-admin/server/api.test.js`](../barrr-admin/server/api.test.js) — health، send، test مع mocks عبر `createApp`
+- منطق رسائل الطلبات: [`../barrr-admin/server/job_notify.js`](../barrr-admin/server/job_notify.js) + [`job_notify.test.js`](../barrr-admin/server/job_notify.test.js)
+- الإرسال الفعلي عبر [`watchers.js`](../barrr-admin/server/watchers.js) (يتطلب تشغيل السيرفر + `fcmToken`)
+
+**مصفوفة إشعارات الطلبات**
+
+| الحدث | المشغّل | المستلم |
+|-------|---------|---------|
+| طلب جديد للمزوّد | إضافة `jobOffers` بحالة `pending` | المزوّد المعروض عليه |
+| عرض سعري / مقارنة | `quoted` / `comparing` | العميل |
+| قبول طارئ (`offerPending`→`enRoute`) | تغيّر الحالة | العميل: «تم قبول طلبك» + الفني: «تم تعيينك» |
+| اختيار عميل (`comparing`/`quoted`→`enRoute`) | تغيّر الحالة | العميل تأكيد + الفني «العميل وافق» |
+| وصل / سعر نهائي / بدء / إكمال / إلغاء / لا فني | تغيّر الحالة | حسب `messagesForTransition` |
 
 ### هـ) قواعد Firestore
 
@@ -122,6 +134,7 @@ flowchart LR
 | `test/support/test_app_scope.dart` | مساعد اختبار |
 | `../barrr-admin/server/phone_fcm.test.js` | هاتف + audience |
 | `../barrr-admin/server/api.test.js` | Express HTTP mocks |
+| `../barrr-admin/server/job_notify.test.js` | رسائل انتقال حالة الطلب |
 | `../barrr-admin/src/lib/*.test.ts` | Vitest Admin |
 | `rules-test/` | قواعد Firestore |
 | `../.github/workflows/test.yml` | CI |
