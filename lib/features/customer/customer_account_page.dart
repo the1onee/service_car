@@ -5,6 +5,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/core/strings.dart';
+import 'package:barrr/features/auth/add_phone_screen.dart';
 import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
@@ -153,6 +155,18 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
     }
   }
 
+  Future<void> _editPhone() async {
+    final saved = await showPhoneEditor(
+      context,
+      uid: widget.profile.id,
+      currentPhone: widget.profile.phone,
+    );
+    if (!saved || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('تم حفظ الرقم')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final me = widget.profile;
@@ -246,6 +260,13 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                           ),
                         );
                       },
+                    ),
+                    const Divider(height: 1),
+                    _MenuTile(
+                      icon: Icons.phone_outlined,
+                      title: AppStrings.phone,
+                      subtitle: profilePhoneLabel(me.phone),
+                      onTap: _editPhone,
                     ),
                     const Divider(height: 1),
                     _MenuTile(
@@ -438,8 +459,10 @@ class _ProfileHero extends StatelessWidget {
                 ],
               ),
               Text(
-                profile.phone,
-                textDirection: TextDirection.ltr,
+                profilePhoneLabel(profile.phone),
+                textDirection: profile.phone.trim().isEmpty
+                    ? TextDirection.rtl
+                    : TextDirection.ltr,
                 style: const TextStyle(
                   color: Color(0xFFBEC6E0),
                   fontSize: 13,

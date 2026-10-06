@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
-import 'package:barrr/features/auth/add_phone_screen.dart';
 import 'package:barrr/features/auth/auth_screen.dart';
 import 'package:barrr/features/shell/role_home.dart';
 import 'package:barrr/models/app_user.dart';
@@ -93,9 +92,6 @@ class _HomeFromProfile extends StatelessWidget {
             return const BrandSplash();
           }
           return const _MissingProfile();
-        }
-        if (appUser.phone.trim().isEmpty) {
-          return AddPhoneScreen(profile: appUser);
         }
         return RoleHome(
           profile: appUser,

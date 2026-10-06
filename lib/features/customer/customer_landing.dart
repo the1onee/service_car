@@ -101,14 +101,45 @@ class _CustomerLandingState extends State<CustomerLanding> {
         _ => Icons.handyman_outlined,
       };
 
+  Color _wellFor(String id) => switch (id) {
+        'technician' => AppColors.amberTint,
+        'parts' => AppColors.azureTint,
+        'oil' => AppColors.emeraldTint,
+        'towing' => AppColors.petrolTint,
+        'wash' => const Color(0xFFE0F7FA),
+        _ => const Color(0xFFE5EEFF),
+      };
+
+  Color _inkFor(String id) => switch (id) {
+        'technician' => AppColors.amberDeep,
+        'parts' => AppColors.azure,
+        'oil' => AppColors.emeraldDeep,
+        'towing' => AppColors.slate,
+        'wash' => const Color(0xFF0891B2),
+        _ => AppColors.ink,
+      };
+
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: AppColors.canvas,
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppColors.azureTint,
+            AppColors.canvas,
+            AppColors.canvas,
+          ],
+          stops: [0, 0.32, 1],
+        ),
+      ),
       child: Column(
         children: [
           Material(
-            color: AppColors.canvas.withValues(alpha: 0.92),
+            color: Colors.white.withValues(alpha: 0.86),
+            elevation: 0,
+            shadowColor: AppColors.slate.withValues(alpha: 0.08),
             child: SafeArea(
               bottom: false,
               child: SizedBox(
@@ -234,16 +265,17 @@ class _CustomerLandingState extends State<CustomerLanding> {
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 5,
+                            horizontal: 10,
+                            vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.azureTint,
+                            color: AppColors.amberTint,
                             borderRadius: BorderRadius.circular(999),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.04),
-                                blurRadius: 4,
+                                color: AppColors.amberDeep.withValues(alpha: 0.12),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
                               ),
                             ],
                           ),
@@ -270,16 +302,16 @@ class _CustomerLandingState extends State<CustomerLanding> {
                     ),
                     const SizedBox(height: 12),
                     Container(
-                      height: 48,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      height: 52,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(18),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                            color: AppColors.slate.withValues(alpha: 0.08),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
                           ),
                         ],
                       ),
@@ -318,13 +350,17 @@ class _CustomerLandingState extends State<CustomerLanding> {
                     // Emergency hero
                     Container(
                       decoration: BoxDecoration(
-                        color: AppColors.slate,
-                        borderRadius: BorderRadius.circular(14),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topRight,
+                          end: Alignment.bottomLeft,
+                          colors: [AppColors.slateMid, AppColors.slate],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.12),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
+                            color: AppColors.amber.withValues(alpha: 0.22),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
                           ),
                         ],
                       ),
@@ -340,7 +376,7 @@ class _CustomerLandingState extends State<CustomerLanding> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: AppColors.amber
-                                    .withValues(alpha: 0.12),
+                                    .withValues(alpha: 0.22),
                               ),
                             ),
                           ),
@@ -442,6 +478,8 @@ class _CustomerLandingState extends State<CustomerLanding> {
                       _ServicesGrid(
                         items: core,
                         iconFor: _iconFor,
+                        wellFor: _wellFor,
+                        inkFor: _inkFor,
                         onTap: widget.onServiceTap,
                       ),
                     const SizedBox(height: 16),
@@ -557,11 +595,15 @@ class _ServicesGrid extends StatelessWidget {
   const _ServicesGrid({
     required this.items,
     required this.iconFor,
+    required this.wellFor,
+    required this.inkFor,
     required this.onTap,
   });
 
   final List<ServiceItem> items;
   final IconData Function(String id) iconFor;
+  final Color Function(String id) wellFor;
+  final Color Function(String id) inkFor;
   final ValueChanged<ServiceItem> onTap;
 
   @override
@@ -577,25 +619,29 @@ class _ServicesGrid extends StatelessWidget {
           itemCount: grid.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            mainAxisExtent: 108,
+            mainAxisExtent: 112,
             crossAxisSpacing: 12,
-            mainAxisSpacing: 16,
+            mainAxisSpacing: 12,
           ),
           itemBuilder: (context, i) {
             final s = grid[i];
             return _ServiceTile(
               title: s.titleAr,
               icon: iconFor(s.id),
+              well: wellFor(s.id),
+              ink: inkFor(s.id),
               onTap: () => onTap(s),
             );
           },
         ),
         if (wash.isNotEmpty) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           for (final s in wash)
             _WashWideTile(
               title: s.titleAr,
               icon: iconFor(s.id),
+              well: wellFor(s.id),
+              ink: inkFor(s.id),
               onTap: () => onTap(s),
             ),
         ],
@@ -608,30 +654,35 @@ class _ServiceTile extends StatelessWidget {
   const _ServiceTile({
     required this.title,
     required this.icon,
+    required this.well,
+    required this.ink,
     required this.onTap,
   });
 
   final String title;
   final IconData icon;
+  final Color well;
+  final Color ink;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
+      elevation: 0,
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+                color: ink.withValues(alpha: 0.10),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
@@ -641,13 +692,13 @@ class _ServiceTile extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    width: 40,
-                    height: 40,
+                    width: 42,
+                    height: 42,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE5EEFF),
-                      borderRadius: BorderRadius.circular(10),
+                      color: well,
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(icon, size: 22, color: AppColors.ink),
+                    child: Icon(icon, size: 22, color: ink),
                   ),
                 ],
               ),
@@ -673,43 +724,48 @@ class _WashWideTile extends StatelessWidget {
   const _WashWideTile({
     required this.title,
     required this.icon,
+    required this.well,
+    required this.ink,
     required this.onTap,
   });
 
   final String title;
   final IconData icon;
+  final Color well;
+  final Color ink;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
+      color: well,
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: ink.withValues(alpha: 0.16)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+                color: ink.withValues(alpha: 0.12),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
           child: Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE5EEFF),
-                  borderRadius: BorderRadius.circular(10),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, size: 22, color: AppColors.ink),
+                child: Icon(icon, size: 22, color: ink),
               ),
               const SizedBox(width: 10),
               Expanded(

@@ -130,6 +130,18 @@ class _AccountPageState extends State<_AccountPage> {
     }
   }
 
+  Future<void> _editPhone() async {
+    final saved = await showPhoneEditor(
+      context,
+      uid: widget.me.id,
+      currentPhone: widget.me.phone,
+    );
+    if (!saved || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('تم حفظ الرقم')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final me = widget.me;
@@ -209,6 +221,13 @@ class _AccountPageState extends State<_AccountPage> {
                         onTap: () {},
                       ),
                     ],
+                    const Divider(height: 1),
+                    _OilMenuTile(
+                      icon: Icons.phone_outlined,
+                      title: AppStrings.phone,
+                      subtitle: profilePhoneLabel(me.phone),
+                      onTap: _editPhone,
+                    ),
                     const Divider(height: 1),
                     _OilMenuTile(
                       icon: Icons.location_on_outlined,
@@ -388,8 +407,10 @@ class _OilProfileHero extends StatelessWidget {
             ],
           ),
           Text(
-            profile.phone,
-            textDirection: TextDirection.ltr,
+            profilePhoneLabel(profile.phone),
+            textDirection: profile.phone.trim().isEmpty
+                ? TextDirection.rtl
+                : TextDirection.ltr,
             style: const TextStyle(
               color: Color(0xFFBEC6E0),
               fontSize: 13,

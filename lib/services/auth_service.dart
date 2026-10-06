@@ -47,6 +47,10 @@ class AuthService {
 
   bool _googleInitialized = false;
 
+  /// عميل الويب (client_type 3) من Firebase. أندرويد يحتاجه لإصدار رمز Google.
+  static const _googleServerClientId =
+      '500429219707-grrldfcsp3cf6j9u01rrnndbecj8jelr.apps.googleusercontent.com';
+
   /// الرقم الذي أُرسل إليه آخر رمز استعادة.
   String? pendingPhone;
 
@@ -69,7 +73,9 @@ class AuthService {
 
   Future<void> _ensureGoogleInitialized() async {
     if (kIsWeb || _googleInitialized) return;
-    await GoogleSignIn.instance.initialize();
+    await GoogleSignIn.instance.initialize(
+      serverClientId: _googleServerClientId,
+    );
     _googleInitialized = true;
   }
 

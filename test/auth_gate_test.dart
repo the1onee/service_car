@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:barrr/features/auth/add_phone_screen.dart';
 import 'package:barrr/features/auth/auth_screen.dart';
 import 'package:barrr/features/shell/auth_gate.dart';
 import 'package:barrr/models/app_user.dart';
@@ -58,7 +57,7 @@ void main() {
     expect(find.byType(AuthScreen), findsOneWidget);
   });
 
-  testWidgets('shows AddPhoneScreen when phone empty', (tester) async {
+  testWidgets('shows role home when phone empty', (tester) async {
     final session = TestSession(
       initialUid: 'u2',
       profile: user(id: 'u2', phone: ''),
@@ -71,7 +70,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.byType(AddPhoneScreen), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-customer')), findsOneWidget);
   });
 
   testWidgets('shows role home stub when profile complete', (tester) async {
