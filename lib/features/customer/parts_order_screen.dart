@@ -455,7 +455,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                               hint: 'مثال: هيونداي سنتافي، تويوتا كورولا',
                             ),
                             validator: (v) => (v ?? '').trim().isEmpty
-                                ? 'أدخل نوع وموديل المركبة.'
+                                ? 'أدخل الشركة ونوع الشركة.'
                                 : null,
                           ),
                           const SizedBox(height: 12),

@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
-import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/features/auth/add_phone_screen.dart';
@@ -42,6 +41,34 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
   var _photoSaved = false;
   var _savingName = false;
   var _savingAddress = false;
+  var _locationPrompted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybePromptLocation());
+  }
+
+  @override
+  void didUpdateWidget(covariant CustomerAccountPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.profile.geo == null && widget.profile.geo != null) {
+      _locationPrompted = true;
+    }
+    if (!_locationPrompted && widget.profile.geo == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybePromptLocation());
+    }
+  }
+
+  void _maybePromptLocation() {
+    if (!mounted || _locationPrompted || _savingAddress) return;
+    if (widget.profile.geo != null) {
+      _locationPrompted = true;
+      return;
+    }
+    _locationPrompted = true;
+    _editAddress();
+  }
 
   Future<void> _changePhoto() async {
     if (_uploadingPhoto) return;
@@ -104,9 +131,9 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
   Future<void> _editAddress() async {
     if (_savingAddress) return;
     final me = widget.profile;
-    final initial = me.geo != null
+    final LatLng? initial = me.geo != null
         ? LatLng(me.geo!.latitude, me.geo!.longitude)
-        : const LatLng(AppConstants.defaultLat, AppConstants.defaultLng);
+        : null;
     final picked = await pickAddressOnMap(
       context,
       initial: initial,

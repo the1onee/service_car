@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/geo.dart';
 import 'package:barrr/data/collections.dart';
@@ -1024,41 +1023,8 @@ class JobRepository {
     return _jobs.doc(jobId).update({'status': JobStatus.inProgress.name});
   }
 
-  var _completeOnServer = false;
-
+  /// إتمام الطلب وتسوية المحفظة محلياً عبر Firestore (بدون Cloud Functions).
   Future<void> completeJob({
-    required String jobId,
-    required double receivedAmount,
-    required bool warrantyEnabled,
-  }) async {
-    if (_completeOnServer) {
-      try {
-        await FirebaseFunctions.instance.httpsCallable('completeJob').call({
-          'jobId': jobId,
-          'receivedAmount': receivedAmount,
-          'warrantyEnabled': warrantyEnabled,
-        });
-        return;
-      } on FirebaseFunctionsException catch (e) {
-        const fallback = {
-          'not-found',
-          'unavailable',
-          'unimplemented',
-          'deadline-exceeded',
-          'internal',
-        };
-        if (!fallback.contains(e.code)) rethrow;
-        _completeOnServer = false;
-      }
-    }
-    await _completeJobLocal(
-      jobId: jobId,
-      receivedAmount: receivedAmount,
-      warrantyEnabled: warrantyEnabled,
-    );
-  }
-
-  Future<void> _completeJobLocal({
     required String jobId,
     required double receivedAmount,
     required bool warrantyEnabled,

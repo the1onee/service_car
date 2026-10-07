@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/features/shared/app_network_or_data_image.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
 
@@ -494,6 +495,134 @@ Future<void> openCustomerInMaps(double lat, double lng) async {
   final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
   if (opened) return;
   await launchUrl(uri, mode: LaunchMode.platformDefault);
+}
+
+/// صورة ورقم هاتف العميل للمزوّد بعد قبول الطلب (`locationRevealed`).
+class CustomerContactBlock extends StatefulWidget {
+  const CustomerContactBlock({
+    super.key,
+    required this.job,
+    this.framed = false,
+  });
+
+  final Job job;
+  final bool framed;
+
+  @override
+  State<CustomerContactBlock> createState() => _CustomerContactBlockState();
+}
+
+class _CustomerContactBlockState extends State<CustomerContactBlock> {
+  String? _photoUrl;
+  var _started = false;
+  var _loading = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    if (!widget.job.locationRevealed) return;
+    _started = true;
+    _loading = true;
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant CustomerContactBlock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.job.customerId != widget.job.customerId ||
+        (!oldWidget.job.locationRevealed && widget.job.locationRevealed)) {
+      _started = false;
+      _photoUrl = null;
+      if (widget.job.locationRevealed) {
+        _started = true;
+        _loading = true;
+        _load();
+      }
+    }
+  }
+
+  Future<void> _load() async {
+    try {
+      final user = await AppScope.of(context).users.get(widget.job.customerId);
+      if (!mounted) return;
+      setState(() {
+        _photoUrl = user?.photoUrl.trim();
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final job = widget.job;
+    if (!job.locationRevealed) return const SizedBox.shrink();
+
+    final phone = job.customerPhone.trim();
+    final photo = (_photoUrl ?? '').trim();
+    if (phone.isEmpty && photo.isEmpty && !_loading) {
+      return const SizedBox.shrink();
+    }
+
+    final body = Row(
+      children: [
+        ClipOval(
+          child: SizedBox(
+            width: 52,
+            height: 52,
+            child: photo.isNotEmpty
+                ? AppNetworkOrDataImage(
+                    source: photo,
+                    memCacheWidth: 160,
+                    errorColor: AppColors.recessed,
+                  )
+                : ColoredBox(
+                    color: AppColors.recessed,
+                    child: _loading
+                        ? const Center(
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : const Icon(
+                            Icons.person_outline,
+                            color: AppColors.inkSoft,
+                          ),
+                  ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'هاتف العميل',
+                style: TextStyle(fontSize: 12, color: AppColors.inkSoft),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                phone.isEmpty ? '—' : phone,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+                textDirection: TextDirection.ltr,
+                textAlign: TextAlign.start,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (!widget.framed) return body;
+    return FieldCard(child: body);
+  }
 }
 
 /// عنوان التوصيل للورشة المعيّنة. الطلبات القديمة بلا عنوان منسوخ تُقرأ من ملف العميل.

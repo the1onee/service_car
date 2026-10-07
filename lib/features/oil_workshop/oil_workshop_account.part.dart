@@ -20,6 +20,34 @@ class _AccountPageState extends State<_AccountPage> {
   var _photoSaved = false;
   var _savingName = false;
   var _savingAddress = false;
+  var _locationPrompted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybePromptLocation());
+  }
+
+  @override
+  void didUpdateWidget(covariant _AccountPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.me.geo == null && widget.me.geo != null) {
+      _locationPrompted = true;
+    }
+    if (!_locationPrompted && widget.me.geo == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybePromptLocation());
+    }
+  }
+
+  void _maybePromptLocation() {
+    if (!mounted || _locationPrompted || _savingAddress) return;
+    if (widget.me.geo != null) {
+      _locationPrompted = true;
+      return;
+    }
+    _locationPrompted = true;
+    _editAddress();
+  }
 
   Future<void> _changePhoto() async {
     if (_uploadingPhoto) return;
@@ -81,9 +109,9 @@ class _AccountPageState extends State<_AccountPage> {
   Future<void> _editAddress() async {
     if (_savingAddress) return;
     final me = widget.me;
-    final initial = me.geo != null
+    final LatLng? initial = me.geo != null
         ? LatLng(me.geo!.latitude, me.geo!.longitude)
-        : const LatLng(AppConstants.defaultLat, AppConstants.defaultLng);
+        : null;
     final picked = await pickAddressOnMap(
       context,
       initial: initial,

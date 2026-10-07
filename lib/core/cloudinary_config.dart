@@ -1,10 +1,9 @@
-/// إعدادات Cloudinary للرفع من التطبيق.
+/// إعدادات Cloudinary للرفع من التطبيق (unsigned preset فقط).
 ///
 /// **لا تضع أسراراً في المصدر.** مرّر القيم عند التشغيل/البناء:
 /// ```
 /// flutter run --dart-define=CLOUDINARY_CLOUD_NAME=xxx --dart-define=CLOUDINARY_UPLOAD_PRESET=barrr_unsigned
 /// ```
-/// أو اعتمد على دالة `getCloudinaryUploadSign` (رفع موقّع عبر Cloud Functions).
 class CloudinaryConfig {
   CloudinaryConfig._();
 
@@ -31,7 +30,7 @@ class CloudinaryConfig {
     if (name.isEmpty) {
       throw StateError(
         'Cloudinary غير مضبوط. مرّر CLOUDINARY_CLOUD_NAME و CLOUDINARY_UPLOAD_PRESET '
-        'عبر --dart-define، أو فعّل getCloudinaryUploadSign في Cloud Functions.',
+        'عبر --dart-define.',
       );
     }
     return Uri.parse('https://api.cloudinary.com/v1_1/$name/image/upload');

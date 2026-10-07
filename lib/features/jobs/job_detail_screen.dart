@@ -111,7 +111,6 @@ class _BodyState extends State<_Body> {
         !profile.isOilWorkshop &&
         !profile.isPaintShop;
     final workshopViewer = profile.isWorkshop && parts;
-    final oilViewer = profile.isOilWorkshop && oil;
     final showWorkshopDetails = customer &&
         (job.technicianName ?? '').isNotEmpty &&
         parts;
@@ -193,18 +192,18 @@ class _BodyState extends State<_Body> {
             const SizedBox(height: 12),
             WashJobDetailsCard.fromJob(
               job,
-              showPhone: (customer || profile.isTechnician) &&
-                  job.customerPhone.trim().isNotEmpty &&
-                  (job.locationRevealed || customer),
+              showPhone: customer && job.customerPhone.trim().isNotEmpty,
             ),
           ] else if (oil) ...[
             const SizedBox(height: 12),
             OilJobDetailsCard.fromJob(
               job,
-              showPhone: (customer || oilViewer || profile.isOilWorkshop) &&
-                  job.customerPhone.trim().isNotEmpty &&
-                  (job.locationRevealed || customer),
+              showPhone: customer && job.customerPhone.trim().isNotEmpty,
             ),
+          ],
+          if (!customer && job.locationRevealed) ...[
+            const SizedBox(height: 12),
+            CustomerContactBlock(job: job, framed: true),
           ],
           const SizedBox(height: 12),
           if (showWorkshopDetails)

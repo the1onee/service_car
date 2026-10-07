@@ -344,7 +344,7 @@ class _WashRequestFormState extends State<WashRequestForm> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.stretch,
                                       children: [
-                                        const _Label('الشركة والموديل'),
+                                        const _Label('الشركة ونوع الشركة'),
                                         const SizedBox(height: 6),
                                         _IconField(
                                           controller: _vehicle,

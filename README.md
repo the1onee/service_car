@@ -8,14 +8,15 @@
 
 الدفع نقداً بين العميل والفني. عمولة التطبيق 10% تُخصم من **محفظة الفني**. بدون توثيق أو رصيد أقل من 10,000 د.ع لا تُستقبل طلبات جديدة.
 
+**بدون Cloud Functions / بدون Blaze:** التوزيع والإشعارات وإتمام الطلب عبر التطبيق + سيرفر Express في `../barrr-admin/server`.
+
 ## المصادقة
 
 - تسجيل الدخول: رقم الهاتف + كلمة المرور.
 - إنشاء الحساب: الاسم، الهاتف، كلمة المرور، العنوان — يُفتح كـ **حساب عميل** فقط.
 - Firebase لا يدعم كلمة مرور لمزوّد الهاتف، فيُربط كل رقم ببريد داخلي
-  `<digits>@phone.barrr.app` ويُستخدم رمز SMS لإثبات ملكية الرقم عند التسجيل أو استعادة كلمة المرور.
-- فعّل مزوّدَي **Phone** و**Email/Password** في Firebase Authentication.
-- للتجربة بدون فوترة: أضف أرقام اختبار في إعدادات Phone، واحذفها قبل الإطلاق.
+  `<digits>@phone.barrr.app`.
+- فعّل مزوّد **Email/Password** في Firebase Authentication (والهاتف كمعرّف عبر البريد الداخلي).
 
 ## التشغيل
 
@@ -23,18 +24,22 @@
 flutter pub get
 flutter run -d chrome --web-hostname localhost --web-port 8080 \
   --dart-define=CLOUDINARY_CLOUD_NAME=your_cloud \
-  --dart-define=CLOUDINARY_UPLOAD_PRESET=barrr_unsigned
+  --dart-define=CLOUDINARY_UPLOAD_PRESET=barrr_unsigned \
+  --dart-define=BARRR_API_BASE=http://127.0.0.1:8787
 # أو
 flutter run -d android \
   --dart-define=CLOUDINARY_CLOUD_NAME=your_cloud \
-  --dart-define=CLOUDINARY_UPLOAD_PRESET=barrr_unsigned
+  --dart-define=CLOUDINARY_UPLOAD_PRESET=barrr_unsigned \
+  --dart-define=BARRR_API_BASE=http://10.0.2.2:8787
 ```
 
 ### رفع الصور (Cloudinary)
 
-لا تضع cloud name أو upload preset داخل المصدر. مرّرهما عبر `--dart-define` كما أعلاه،
-أو انشر دالة `getCloudinaryUploadSign` مع متغيرات البيئة
-`CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` للرفع الموقّع.
+رفع **unsigned** فقط. مرّر عبر `--dart-define`:
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_UPLOAD_PRESET` (مثل `barrr_unsigned`)
+
+لا تضع أسراراً في المصدر.
 
 ### الخرائط
 
@@ -42,36 +47,18 @@ flutter run -d android \
 - التطبيق: `flutter_map`
 - لوحة الأدمن: Leaflet / `react-leaflet`
 
-لا حاجة لتفعيل Google Maps أو ربط بطاقة لذلك.
-
-نشر القواعد والدوال:
+### نشر قواعد Firestore
 
 ```bash
-cd functions && npm install && cd ..
-firebase deploy --only firestore:rules,firestore:indexes,functions
+firebase deploy --only firestore:rules,firestore:indexes
 ```
 
-## Cloud Functions
+### سيرفر الإشعارات / الإدارة
 
-`functions/index.js` يضم محرك التوزيع والعروض والإشعارات، وبالإضافة إليه دوال لوحة التحكم
-في `functions/admin_users.js` وكلها تتطلب أن يكون دور صاحب الطلب `admin` في `users/{uid}`:
-
-| الدالة | الغرض |
-| --- | --- |
-| `createUserAccount` | إنشاء حساب عميل أو فني بالرقم وكلمة المرور (Admin SDK يربط الرقم دون رمز SMS). |
-| `deleteUserAccount` | حذف حساب المصادقة وملف التعريف معاً. |
-| `setUserPassword` | تعيين كلمة مرور جديدة لمستخدم. |
-| `setUserDisabled` | تعطيل أو تفعيل حساب دون حذفه. |
-| `getCloudinaryUploadSign` | معاملات رفع موقّع لـ Cloudinary (يتطلب CLOUDINARY_* على الخادم). |
-
-كل الدوال على المنطقة الافتراضية `us-central1` لأن التطبيق يستدعيها عبر
-`FirebaseFunctions.instance`؛ تغيير المنطقة يكسر التوزيع.
-
-`functions/phone.js` نسخة مطابقة لـ `lib/core/phone.dart`؛ أي تعديل على اشتقاق البريد
-الداخلي يجب أن يُطبَّق في الملفين معاً وفي لوحة التحكم.
+انظر `../barrr-admin/server/README.md` — FCM وwatchers وعمليات الأدمن عبر Admin SDK على VPS.
 
 ## لوحة التحكم (ويب)
 
 مشروع منفصل في `../barrr-admin` (Vite + React + TypeScript) على نفس مشروع Firebase.
 الصلاحيات: القاعدة العامة في `firestore.rules` تمنح الأدمن قراءة وكتابة وحذفاً على كل
-المجموعات، وكتالوج `services` صار للأدمن فقط بينما يقرأه التطبيق.
+المجموعات، وكتالوج `services` للأدمن فقط بينما يقرأه التطبيق.

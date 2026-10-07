@@ -106,33 +106,33 @@ class _TechJobPanelState extends State<TechJobPanel> {
                 ),
               ),
               const SizedBox(height: 10),
+              if (job.locationRevealed) ...[
+                CustomerContactBlock(job: job),
+                const SizedBox(height: 10),
+              ],
               if (tow)
                 TowJobDetailsCard.fromJob(
                   job,
                   compact: true,
-                  showPhone: job.locationRevealed &&
-                      job.customerPhone.trim().isNotEmpty,
+                  showPhone: false,
                 )
               else if (wash)
                 WashJobDetailsCard.fromJob(
                   job,
                   compact: true,
-                  showPhone: job.locationRevealed &&
-                      job.customerPhone.trim().isNotEmpty,
+                  showPhone: false,
                 )
               else if (oil)
                 OilJobDetailsCard.fromJob(
                   job,
                   compact: true,
-                  showPhone: job.locationRevealed &&
-                      job.customerPhone.trim().isNotEmpty,
+                  showPhone: false,
                 )
               else
                 TechJobDetailsCard.fromJob(
                   job,
                   compact: true,
-                  showPhone: job.locationRevealed &&
-                      job.customerPhone.trim().isNotEmpty,
+                  showPhone: false,
                 ),
               if (job.status == JobStatus.quoted)
                 Text(

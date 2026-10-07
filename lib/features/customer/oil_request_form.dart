@@ -374,12 +374,12 @@ class _OilRequestFormState extends State<OilRequestForm> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.stretch,
                                       children: [
-                                        const _Label('الشركة والموديل'),
+                                        const _Label('الشركة ونوع الشركة'),
                                         const SizedBox(height: 6),
                                         _IconField(
                                           controller: _vehicle,
                                           icon: Icons.directions_car_outlined,
-                                          hint: 'الموديل',
+                                          hint: 'نوع الشركة',
                                         ),
                                       ],
                                     ),

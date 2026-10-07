@@ -173,6 +173,6 @@ cd barrr && npx firebase-tools emulators:exec --only firestore --project demo-ba
 
 | المستبعد | السبب |
 |----------|--------|
-| Cloud Functions | غير مستخدمة في خطة الاختبار |
-| OTP / WhatsApp verify | لم يُفعَّل بعد في نطاق الاختبارات |
+| Cloud Functions | أُزيلت من التطبيق و`firebase.json`؛ المنطق على التطبيق + Express |
+| OTP / WhatsApp verify | خارج نطاق اختبارات الوحدة الحالية |
 | Playwright E2E | اختياري لاحق — هش ويحتاج بيئة تشغيل كاملة |

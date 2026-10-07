@@ -319,6 +319,7 @@ class _TechnicianHomeState extends State<TechnicianHome> {
         return _AccountPage(
           me: snap.data ?? widget.profile,
           city: _zone?.nameAr,
+          isActive: _tab == 3,
           onOpenOrders: () => setState(() => _tab = 1),
           onOpenWallet: () => setState(() => _tab = 2),
         );

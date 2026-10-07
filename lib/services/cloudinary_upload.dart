@@ -1,27 +1,17 @@
 import 'dart:convert';
 
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:barrr/core/cloudinary_config.dart';
 
-/// رفع صور مضغوطة إلى Cloudinary.
-/// يفضّل الرفع الموقّع عبر [getCloudinaryUploadSign]، وإلا unsigned عبر --dart-define.
+/// رفع صور مضغوطة إلى Cloudinary عبر unsigned preset (--dart-define).
 class CloudinaryUpload {
-  CloudinaryUpload({
-    ImagePicker? picker,
-    FirebaseFunctions? functions,
-  })  : _picker = picker ?? ImagePicker(),
-        _functions = functions;
+  CloudinaryUpload({ImagePicker? picker}) : _picker = picker ?? ImagePicker();
 
   final ImagePicker _picker;
-  final FirebaseFunctions? _functions;
 
   static const maxBytesAfterCompress = 600 * 1024;
-
-  FirebaseFunctions get _fns =>
-      _functions ?? FirebaseFunctions.instance;
 
   Future<XFile?> pickImage({
     ImageSource source = ImageSource.gallery,
@@ -66,36 +56,32 @@ class CloudinaryUpload {
         'الصورة ما زالت كبيرة بعد الضغط. اختر صورة أوضح بحجم أصغر.',
       );
     }
-
-    final filename = file.name.trim().isEmpty ? 'upload.jpg' : file.name;
-    final signed = await _trySignedParams(folder);
-    if (signed == null && !CloudinaryConfig.isUnsignedConfigured) {
+    if (!CloudinaryConfig.isUnsignedConfigured) {
       throw StateError(
         'ارفع الصور يحتاج Cloud name من لوحة Cloudinary مع preset barrr_unsigned.',
       );
     }
 
+    final filename = file.name.trim().isEmpty ? 'upload.jpg' : file.name;
     final request = http.MultipartRequest(
       'POST',
-      CloudinaryConfig.uploadUri(signed?['cloudName'] as String?),
-    )..files.add(
+      CloudinaryConfig.uploadUri(),
+    )
+      ..files.add(
         http.MultipartFile.fromBytes(
           'file',
           bytes,
           filename: filename,
         ),
-      );
+      )
+      ..fields['upload_preset'] = CloudinaryConfig.uploadPreset.trim();
 
-    if (signed != null) {
-      request.fields['api_key'] = '${signed['apiKey']}';
-      request.fields['timestamp'] = '${signed['timestamp']}';
-      request.fields['signature'] = '${signed['signature']}';
-      request.fields['folder'] = '${signed['folder']}';
-      if (tags.isNotEmpty) {
-        request.fields['tags'] = tags.join(',');
-      }
-    } else {
-      request.fields['upload_preset'] = CloudinaryConfig.uploadPreset.trim();
+    final folderTrim = folder.trim();
+    if (folderTrim.isNotEmpty) {
+      request.fields['folder'] = folderTrim;
+    }
+    if (tags.isNotEmpty) {
+      request.fields['tags'] = tags.join(',');
     }
 
     final streamed = await request.send().timeout(const Duration(seconds: 60));
@@ -119,34 +105,6 @@ class CloudinaryUpload {
       debugPrint('Cloudinary uploaded ${bytes.length}B → $url');
     }
     return url.trim();
-  }
-
-  Future<Map<String, dynamic>?> _trySignedParams(String folder) async {
-    try {
-      final result = await _fns
-          .httpsCallable('getCloudinaryUploadSign')
-          .call(<String, dynamic>{'folder': folder});
-      final data = result.data;
-      if (data is! Map) return null;
-      final map = Map<String, dynamic>.from(data);
-      if (map['cloudName'] == null ||
-          map['apiKey'] == null ||
-          map['signature'] == null ||
-          map['timestamp'] == null) {
-        return null;
-      }
-      return map;
-    } on FirebaseFunctionsException catch (e) {
-      if (kDebugMode) {
-        debugPrint('Cloudinary signed upload unavailable: ${e.code} ${e.message}');
-      }
-      return null;
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Cloudinary signed upload unavailable: $e');
-      }
-      return null;
-    }
   }
 
   static String _cloudinaryErrorMessage(int statusCode, String body) {

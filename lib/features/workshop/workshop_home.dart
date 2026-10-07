@@ -837,7 +837,6 @@ class _AcceptedJobCard extends StatelessWidget {
     ].join(' ');
     final meta = [
       if (car.isNotEmpty) car,
-      if (job.customerPhone.isNotEmpty) job.customerPhone,
       if (job.initialPrice != null) formatIqd(job.initialPrice!),
     ].join(' · ');
 
@@ -890,6 +889,10 @@ class _AcceptedJobCard extends StatelessWidget {
               meta,
               style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
             ),
+          ],
+          if (job.locationRevealed) ...[
+            const SizedBox(height: 10),
+            CustomerContactBlock(job: job),
           ],
           const SizedBox(height: 8),
           DeliveryAddressBlock(job: job),
