@@ -7,6 +7,19 @@ import 'package:barrr/models/job.dart';
 import 'package:barrr/models/job_offer.dart';
 import 'package:barrr/models/warranty.dart';
 
+bool _offerExpired(Map<String, dynamic> data, [DateTime? now]) {
+  final created = (data['createdAt'] as Timestamp?)?.toDate();
+  final stored = (data['expiresAt'] as Timestamp?)?.toDate();
+  final window = (data['windowSeconds'] as num?)?.toInt();
+  if (stored == null && (window == null || window <= 0)) return false;
+  final deadline = resolveOfferExpiry(
+    createdAt: created,
+    expiresAt: stored,
+    windowSeconds: window,
+  );
+  return !(now ?? DateTime.now()).isBefore(deadline);
+}
+
 class JobRepository {
   JobRepository({FirebaseFirestore? db}) : _injected = db;
 
@@ -260,8 +273,7 @@ class JobRepository {
     final livePending = previous.docs.where((d) {
       final data = d.data();
       if (data['status'] != 'pending') return false;
-      final exp = (data['expiresAt'] as Timestamp?)?.toDate();
-      return exp == null || exp.isAfter(now);
+      return !_offerExpired(data, now);
     }).toList();
     if (livePending.isNotEmpty) {
       if (job.status != JobStatus.offerPending) {
@@ -393,6 +405,7 @@ class JobRepository {
         'technicianId': t.id,
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
+        if (expires != null) 'windowSeconds': seconds,
         if (expires != null) 'expiresAt': Timestamp.fromDate(expires),
         'serviceTitle': job.serviceTitle,
         'vehicleTypeTitle': job.vehicleTypeTitle,
@@ -434,8 +447,10 @@ class JobRepository {
     batch.update(_jobs.doc(jobId), {
       'status': JobStatus.offerPending.name,
       'offerIds': offerIds,
+      if (expires != null) 'windowSeconds': seconds,
       if (expires != null) 'expiresAt': Timestamp.fromDate(expires),
       if (noExpiry) 'expiresAt': FieldValue.delete(),
+      if (noExpiry) 'windowSeconds': FieldValue.delete(),
     });
     await batch.commit();
   }
@@ -494,8 +509,7 @@ class JobRepository {
       final offer = offerSnap.data()!;
       if (offer['technicianId'] != technicianId) return false;
       if (offer['status'] != 'pending') return false;
-      final exp = (offer['expiresAt'] as Timestamp?)?.toDate();
-      if (exp != null && DateTime.now().isAfter(exp)) {
+      if (_offerExpired(offer)) {
         tx.update(offerRef, {'status': 'expired'});
         return false;
       }
@@ -554,8 +568,7 @@ class JobRepository {
       final offer = offerSnap.data()!;
       if (offer['technicianId'] != technicianId) return false;
       if (offer['status'] != 'pending') return false;
-      final exp = (offer['expiresAt'] as Timestamp?)?.toDate();
-      if (exp != null && DateTime.now().isAfter(exp)) {
+      if (_offerExpired(offer)) {
         tx.update(offerRef, {'status': 'expired'});
         return false;
       }

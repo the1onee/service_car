@@ -62,10 +62,7 @@ class _OfferOverlayState extends State<OfferOverlay> {
     if (_openEnded) return;
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       final n = widget.offer.remainingSeconds();
-      if (n <= 0) {
-        _timer?.cancel();
-        widget.onDone();
-      }
+      if (n <= 0) _timer?.cancel();
       if (mounted) setState(() => _left = n);
     });
   }

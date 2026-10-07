@@ -52,6 +52,7 @@ class _TechnicianHomeState extends State<TechnicianHome> {
   StreamSubscription<Job?>? _activeJobSub;
   late final ValueNotifier<LatLng> _meNotifier;
   JobOffer? _incoming;
+  List<JobOffer> _liveOffers = const [];
   final Set<String> _closedOffers = {};
   Job? _activeJob;
   CityZone? _zone;
@@ -98,22 +99,32 @@ class _TechnicianHomeState extends State<TechnicianHome> {
       if (!mounted) return;
       final live = offers
           .where((o) => !_closedOffers.contains(o.id))
-          .where((o) => o.isOpenEnded || o.remainingSeconds() > 0)
           .toList();
-      if (_incoming != null &&
-          live.every((o) => o.id != _incoming!.id)) {
-        setState(() => _incoming = null);
-        return;
-      }
-      if (_incoming == null && live.isNotEmpty && _activeJob == null) {
-        setState(() => _incoming = live.first);
-      }
+      setState(() {
+        _liveOffers = live;
+        if (_incoming != null && live.every((o) => o.id != _incoming!.id)) {
+          _incoming = live.isEmpty ? null : live.first;
+        } else if (_incoming == null && live.isNotEmpty && _activeJob == null) {
+          _incoming = live.first;
+          _tab = 0;
+        }
+      });
     });
     _fcm = scope.fcm;
     _fcmFocusListener = () {
       final id = scope.fcm.focusJobId.value;
       if (id == null || id.isEmpty || !mounted) return;
-      setState(() => _tab = 0);
+      JobOffer? match;
+      for (final offer in _liveOffers) {
+        if (offer.jobId == id) {
+          match = offer;
+          break;
+        }
+      }
+      setState(() {
+        _tab = 0;
+        if (match != null && _activeJob == null) _incoming = match;
+      });
       scope.fcm.focusJobId.value = null;
     };
     scope.fcm.focusJobId.addListener(_fcmFocusListener!);
@@ -281,9 +292,43 @@ class _TechnicianHomeState extends State<TechnicianHome> {
       stream: userStream,
       builder: (context, snap) {
         final me = snap.data ?? widget.profile;
-        return OrdersScreen(
-          stream: recentJobsStream,
-          profile: me,
+        return Column(
+          children: [
+            if (_liveOffers.isNotEmpty)
+              Material(
+                color: const Color(0xFFFFF4D6),
+                child: InkWell(
+                  onTap: () => setState(() {
+                    _incoming = _liveOffers.first;
+                    _tab = 0;
+                  }),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.notification_important_outlined),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _liveOffers.length == 1
+                                ? 'طلب جديد بانتظار ردّك'
+                                : '${_liveOffers.length} طلبات جديدة بانتظار ردّك',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        const Icon(Icons.chevron_left),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            Expanded(
+              child: OrdersScreen(
+                stream: recentJobsStream,
+                profile: me,
+              ),
+            ),
+          ],
         );
       },
     );

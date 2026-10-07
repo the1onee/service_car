@@ -1,4 +1,27 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:barrr/core/constants.dart';
+
+/// مهلة العرض من وقت السيرفر، لا من ساعة الهاتف.
+/// إذا كانت ساعة الجهاز متأخرة يُحفظ expiresAt قبل createdAt فيختفي الطلب.
+DateTime resolveOfferExpiry({
+  DateTime? createdAt,
+  DateTime? expiresAt,
+  int? windowSeconds,
+}) {
+  if (createdAt != null && windowSeconds != null && windowSeconds > 0) {
+    return createdAt.add(Duration(seconds: windowSeconds));
+  }
+  if (expiresAt == null) {
+    return DateTime.now().add(const Duration(days: 365));
+  }
+  if (createdAt != null && !expiresAt.isAfter(createdAt)) {
+    final seconds = (windowSeconds != null && windowSeconds > 0)
+        ? windowSeconds
+        : AppConstants.quoteWindowSeconds;
+    return createdAt.add(Duration(seconds: seconds));
+  }
+  return expiresAt;
+}
 
 enum OfferStatus { pending, submitted, accepted, expired, rejected }
 
@@ -148,8 +171,11 @@ class JobOffer {
         (e) => e.name == raw,
         orElse: () => OfferStatus.pending,
       ),
-      expiresAt: (d['expiresAt'] as Timestamp?)?.toDate() ??
-          DateTime.now().add(const Duration(days: 365)),
+      expiresAt: resolveOfferExpiry(
+        createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
+        expiresAt: (d['expiresAt'] as Timestamp?)?.toDate(),
+        windowSeconds: (d['windowSeconds'] as num?)?.toInt(),
+      ),
       serviceTitle: d['serviceTitle'] as String?,
       vehicleTypeTitle: d['vehicleTypeTitle'] as String?,
       approxLocation: d['approxLocation'] as GeoPoint?,

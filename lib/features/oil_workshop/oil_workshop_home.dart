@@ -93,7 +93,6 @@ class _OilWorkshopHomeState extends State<OilWorkshopHome> {
       if (!mounted) return;
       final live = offers
           .where((o) => !_closedOffers.contains(o.id))
-          .where((o) => o.isOpenEnded || o.remainingSeconds() > 0)
           .toList();
       if (_incoming != null &&
           live.every((o) => o.id != _incoming!.id)) {

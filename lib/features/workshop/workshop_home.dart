@@ -235,9 +235,48 @@ class _WorkshopHomeState extends State<WorkshopHome> {
               1 => StreamBuilder<AppUser?>(
                   stream: userStream,
                   builder: (context, snap) {
-                    return OrdersScreen(
-                      stream: _ensureRecentJobs(),
-                      profile: snap.data ?? me,
+                    final profile = snap.data ?? me;
+                    final pending = _freshPending;
+                    return Column(
+                      children: [
+                        if (pending.isNotEmpty)
+                          Material(
+                            color: const Color(0xFFFFF4D6),
+                            child: InkWell(
+                              onTap: () => setState(() {
+                                _tab = 0;
+                                _filter = _BoardFilter.incoming;
+                              }),
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                        Icons.notification_important_outlined),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        pending.length == 1
+                                            ? 'طلب جديد بانتظار عرضك'
+                                            : '${pending.length} طلبات جديدة بانتظار عرضك',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w700),
+                                      ),
+                                    ),
+                                    const Icon(Icons.chevron_left),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        Expanded(
+                          child: OrdersScreen(
+                            stream: _ensureRecentJobs(),
+                            profile: profile,
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),

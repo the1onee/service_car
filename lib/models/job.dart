@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:barrr/data/service_catalog.dart';
+import 'package:barrr/models/job_offer.dart';
 import 'package:barrr/models/warranty.dart';
 
 enum JobStatus {
@@ -323,8 +324,18 @@ class Job {
       warranty: Warranty.fromMap(d['warranty'] as Map<String, dynamic>?),
       ratings: JobRatings.fromMap(d['ratings'] as Map<String, dynamic>?),
       dispatchRound: (d['dispatchRound'] as num?)?.toInt() ?? 1,
-      expiresAt: (d['expiresAt'] as Timestamp?)?.toDate(),
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      expiresAt: () {
+        final created = (d['createdAt'] as Timestamp?)?.toDate();
+        final stored = (d['expiresAt'] as Timestamp?)?.toDate();
+        final window = (d['windowSeconds'] as num?)?.toInt();
+        if (stored == null && (window == null || window <= 0)) return null;
+        return resolveOfferExpiry(
+          createdAt: created,
+          expiresAt: stored,
+          windowSeconds: window,
+        );
+      }(),
       cancelledBy: d['cancelledBy'] as String? ?? '',
       cancelReason: d['cancelReason'] as String? ?? '',
       useWallet: d['useWallet'] == true,
