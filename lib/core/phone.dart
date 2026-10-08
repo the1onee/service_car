@@ -35,6 +35,17 @@ String prettyIraqiPhone(String e164) {
 String phoneAuthEmail(String e164) =>
     '${e164.replaceAll('+', '')}@$_authEmailDomain';
 
+bool isPhoneAuthEmail(String email) =>
+    email.trim().toLowerCase().endsWith('@$_authEmailDomain');
+
+/// حساب مبني على رقم هاتف (إدخال رقم أو بريد phone.barrr.app).
+bool isPhoneBackedIdentifier(String raw) {
+  final v = raw.trim();
+  if (v.isEmpty) return false;
+  if (v.contains('@')) return isPhoneAuthEmail(v);
+  return looksLikeIraqiMobile(normalizeIraqiPhone(v));
+}
+
 bool looksLikeEmail(String raw) {
   final v = raw.trim();
   return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v);

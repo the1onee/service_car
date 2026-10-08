@@ -1,12 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:http/http.dart' as http;
-import 'package:barrr/core/api_config.dart';
 import 'package:barrr/core/phone.dart';
 import 'package:barrr/data/collections.dart';
 import 'package:barrr/models/app_user.dart';
@@ -22,23 +19,20 @@ enum GoogleAuthResult {
 }
 
 /// المصادقة: Google أو هاتف/بريد + كلمة المرور.
-/// استعادة كلمة المرور عبر رمز واتساب على السيرفر.
+/// استعادة كلمة المرور عبر رابط Firebase للإيميل الحقيقي فقط.
 class AuthService {
   AuthService({
     FirebaseAuth? auth,
     FirebaseFirestore? db,
-    http.Client? httpClient,
     Stream<String?>? uidChangesOverride,
     String? Function()? currentUidOverride,
   })  : _authOr = auth,
         _dbOr = db,
-        _http = httpClient ?? http.Client(),
         _uidChangesOverride = uidChangesOverride,
         _currentUidOverride = currentUidOverride;
 
   final FirebaseAuth? _authOr;
   final FirebaseFirestore? _dbOr;
-  final http.Client _http;
   final Stream<String?>? _uidChangesOverride;
   final String? Function()? _currentUidOverride;
 
@@ -248,52 +242,17 @@ class AuthService {
     }
   }
 
-  Future<void> sendResetOtp(String rawPhone) async {
-    final e164 = _requireIraqiMobile(rawPhone);
-    pendingPhone = e164;
+  /// يرسل رابط استعادة كلمة المرور عبر Firebase للإيميل الحقيقي فقط.
+  Future<void> sendPasswordResetForEmail(String rawEmail) async {
+    final email = rawEmail.trim().toLowerCase();
+    if (!looksLikeEmail(email) || isPhoneAuthEmail(email)) {
+      throw FirebaseAuthException(
+        code: 'invalid-email',
+        message: 'أدخل بريداً إلكترونياً صالحاً لاستعادة كلمة المرور.',
+      );
+    }
     if (_auth.currentUser != null) await _auth.signOut();
-    await _sendWhatsAppResetOtp(e164);
-  }
-
-  Future<void> resendOtp() async {
-    final e164 = pendingPhone;
-    if (e164 == null) {
-      throw FirebaseAuthException(
-        code: 'session-expired',
-        message: 'أعد طلب رمز التحقق.',
-      );
-    }
-    await _sendWhatsAppResetOtp(e164);
-  }
-
-  Future<void> resetPassword({
-    required String smsCode,
-    required String newPassword,
-  }) async {
-    final e164 = pendingPhone;
-    if (e164 == null) {
-      throw FirebaseAuthException(
-        code: 'session-expired',
-        message: 'انتهت الجلسة، أعد طلب رمز التحقق.',
-      );
-    }
-    final code = _requireCode(smsCode);
-    if (newPassword.length < 6) {
-      throw FirebaseAuthException(
-        code: 'weak-password',
-        message: 'كلمة المرور ضعيفة، استخدم ٦ أحرف على الأقل.',
-      );
-    }
-
-    await _apiPost(
-      '/api/auth/reset-password',
-      body: {
-        'phone': e164,
-        'code': code,
-        'newPassword': newPassword,
-      },
-      auth: false,
-    );
+    await _auth.sendPasswordResetEmail(email: email);
   }
 
   Future<void> signOut() async {
@@ -322,131 +281,9 @@ class AuthService {
     await _discardIncompleteAccount(user);
   }
 
-  Future<void> _sendWhatsAppResetOtp(String e164) async {
-    debugPrint(
-      'auth otp send → ${ApiConfig.baseUrl}/api/auth/otp/send phone=$e164 purpose=resetPassword',
-    );
-    await _apiPost(
-      '/api/auth/otp/send',
-      body: {
-        'phone': e164,
-        'purpose': 'resetPassword',
-      },
-      auth: false,
-    );
-  }
-
-  Future<Map<String, dynamic>> _apiPost(
-    String path, {
-    required Map<String, dynamic> body,
-    required bool auth,
-  }) async {
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
-    if (auth) {
-      final user = _auth.currentUser;
-      if (user == null) {
-        throw FirebaseAuthException(
-          code: 'session-expired',
-          message: 'انتهت الجلسة، أعد طلب رمز التحقق.',
-        );
-      }
-      final idToken = await user.getIdToken();
-      headers['Authorization'] = 'Bearer $idToken';
-    }
-
-    late http.Response res;
-    try {
-      res = await _http
-          .post(
-            ApiConfig.uri(path),
-            headers: headers,
-            body: jsonEncode(body),
-          )
-          .timeout(const Duration(seconds: 30));
-    } on TimeoutException {
-      throw FirebaseAuthException(
-        code: 'network-request-failed',
-        message: 'انتهت مهلة الاتصال بسيرفر التحقق.',
-      );
-    } catch (e) {
-      debugPrint('auth api error: $e');
-      throw FirebaseAuthException(
-        code: 'network-request-failed',
-        message:
-            'تعذّر الاتصال بسيرفر التحقق. تأكد أن السيرفر يعمل على ${ApiConfig.baseUrl}',
-      );
-    }
-
-    Map<String, dynamic> data = {};
-    try {
-      final decoded = jsonDecode(res.body);
-      if (decoded is Map<String, dynamic>) data = decoded;
-    } catch (_) {}
-
-    if (res.statusCode >= 200 && res.statusCode < 300) {
-      return data;
-    }
-
-    final code = (data['error'] as String?)?.trim();
-    final message = (data['message'] as String?)?.trim();
-    throw FirebaseAuthException(
-      code: _mapApiErrorCode(code, res.statusCode),
-      message: (message != null && message.isNotEmpty)
-          ? message
-          : 'تعذّر إكمال التحقق (${res.statusCode}).',
-    );
-  }
-
-  String _mapApiErrorCode(String? code, int status) {
-    switch (code) {
-      case 'invalid-verification-code':
-      case 'session-expired':
-      case 'too-many-requests':
-      case 'quota-exceeded':
-      case 'user-not-found':
-      case 'invalid-phone-number':
-      case 'phone-already-registered':
-      case 'weak-password':
-      case 'whatsapp_not_configured':
-      case 'whatsapp_template_missing':
-      case 'whatsapp_send_failed':
-      case 'google-sign-in-failed':
-        return code!;
-      default:
-        if (status == 429) return 'too-many-requests';
-        if (status == 404) return 'user-not-found';
-        if (status == 401 || status == 403) return 'session-expired';
-        return code?.isNotEmpty == true ? code! : 'internal-error';
-    }
-  }
-
   Future<bool> _hasProfile(String uid) async {
     final doc = await _db.collection(Cols.users).doc(uid).get();
     return doc.exists;
-  }
-
-  String _requireCode(String smsCode) {
-    final code = smsCode.trim();
-    if (code.length < 6) {
-      throw FirebaseAuthException(
-        code: 'invalid-verification-code',
-        message: 'رمز التحقق غير مكتمل.',
-      );
-    }
-    return code;
-  }
-
-  String _requireIraqiMobile(String rawPhone) {
-    final e164 = normalizeIraqiPhone(rawPhone);
-    if (!looksLikeIraqiMobile(e164)) {
-      throw FirebaseAuthException(
-        code: 'invalid-phone-number',
-        message: 'رقم الهاتف غير صالح. مثال: 07701234567',
-      );
-    }
-    return e164;
   }
 
   Future<void> _discardIncompleteAccount(User user) async {

@@ -12,11 +12,13 @@
 
 ## المصادقة
 
-- تسجيل الدخول: رقم الهاتف + كلمة المرور.
-- إنشاء الحساب: الاسم، الهاتف، كلمة المرور، العنوان — يُفتح كـ **حساب عميل** فقط.
+- تسجيل الدخول: رقم الهاتف أو بريد حقيقي + كلمة المرور (أو Google).
+- إنشاء الحساب: الاسم، الهاتف/البريد، كلمة المرور، العنوان — يُفتح كـ **حساب عميل** فقط.
 - Firebase لا يدعم كلمة مرور لمزوّد الهاتف، فيُربط كل رقم ببريد داخلي
   `<digits>@phone.barrr.app`.
-- فعّل مزوّد **Email/Password** في Firebase Authentication (والهاتف كمعرّف عبر البريد الداخلي).
+- **نسيان كلمة المرور:** رابط استعادة عبر Firebase للإيميل الحقيقي فقط.
+  حسابات الهاتف تُوجَّه للتواصل مع الدعم (`07739601771`) — لا واتساب OTP.
+- فعّل مزوّد **Email/Password** وقالب **Password reset** في Firebase Authentication.
 
 ## التشغيل
 
@@ -56,6 +58,27 @@ firebase deploy --only firestore:rules,firestore:indexes
 ### سيرفر الإشعارات / الإدارة
 
 انظر `../barrr-admin/server/README.md` — FCM وwatchers وعمليات الأدمن عبر Admin SDK على VPS.
+
+### بناء Android للإصدار (Release)
+
+1. أنشئ مفتاح الرفع (مرة واحدة، احفظه بأمان):
+
+```bash
+keytool -genkey -v -keystore android/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias barrr
+```
+
+2. انسخ `android/key.properties.example` إلى `android/key.properties` واملأ كلمات المرور والمسار.
+3. ابنِ:
+
+```bash
+flutter build apk --release
+# أو مع عنوان API إن لزم بعد الدومين:
+# flutter build apk --release --dart-define=BARRR_API_BASE=https://your-domain.com
+```
+
+4. أضف **SHA-1** لمفتاح الرفع في Firebase Console → Project settings → Your apps (Android)، وإلا قد يفشل Google Sign-In في الإصدار.
+
+HTTPS على لوحة الأدمن: انظر `../barrr-admin/deploy/HTTPS.md` (يتطلب دومين).
 
 ## لوحة التحكم (ويب)
 

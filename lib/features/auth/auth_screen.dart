@@ -1,8 +1,6 @@
-import 'dart:async';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/phone.dart';
 import 'package:barrr/core/strings.dart';
@@ -11,7 +9,7 @@ import 'package:barrr/services/auth_service.dart';
 
 part 'auth_widgets.part.dart';
 
-enum _Stage { login, register, otp }
+enum _Stage { login, register, resetSent }
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -28,25 +26,20 @@ class _AuthScreenState extends State<AuthScreen> {
   final _loginPassword = TextEditingController();
   final _phone = TextEditingController();
   final _password = TextEditingController();
-  final _otp = TextEditingController();
 
   _Stage _stage = _Stage.login;
   bool _hidePassword = true;
   bool _busy = false;
   String? _error;
-
-  Timer? _resendTimer;
-  int _resendIn = 0;
+  String? _resetEmail;
 
   @override
   void dispose() {
-    _resendTimer?.cancel();
     for (final c in [
       _loginPhone,
       _loginPassword,
       _phone,
       _password,
-      _otp,
     ]) {
       c.dispose();
     }
@@ -95,79 +88,96 @@ class _AuthScreenState extends State<AuthScreen> {
         ));
   }
 
-  void _startPasswordReset(String phone) {
-    _run(() async {
-      await _auth.sendResetOtp(phone);
-      if (!mounted) return;
-      setState(() {
-        _stage = _Stage.otp;
-        _otp.clear();
-        _password.clear();
-      });
-      _startResendCountdown();
-    });
-  }
+  Future<void> _openForgotPassword() async {
+    final identifier = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _ForgotPasswordSheet(initialValue: _loginPhone.text),
+    );
+    if (identifier == null || !mounted) return;
 
-  void _submitOtp() {
-    if (_otp.text.trim().length < 6) {
-      setState(() => _error = 'أدخل الرمز المكوّن من ٦ أرقام.');
+    final trimmed = identifier.trim();
+    if (isPhoneBackedIdentifier(trimmed)) {
+      await _showPhoneResetBlocked();
       return;
     }
+
+    if (!looksLikeEmail(trimmed) || isPhoneAuthEmail(trimmed)) {
+      setState(() => _error = 'أدخل بريداً إلكترونياً صالحاً.');
+      return;
+    }
+
     _run(() async {
-      final newPassword = await _askNewPassword();
-      if (newPassword == null) return;
-      await _auth.resetPassword(
-        smsCode: _otp.text,
-        newPassword: newPassword,
-      );
+      await _auth.sendPasswordResetForEmail(trimmed);
       if (!mounted) return;
       setState(() {
-        _stage = _Stage.login;
+        _stage = _Stage.resetSent;
+        _resetEmail = trimmed.toLowerCase();
         _error = null;
       });
     });
   }
 
-  void _resendOtp() {
-    if (_resendIn > 0) return;
-    _run(() async {
-      await _auth.resendOtp();
-      _startResendCountdown();
-    });
-  }
-
-  void _startResendCountdown() {
-    _resendTimer?.cancel();
-    setState(() => _resendIn = 60);
-    _resendTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) return t.cancel();
-      setState(() => _resendIn -= 1);
-      if (_resendIn <= 0) t.cancel();
-    });
-  }
-
-  void _backFromOtp() {
-    _resendTimer?.cancel();
-    setState(() {
-      _resendIn = 0;
-      _error = null;
-      _stage = _Stage.login;
-    });
-  }
-
-  Future<String?> _askNewPassword() => showModalBottomSheet<String>(
-        context: context,
-        isScrollControlled: true,
-        builder: (_) => const _NewPasswordSheet(),
-      );
-
-  Future<void> _openForgotPassword() async {
-    final phone = await showModalBottomSheet<String>(
+  Future<void> _showPhoneResetBlocked() {
+    return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _ForgotPasswordSheet(initialPhone: _loginPhone.text),
+      builder: (ctx) => _SheetShell(
+        title: AppStrings.phoneResetBlockedTitle,
+        subtitle: AppStrings.phoneResetBlockedBody,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(
+                color: AppColors.canvas,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.outline),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.support_agent_rounded, color: AppColors.petrol),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      AppStrings.supportPhone,
+                      textDirection: TextDirection.ltr,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                        color: AppColors.petrolDark,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _GradientButton(
+              label: AppStrings.callSupport,
+              icon: Icons.phone_rounded,
+              busy: false,
+              onPressed: () => _dialSupport(),
+            ),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('حسناً'),
+            ),
+          ],
+        ),
+      ),
     );
-    if (phone != null && mounted) _startPasswordReset(phone);
+  }
+
+  Future<void> _dialSupport() async {
+    final uri = Uri(scheme: 'tel', path: AppStrings.supportPhone);
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened) {
+      await launchUrl(uri, mode: LaunchMode.platformDefault);
+    }
   }
 
   String _friendlyError(Object e) {
@@ -176,32 +186,21 @@ class _AuthScreenState extends State<AuthScreen> {
       case 'invalid-phone-number':
         return 'رقم الهاتف غير صالح. استخدم صيغة 07701234567';
       case 'invalid-credential':
-      case 'invalid-email':
-      case 'user-not-found':
       case 'wrong-password':
         return 'رقم الهاتف أو كلمة المرور غير صحيحة.';
+      case 'invalid-email':
+        return e.message?.trim().isNotEmpty == true
+            ? e.message!
+            : 'البريد الإلكتروني غير صالح.';
+      case 'user-not-found':
+        // Firebase غالباً يخفي وجود الحساب؛ نعرض رسالة عامة.
+        return AppStrings.resetEmailSentBody;
       case 'user-disabled':
         return 'هذا الحساب موقوف. راجع الإدارة.';
       case 'phone-already-registered':
         return 'هذا الحساب مسجّل مسبقاً. سجّل الدخول.';
-      case 'invalid-verification-code':
-        return 'رمز التحقق غير صحيح.';
-      case 'session-expired':
-        return 'انتهت صلاحية الرمز. اطلب رمزاً جديداً.';
       case 'too-many-requests':
         return 'محاولات كثيرة. انتظر قليلاً ثم أعد المحاولة.';
-      case 'quota-exceeded':
-        return 'تم تجاوز حد رسائل التحقق اليوم. حاول لاحقاً.';
-      case 'whatsapp_not_configured':
-        return 'خدمة واتساب غير مفعّلة على السيرفر حالياً.';
-      case 'whatsapp_template_missing':
-        return e.message?.trim().isNotEmpty == true
-            ? e.message!
-            : 'قالب رسالة التحقق غير موجود في واتساب. راجع إعداد القالب في Meta.';
-      case 'whatsapp_send_failed':
-        return e.message?.trim().isNotEmpty == true
-            ? e.message!
-            : 'تعذّر إرسال رمز واتساب. حاول لاحقاً.';
       case 'google-sign-in-failed':
         return e.message?.trim().isNotEmpty == true
             ? e.message!
@@ -296,7 +295,7 @@ class _AuthScreenState extends State<AuthScreen> {
           child: switch (_stage) {
             _Stage.login => _loginView(),
             _Stage.register => _registerView(),
-            _Stage.otp => _otpView(),
+            _Stage.resetSent => _resetSentView(),
           },
         ),
       ),
@@ -444,70 +443,44 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  Widget _otpView() {
-    final phone = _auth.pendingPhone ?? '';
+  Widget _resetSentView() {
     return Column(
-      key: const ValueKey('otp'),
+      key: const ValueKey('resetSent'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            IconButton(
-              onPressed: _busy ? null : _backFromOtp,
-              icon: const Icon(Icons.arrow_back_rounded),
-              tooltip: AppStrings.changePhone,
-              style: IconButton.styleFrom(
-                backgroundColor: AppColors.canvas,
-                foregroundColor: AppColors.ink,
-              ),
-            ),
-            const Spacer(),
-            const _Pill(
-              icon: Icons.chat_rounded,
-              label: 'رمز واتساب',
-              color: AppColors.azure,
-              tint: AppColors.azureTint,
-            ),
-          ],
+        const _Pill(
+          icon: Icons.mark_email_read_rounded,
+          label: 'رابط بالبريد',
+          color: AppColors.azure,
+          tint: AppColors.azureTint,
         ),
         const SizedBox(height: 16),
         const _SectionTitle(
-          title: AppStrings.resetPassword,
-          subtitle: AppStrings.otpSentTo,
+          title: AppStrings.resetEmailSentTitle,
+          subtitle: AppStrings.resetEmailSentBody,
         ),
-        const SizedBox(height: 6),
-        Text(
-          prettyIraqiPhone(phone),
-          textDirection: TextDirection.ltr,
-          style: const TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 16,
-            color: AppColors.petrol,
-            letterSpacing: 0.5,
+        if (_resetEmail != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _resetEmail!,
+            textDirection: TextDirection.ltr,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+              color: AppColors.petrol,
+            ),
           ),
-        ),
-        const SizedBox(height: 24),
-        _OtpBoxes(controller: _otp, onCompleted: _submitOtp),
-        _errorBanner(),
+        ],
         const SizedBox(height: 22),
         _GradientButton(
-          label: AppStrings.verifyOtp,
-          icon: Icons.check_rounded,
-          busy: _busy,
-          onPressed: _submitOtp,
-        ),
-        const SizedBox(height: 10),
-        Center(
-          child: _resendIn > 0
-              ? Text(
-                  '${AppStrings.resendIn} $_resendIn ثانية',
-                  style: const TextStyle(color: AppColors.inkSoft, fontSize: 13),
-                )
-              : TextButton.icon(
-                  onPressed: _busy ? null : _resendOtp,
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: const Text(AppStrings.resendOtp),
-                ),
+          label: AppStrings.login,
+          icon: Icons.login_rounded,
+          busy: false,
+          onPressed: () => setState(() {
+            _stage = _Stage.login;
+            _resetEmail = null;
+            _error = null;
+          }),
         ),
       ],
     );

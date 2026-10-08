@@ -256,53 +256,6 @@ class _Pill extends StatelessWidget {
   }
 }
 
-class _PhoneField extends StatelessWidget {
-  const _PhoneField({required this.controller});
-
-  final TextEditingController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: TextInputType.phone,
-      textDirection: TextDirection.ltr,
-      textAlign: TextAlign.left,
-      textInputAction: TextInputAction.next,
-      autofillHints: const [AutofillHints.telephoneNumber],
-      inputFormatters: [
-        FilteringTextInputFormatter.allow(RegExp(r'[0-9+\u0660-\u0669 ]')),
-        LengthLimitingTextInputFormatter(16),
-      ],
-      decoration: const InputDecoration(
-        labelText: AppStrings.phone,
-        hintText: '07701234567',
-        prefixIcon: Icon(Icons.smartphone_rounded),
-        suffixIcon: Padding(
-          padding: EdgeInsetsDirectional.only(end: 14),
-          child: Center(
-            widthFactor: 1,
-            child: Text(
-              '964+',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: AppColors.inkSoft,
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ),
-      ),
-      validator: (v) {
-        if (!looksLikeIraqiMobile(normalizeIraqiPhone(v ?? ''))) {
-          return 'أدخل رقماً عراقياً صحيحاً مثل 07701234567';
-        }
-        return null;
-      },
-    );
-  }
-}
-
 class _PasswordField extends StatelessWidget {
   const _PasswordField({
     required this.controller,
@@ -344,121 +297,6 @@ class _PasswordField extends StatelessWidget {
       ),
       validator: validator ??
           (v) => (v ?? '').isEmpty ? 'أدخل كلمة المرور.' : null,
-    );
-  }
-}
-
-/// ستة مربعات لرمز التحقق تعمل بحقل واحد مخفي يدعم اللصق والتعبئة التلقائية.
-class _OtpBoxes extends StatefulWidget {
-  const _OtpBoxes({required this.controller, required this.onCompleted});
-
-  final TextEditingController controller;
-  final VoidCallback onCompleted;
-
-  @override
-  State<_OtpBoxes> createState() => _OtpBoxesState();
-}
-
-class _OtpBoxesState extends State<_OtpBoxes> {
-  final _focus = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    widget.controller.addListener(_onChanged);
-    _focus.addListener(_repaint);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
-  }
-
-  void _repaint() {
-    if (mounted) setState(() {});
-  }
-
-  void _onChanged() {
-    _repaint();
-    if (widget.controller.text.length == 6) {
-      _focus.unfocus();
-      widget.onCompleted();
-    }
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_onChanged);
-    _focus.removeListener(_repaint);
-    _focus.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final code = widget.controller.text;
-    return GestureDetector(
-      onTap: _focus.requestFocus,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Directionality(
-            textDirection: TextDirection.ltr,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                for (var i = 0; i < 6; i++)
-                  _box(
-                    digit: i < code.length ? code[i] : '',
-                    active: _focus.hasFocus && i == code.length,
-                  ),
-              ],
-            ),
-          ),
-          Positioned.fill(
-            child: Opacity(
-              opacity: 0,
-              child: TextField(
-                controller: widget.controller,
-                focusNode: _focus,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                showCursor: false,
-                enableInteractiveSelection: false,
-                autofillHints: const [AutofillHints.oneTimeCode],
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(counterText: ''),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _box({required String digit, required bool active}) {
-    final filled = digit.isNotEmpty;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      height: 58,
-      width: 48,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: filled ? AppColors.petrolTint : const Color(0xFFF7FAFB),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: active
-              ? AppColors.petrol
-              : filled
-                  ? AppColors.petrol.withValues(alpha: 0.35)
-                  : AppColors.outline,
-          width: active ? 1.8 : 1,
-        ),
-      ),
-      child: Text(
-        digit,
-        style: const TextStyle(
-          fontSize: 22,
-          fontWeight: FontWeight.w800,
-          color: AppColors.petrolDark,
-        ),
-      ),
     );
   }
 }
@@ -642,11 +480,11 @@ class _FooterLink extends StatelessWidget {
   }
 }
 
-/// طلب رقم الهاتف لبدء استعادة كلمة المرور.
+/// طلب المعرّف لبدء استعادة كلمة المرور (إيميل أو هاتف).
 class _ForgotPasswordSheet extends StatefulWidget {
-  const _ForgotPasswordSheet({required this.initialPhone});
+  const _ForgotPasswordSheet({required this.initialValue});
 
-  final String initialPhone;
+  final String initialValue;
 
   @override
   State<_ForgotPasswordSheet> createState() => _ForgotPasswordSheetState();
@@ -654,11 +492,11 @@ class _ForgotPasswordSheet extends StatefulWidget {
 
 class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
   final _form = GlobalKey<FormState>();
-  late final _phone = TextEditingController(text: widget.initialPhone);
+  late final _identifier = TextEditingController(text: widget.initialValue);
 
   @override
   void dispose() {
-    _phone.dispose();
+    _identifier.dispose();
     super.dispose();
   }
 
@@ -666,87 +504,20 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
   Widget build(BuildContext context) {
     return _SheetShell(
       title: AppStrings.resetPassword,
-      subtitle: 'سنرسل رمز تحقق عبر واتساب إلى رقمك لتعيين كلمة مرور جديدة.',
+      subtitle: AppStrings.resetPasswordEmailHint,
       child: Form(
         key: _form,
         child: Column(
           children: [
-            _PhoneField(controller: _phone),
+            _IdentifierField(controller: _identifier),
             const SizedBox(height: 20),
             _GradientButton(
-              label: 'إرسال الرمز',
-              icon: Icons.send_rounded,
+              label: AppStrings.sendResetLink,
+              icon: Icons.mail_outline_rounded,
               busy: false,
               onPressed: () {
                 if (_form.currentState?.validate() ?? false) {
-                  Navigator.pop(context, _phone.text);
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// تعيين كلمة المرور الجديدة بعد نجاح التحقق.
-class _NewPasswordSheet extends StatefulWidget {
-  const _NewPasswordSheet();
-
-  @override
-  State<_NewPasswordSheet> createState() => _NewPasswordSheetState();
-}
-
-class _NewPasswordSheetState extends State<_NewPasswordSheet> {
-  final _form = GlobalKey<FormState>();
-  final _password = TextEditingController();
-  final _confirm = TextEditingController();
-  bool _hide = true;
-
-  @override
-  void dispose() {
-    _password.dispose();
-    _confirm.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _SheetShell(
-      title: AppStrings.newPassword,
-      subtitle: 'اختر كلمة مرور جديدة لحسابك.',
-      child: Form(
-        key: _form,
-        child: Column(
-          children: [
-            _PasswordField(
-              controller: _password,
-              label: AppStrings.newPassword,
-              obscure: _hide,
-              autofillHint: AutofillHints.newPassword,
-              onToggle: () => setState(() => _hide = !_hide),
-              validator: (v) =>
-                  (v ?? '').length < 6 ? 'استخدم ٦ أحرف أو أرقام على الأقل.' : null,
-            ),
-            const SizedBox(height: 14),
-            _PasswordField(
-              controller: _confirm,
-              label: AppStrings.confirmPassword,
-              obscure: _hide,
-              autofillHint: AutofillHints.newPassword,
-              onToggle: () => setState(() => _hide = !_hide),
-              validator: (v) =>
-                  v != _password.text ? 'كلمتا المرور غير متطابقتين.' : null,
-            ),
-            const SizedBox(height: 20),
-            _GradientButton(
-              label: 'حفظ كلمة المرور',
-              icon: Icons.check_rounded,
-              busy: false,
-              onPressed: () {
-                if (_form.currentState?.validate() ?? false) {
-                  Navigator.pop(context, _password.text);
+                  Navigator.pop(context, _identifier.text);
                 }
               },
             ),

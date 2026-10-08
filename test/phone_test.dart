@@ -59,5 +59,13 @@ void main() {
       expect(phoneFromIdentifier('07701234567'), '+9647701234567');
       expect(phoneFromIdentifier('a@b.com'), '');
     });
+
+    test('isPhoneAuthEmail / isPhoneBackedIdentifier', () {
+      expect(isPhoneAuthEmail('9647701234567@phone.barrr.app'), isTrue);
+      expect(isPhoneAuthEmail('user@example.com'), isFalse);
+      expect(isPhoneBackedIdentifier('07701234567'), isTrue);
+      expect(isPhoneBackedIdentifier('9647701234567@phone.barrr.app'), isTrue);
+      expect(isPhoneBackedIdentifier('user@example.com'), isFalse);
+    });
   });
 }

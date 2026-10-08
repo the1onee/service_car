@@ -47,14 +47,20 @@ class AppStrings {
   static const optional = 'اختياري';
   static const forgotPassword = 'نسيت كلمة المرور؟';
   static const resetPassword = 'استعادة كلمة المرور';
+  static const resetPasswordEmailHint =
+      'أدخل بريدك الإلكتروني وسنرسل رابطاً لتعيين كلمة مرور جديدة.';
+  static const sendResetLink = 'إرسال رابط الاستعادة';
+  static const resetEmailSentTitle = 'تحقق من بريدك';
+  static const resetEmailSentBody =
+      'إن وُجد حساب بهذا البريد فستصلك رسالة تحتوي رابط استعادة كلمة المرور.';
+  static const phoneResetBlockedTitle = 'تواصل مع الدعم';
+  static const phoneResetBlockedBody =
+      'الحسابات المسجّلة برقم الهاتف لا يمكن استعادة كلمة مرورها من التطبيق. تواصل مع الدعم لإجراء التعديل.';
+  static const supportPhone = '07739601771';
+  static const callSupport = 'اتصال بالدعم';
   static const noAccount = 'ليس لديك حساب؟';
   static const haveAccount = 'لديك حساب بالفعل؟';
   static const continueLabel = 'متابعة';
-  static const otpSentTo = 'أدخل رمز واتساب المرسل إلى';
-  static const verifyOtp = 'تأكيد الرمز';
-  static const resendOtp = 'إعادة إرسال الرمز';
-  static const resendIn = 'إعادة الإرسال بعد';
-  static const changePhone = 'تغيير الرقم';
   static const logout = 'تسجيل الخروج';
 
   // الأدوار
