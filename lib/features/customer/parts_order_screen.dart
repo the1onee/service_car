@@ -50,6 +50,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
   String? _partImageUrl;
   String? _specialtyId;
   String _specialtyAr = '';
+  String? _partCondition;
   List<SpecialtyOption> _specialties = const [];
   var _loadingSpecialties = true;
   String? _specialtiesError;
@@ -161,6 +162,13 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
       );
       return;
     }
+    final partCondition = _partCondition;
+    if (partCondition == null || partCondition.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('اختر حالة القطعة.')),
+      );
+      return;
+    }
     setState(() => _submitting = true);
     try {
       final scope = AppScope.of(context);
@@ -188,6 +196,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
         isEmergency: false,
         commissionRate: 0,
         partName: _partDetails.text.trim(),
+        partCondition: partCondition,
         partNote: '',
         partImageUrl: _partImageUrl ?? '',
         carMake: make,
@@ -479,6 +488,14 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                                 : null,
                           ),
                           const SizedBox(height: 12),
+                          const _Label('حالة القطعة'),
+                          const SizedBox(height: 8),
+                          _PartConditionPicker(
+                            value: _partCondition,
+                            onChanged: (value) =>
+                                setState(() => _partCondition = value),
+                          ),
+                          const SizedBox(height: 12),
                           const _Label('الصورة'),
                           if (_partImageUrl != null) ...[
                             Container(
@@ -707,6 +724,76 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
     if (a.contains('بصرة')) return 'البصرة';
     if (a.isEmpty) return 'البصرة';
     return a.split(RegExp(r'[،,]')).first.trim();
+  }
+}
+
+class _PartConditionPicker extends StatelessWidget {
+  const _PartConditionPicker({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String? value;
+  final ValueChanged<String> onChanged;
+
+  static const _options = [
+    ('oem', 'أصلي وكالة'),
+    ('aftermarket', 'تجاري'),
+    ('used', 'مستعمل تفصيخ'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (final option in _options) ...[
+          Material(
+            color: value == option.$1 ? const Color(0xFFEFF4FF) : Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
+              onTap: () => onChanged(option.$1),
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: value == option.$1
+                        ? Colors.black.withValues(alpha: 0.2)
+                        : const Color(0xFFE5EEFF),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      value == option.$1
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                      size: 20,
+                      color: value == option.$1
+                          ? Colors.black
+                          : const Color(0xFF76777D),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      option.$2,
+                      style: TextStyle(
+                        fontWeight: value == option.$1
+                            ? FontWeight.w700
+                            : FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (option != _options.last) const SizedBox(height: 8),
+        ],
+      ],
+    );
   }
 }
 

@@ -20,6 +20,16 @@ enum JobStatus {
 
 enum MatchingMode { emergency, quotes }
 
+/// تسمية حالة قطعة الغيار التي يختارها العميل.
+String partConditionLabel(String code) {
+  return switch (code) {
+    'oem' => 'أصلي وكالة',
+    'aftermarket' => 'تجاري',
+    'used' => 'مستعمل تفصيخ',
+    _ => code,
+  };
+}
+
 JobStatus jobStatusFrom(String? raw) {
   return JobStatus.values.firstWhere(
     (s) => s.name == raw,
@@ -68,6 +78,7 @@ class Job {
     this.walletApplied,
     this.changeAmount,
     this.partName = '',
+    this.partCondition = '',
     this.partNote = '',
     this.partImageUrl = '',
     this.carMake = '',
@@ -125,6 +136,8 @@ class Job {
   final double? changeAmount;
   /// طلب قطع غيار.
   final String partName;
+  /// oem | aftermarket | used — يختارها العميل عند طلب القطعة.
+  final String partCondition;
   final String partNote;
   final String partImageUrl;
   final String carMake;
@@ -278,6 +291,7 @@ class Job {
         'useWallet': useWallet,
         'walletReserve': walletReserve,
         'partName': partName,
+        'partCondition': partCondition,
         'partNote': partNote,
         'partImageUrl': partImageUrl,
         'carMake': carMake,
@@ -343,6 +357,7 @@ class Job {
       walletApplied: (d['walletApplied'] as num?)?.toDouble(),
       changeAmount: (d['changeAmount'] as num?)?.toDouble(),
       partName: d['partName'] as String? ?? '',
+      partCondition: d['partCondition'] as String? ?? '',
       partNote: d['partNote'] as String? ?? '',
       partImageUrl: d['partImageUrl'] as String? ?? '',
       carMake: d['carMake'] as String? ?? '',

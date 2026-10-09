@@ -27,8 +27,6 @@ class WorkshopQuoteSheet extends StatefulWidget {
   State<WorkshopQuoteSheet> createState() => _WorkshopQuoteSheetState();
 }
 
-enum _PartCondition { oem, aftermarket, used }
-
 class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
 
   final _price = TextEditingController();
@@ -36,7 +34,6 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
   final _warrantyNote = TextEditingController();
   final _vendorNotes = TextEditingController();
 
-  _PartCondition _condition = _PartCondition.oem;
   var _warrantyEnabled = false;
   late int _left;
   Timer? _timer;
@@ -68,14 +65,11 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
     super.dispose();
   }
 
-  String get _conditionLabel => switch (_condition) {
-        _PartCondition.oem => 'أصلي وكالة جديد',
-        _PartCondition.aftermarket => 'تجاري',
-        _PartCondition.used => 'مستعمل تفصيخ مفحوص',
-      };
-
-  String get _summaryMeta {
-    final parts = <String>[_conditionLabel];
+  String _summaryMeta(String conditionCode) {
+    final parts = <String>[];
+    if (conditionCode.isNotEmpty) {
+      parts.add(partConditionLabel(conditionCode));
+    }
     if (_warrantyEnabled) {
       final days = _warrantyDays.text.trim().isEmpty
           ? '7'
@@ -116,7 +110,7 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
         technicianId: widget.offer.technicianId,
         technicianName: widget.workshopName,
         initialPrice: parsed,
-        partCondition: _condition.name,
+        partCondition: widget.offer.partCondition,
         warrantyDays: days,
         warrantyNote: note,
         deliveryType: 'delivery',
@@ -209,6 +203,9 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
                 ? _maskPhone(job!.customerPhone)
                 : '0770 *** ****';
             final km = widget.offer.distanceKm;
+            final conditionCode = (job?.partCondition.isNotEmpty == true)
+                ? job!.partCondition
+                : widget.offer.partCondition;
 
             return Stack(
               children: [
@@ -597,42 +594,35 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
                                 ),
                                 const SizedBox(height: 16),
                                 const Text(
-                                  'حالة القطعة المتوفرة بالورشة:',
+                                  'حالة القطعة التي طلبها العميل:',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 13,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-                                _ConditionTile(
-                                  selected: _condition == _PartCondition.oem,
-                                  title: 'أصلي وكالة جديد (Genuine OEM)',
-                                  subtitle: 'كارتون المصنع مع رقم القطعة',
-                                  trailing: const Icon(Icons.verified,
-                                      color: AppColors.emerald, size: 20),
-                                  onTap: () => setState(
-                                      () => _condition = _PartCondition.oem),
-                                ),
-                                const SizedBox(height: 8),
-                                _ConditionTile(
-                                  selected:
-                                      _condition == _PartCondition.aftermarket,
-                                  title: 'تجاري',
-                                  subtitle:
-                                      'قطعة تجارية مطابقة للاستخدام اليومي',
-                                  trailing: _Tag('تجاري'),
-                                  onTap: () => setState(() =>
-                                      _condition = _PartCondition.aftermarket),
-                                ),
-                                const SizedBox(height: 8),
-                                _ConditionTile(
-                                  selected: _condition == _PartCondition.used,
-                                  title: 'مستعمل تفصيخ أصلي بفحص',
-                                  subtitle:
-                                      'مفكوك من مركبة سليمة ومفحوص ديناميكياً',
-                                  trailing: _Tag('مفحوص'),
-                                  onTap: () => setState(
-                                      () => _condition = _PartCondition.used),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEFF4FF),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: const Color(0xFFE5EEFF),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    conditionCode.isEmpty
+                                        ? 'لم يحدّد العميل الحالة'
+                                        : partConditionLabel(conditionCode),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                    ),
+                                  ),
                                 ),
                                 const SizedBox(height: 14),
                                 const Text(
@@ -814,7 +804,7 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
                                             ],
                                           ),
                                           Text(
-                                            _summaryMeta,
+                                            _summaryMeta(conditionCode),
                                             style: const TextStyle(
                                               fontSize: 11,
                                               color: Color(0xFF45464D),
@@ -976,101 +966,6 @@ class _Chip extends StatelessWidget {
           ],
           Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
         ],
-      ),
-    );
-  }
-}
-
-class _Tag extends StatelessWidget {
-  const _Tag(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE5EEFF),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 11, color: Color(0xFF45464D)),
-      ),
-    );
-  }
-}
-
-class _ConditionTile extends StatelessWidget {
-  const _ConditionTile({
-    required this.selected,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.trailing,
-  });
-
-  final bool selected;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? const Color(0xFFEFF4FF) : Colors.white,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: selected
-                  ? Colors.black.withValues(alpha: 0.2)
-                  : const Color(0xFFE5EEFF),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                selected
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_off,
-                size: 20,
-                color: selected ? Colors.black : const Color(0xFF76777D),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF45464D),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (trailing != null) trailing!,
-            ],
-          ),
-        ),
       ),
     );
   }
