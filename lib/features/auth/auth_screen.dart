@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:barrr/core/app_brand.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/phone.dart';
 import 'package:barrr/core/strings.dart';

@@ -10,6 +10,8 @@ import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/features/shared/field_ui.dart';
+import 'package:barrr/core/app_brand.dart';
+import 'package:barrr/features/legal/terms_view_screen.dart';
 import 'package:barrr/features/warranty/warranties_screen.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
@@ -126,6 +128,28 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
     } finally {
       if (mounted) setState(() => _savingName = false);
     }
+  }
+
+  void _showAbout(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppBrand.appName),
+        content: SingleChildScrollView(
+          child: Text(
+            '${AppBrand.tagline}\n\n${AppBrand.aboutBlurb}\n\n'
+            'الدعم: ${AppBrand.supportPhone}',
+            style: const TextStyle(height: 1.5),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('حسناً'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _editAddress() async {
@@ -305,6 +329,19 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                               ? 'لا يوجد عنوان'
                               : me.address),
                       onTap: _savingAddress ? () {} : _editAddress,
+                    ),
+                    const Divider(height: 1),
+                    _MenuTile(
+                      icon: Icons.info_outline_rounded,
+                      title: 'عن التطبيق',
+                      subtitle: AppBrand.appName,
+                      onTap: () => _showAbout(context),
+                    ),
+                    const Divider(height: 1),
+                    _MenuTile(
+                      icon: Icons.description_outlined,
+                      title: 'شروط الاستخدام',
+                      onTap: () => TermsViewScreen.open(context),
                     ),
                   ],
                 ),

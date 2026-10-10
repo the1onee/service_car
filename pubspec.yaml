@@ -1,5 +1,5 @@
 name: barrr
-description: تطبيق طلب فني ميداني — عميل وفني على Flutter وFirebase.
+description: تطبيق البطريق — خدمات سيارات (عميل وفني) على Flutter وFirebase.
 publish_to: "none"
 version: 1.0.0+1
 
@@ -32,6 +32,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/branding/
   fonts:
     - family: NotoSansArabic
       fonts:

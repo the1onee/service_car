@@ -3,7 +3,7 @@
     "providers": {
       "emailPassword": true,
       "googleSignIn": {
-        "oAuthBrandDisplayName": "طلب الفني",
+        "oAuthBrandDisplayName": "البطريق",
         "supportEmail": "mohammedabdullahyousef21@gmail.com"
       }
     }

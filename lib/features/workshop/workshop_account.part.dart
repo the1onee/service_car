@@ -273,6 +273,12 @@ class _AccountPageState extends State<_AccountPage> {
                               : me.address),
                       onTap: _savingAddress ? () {} : _editAddress,
                     ),
+                    const Divider(height: 1),
+                    _WsMenuTile(
+                      icon: Icons.description_outlined,
+                      title: 'شروط الاستخدام',
+                      onTap: () => TermsViewScreen.open(context),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 28),

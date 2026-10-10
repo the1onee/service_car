@@ -85,8 +85,20 @@ class _BrandHeader extends StatelessWidget {
                   opacity: 0.45,
                 ),
               ),
-              child: const Icon(Icons.car_repair_rounded,
-                  color: AppColors.ink, size: 28),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(17),
+                child: Image.asset(
+                  AppBrand.logoAsset,
+                  width: 52,
+                  height: 52,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.rv_hookup_rounded,
+                    color: AppColors.ink,
+                    size: 28,
+                  ),
+                ),
+              ),
             ),
           ),
         ),

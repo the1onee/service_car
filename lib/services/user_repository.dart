@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:barrr/legal/terms_of_use.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/phone.dart';
 import 'package:barrr/data/collections.dart';
@@ -146,6 +147,13 @@ class UserRepository {
     return _userRef(uid).set({
       'address': address,
       'geo': geo,
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> acceptTerms(String uid) {
+    return _userRef(uid).set({
+      'termsAcceptedVersion': AppTerms.version,
+      'termsAcceptedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 

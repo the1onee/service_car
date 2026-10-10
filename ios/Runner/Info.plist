@@ -5,13 +5,13 @@
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>نحتاج موقعك لطلب الفني وتتبع الوصول</string>
+	<string>نحتاج موقعك لطلب الخدمة عبر البطريق وتتبع الوصول</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>تحديث موقع الفني أثناء التوفر</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>طلب الفني</string>
+	<string>البطريق</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

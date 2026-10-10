@@ -1,6 +1,8 @@
+import 'package:barrr/core/app_brand.dart';
+
 class AppStrings {
-  static const appName = 'طلب الفني';
-  static const tagline = 'فني موثوق يصل إليك في أي مكان';
+  static const appName = AppBrand.appName;
+  static const tagline = AppBrand.tagline;
 
   // المصادقة
   static const login = 'تسجيل الدخول';

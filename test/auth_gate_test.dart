@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:barrr/features/auth/auth_screen.dart';
 import 'package:barrr/features/shell/auth_gate.dart';
+import 'package:barrr/legal/terms_of_use.dart';
 import 'package:barrr/models/app_user.dart';
 
 import 'support/test_app_scope.dart';
@@ -24,6 +25,7 @@ void main() {
       role: role,
       name: 'اختبار',
       phone: phone,
+      termsAcceptedVersion: AppTerms.version,
     );
   }
 

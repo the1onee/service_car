@@ -206,7 +206,7 @@ class Job {
   bool get isTechnicianJob =>
       !isPartsOrder && !isOilOrder && !isPaintOrder;
 
-  /// عروض بلا نافذة زمنية قصيرة. الطوارئ (سطحة وغيرها) أول قبول يفوز وبنوافذ قصيرة.
+  /// عروض بلا نافذة زمنية. الطوارئ (فتح سيارة / وقود) أول قبول يفوز؛ السطحة عروض يختارها العميل.
   bool get isOpenEndedDispatch =>
       !isEmergency && (isPartsOrder || isOilOrder || isTechnicianJob);
 

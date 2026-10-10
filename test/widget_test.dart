@@ -41,7 +41,7 @@ void main() {
     });
 
     test('emergency vs quote services', () {
-      expect(isEmergencyService('towing'), isTrue);
+      expect(isEmergencyService('towing'), isFalse);
       expect(isEmergencyService('locks'), isTrue);
       expect(isEmergencyService('fuel'), isTrue);
       expect(isEmergencyService('oil'), isFalse);

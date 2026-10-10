@@ -131,7 +131,7 @@ const seedServices = <ServiceItem>[
     id: 'towing',
     titleAr: 'سطحة ومساعدة على الطريق',
     category: 'طوارئ',
-    isEmergency: true,
+    isEmergency: false,
     providerKind: ServiceProviderKind.mobile,
     sortOrder: 100,
   ),
@@ -153,7 +153,7 @@ const seedServices = <ServiceItem>[
   ),
 ];
 
-const emergencyServiceIds = {'towing', 'locks', 'fuel'};
+const emergencyServiceIds = {'locks', 'fuel'};
 
 bool isEmergencyService(String serviceId) => emergencyServiceIds.contains(serviceId);
 

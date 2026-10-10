@@ -44,7 +44,7 @@ void main() {
     test('matchingModeFrom uses raw then emergency service fallback', () {
       expect(matchingModeFrom('emergency'), MatchingMode.emergency);
       expect(matchingModeFrom('quotes'), MatchingMode.quotes);
-      expect(matchingModeFrom(null, 'towing'), MatchingMode.emergency);
+      expect(matchingModeFrom(null, 'towing'), MatchingMode.quotes);
       expect(matchingModeFrom(null, 'wash'), MatchingMode.quotes);
     });
   });
@@ -93,9 +93,9 @@ void main() {
           id: 'b',
           status: JobStatus.dispatching,
           serviceId: 'towing',
-          matchingMode: MatchingMode.emergency,
+          matchingMode: MatchingMode.quotes,
         ).isOpenEndedDispatch,
-        isFalse,
+        isTrue,
       );
     });
   });

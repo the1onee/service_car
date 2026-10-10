@@ -277,6 +277,16 @@ class CustomerJobPanel extends StatelessWidget {
             QuoteCompareList(job: job, selectable: true),
           ];
         }
+        if (job.isTowOrder) {
+          return [
+            const Text(
+              'اختر عرض السطحة عندما يصل — بدون مهلة زمنية.',
+              style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            QuoteCompareList(job: job, selectable: true),
+          ];
+        }
         if (job.isTechnicianJob) {
           return [
             const Text(

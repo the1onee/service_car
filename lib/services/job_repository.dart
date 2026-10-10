@@ -664,7 +664,11 @@ class JobRepository {
     await _jobs.doc(jobId).update({
       'technicianId': offer.technicianId,
       'technicianName': offer.technicianName ??
-          (isOil ? 'ورشة زيوت' : (isParts ? 'ورشة' : 'فني')),
+          (isOil
+              ? 'ورشة زيوت'
+              : (isParts
+                  ? 'ورشة'
+                  : (job?.isTowOrder == true ? 'سطحة' : 'فني'))),
       'initialPrice': price,
       if (isParts && price != null) 'finalPrice': price,
       'status': directAssign ? JobStatus.enRoute.name : JobStatus.quoted.name,

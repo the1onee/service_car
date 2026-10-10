@@ -150,7 +150,7 @@ class _TowRequestFormState extends State<TowRequestForm> {
         titleAr: 'سطحة ومساعدة على الطريق',
         category: 'طوارئ',
         providerKind: ServiceProviderKind.mobile,
-        isEmergency: true,
+        isEmergency: false,
       ),
     );
   }
@@ -207,7 +207,7 @@ class _TowRequestFormState extends State<TowRequestForm> {
         vehicleTypeId: vehicleType.id,
         vehicleTypeTitle: vehicleType.nameAr,
         exact: pickupGeo,
-        isEmergency: true,
+        isEmergency: false,
         commissionRate: towService.commissionRate,
         partName: 'سطحة',
         partNote: note,

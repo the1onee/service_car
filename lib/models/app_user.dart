@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:barrr/core/constants.dart';
+import 'package:barrr/legal/terms_of_use.dart';
 
 enum UserRole { customer, technician, workshop, oilWorkshop, paintShop, admin }
 
@@ -34,6 +35,7 @@ class AppUser {
     this.verificationStatus = VerificationStatus.pending,
     this.walletBalance = 0,
     this.commissionPercent = 0,
+    this.termsAcceptedVersion = '',
   });
 
   final String id;
@@ -69,6 +71,12 @@ class AppUser {
   final double walletBalance;
   /// نسبة عمولة ورشة القطع (٥ تعني ٥٪). يحدّدها الأدمن عند التسجيل.
   final double commissionPercent;
+
+  /// آخر نسخة شروط استخدام وافق عليها المستخدم.
+  final String termsAcceptedVersion;
+
+  bool get hasAcceptedCurrentTerms =>
+      termsAcceptedVersion.trim() == AppTerms.version;
 
   bool get isTechnician => role == UserRole.technician;
   bool get isWorkshop => role == UserRole.workshop;
@@ -129,6 +137,8 @@ class AppUser {
         'verificationStatus': verificationStatus.name,
         'walletBalance': walletBalance,
         'commissionPercent': commissionPercent,
+        if (termsAcceptedVersion.isNotEmpty)
+          'termsAcceptedVersion': termsAcceptedVersion,
       };
 
   factory AppUser.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -185,6 +195,7 @@ class AppUser {
       verificationStatus: _statusOf(d['verificationStatus'], verifiedFlag),
       walletBalance: (d['walletBalance'] as num?)?.toDouble() ?? 0,
       commissionPercent: (d['commissionPercent'] as num?)?.toDouble() ?? 0,
+      termsAcceptedVersion: d['termsAcceptedVersion'] as String? ?? '',
     );
   }
 
@@ -219,6 +230,7 @@ class AppUser {
     bool? verified,
     VerificationStatus? verificationStatus,
     double? walletBalance,
+    String? termsAcceptedVersion,
   }) {
     return AppUser(
       id: id,
@@ -245,6 +257,7 @@ class AppUser {
       verificationStatus: verificationStatus ?? this.verificationStatus,
       walletBalance: walletBalance ?? this.walletBalance,
       commissionPercent: commissionPercent,
+      termsAcceptedVersion: termsAcceptedVersion ?? this.termsAcceptedVersion,
     );
   }
 }

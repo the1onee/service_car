@@ -1,11 +1,11 @@
 {
-    "name": "طلب الفني",
-    "short_name": "طلب الفني",
+    "name": "البطريق",
+    "short_name": "البطريق",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#F4F7F6",
     "theme_color": "#0F6B5C",
-    "description": "خدمات السيارات في البصرة",
+    "description": "خدمات السيارات — البطريق",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
