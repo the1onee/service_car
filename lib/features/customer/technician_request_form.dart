@@ -6,7 +6,7 @@ import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/cloudinary_config.dart';
 import 'package:barrr/core/geo.dart';
 import 'package:barrr/core/strings.dart';
-import 'package:barrr/core/theme.dart' show AppColors;
+import 'package:barrr/core/theme.dart' show AppColors, AppTheme;
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
