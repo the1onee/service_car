@@ -20,6 +20,20 @@ bool _offerExpired(Map<String, dynamic> data, [DateTime? now]) {
   return !(now ?? DateTime.now()).isBefore(deadline);
 }
 
+List<String> _specialtyIdsOf(Map<String, dynamic> data) {
+  final raw = data['specialtyIds'];
+  if (raw is List) {
+    final ids = raw
+        .whereType<String>()
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (ids.isNotEmpty) return ids;
+  }
+  final single = (data['specialtyId'] as String?)?.trim() ?? '';
+  return single.isEmpty ? const [] : [single];
+}
+
 class JobRepository {
   JobRepository({FirebaseFirestore? db}) : _injected = db;
 
@@ -329,6 +343,7 @@ class JobRepository {
             isWorkshop: role == 'workshop' || role == 'paintShop',
             oilWorkshopTier: data['oilWorkshopTier'] as String? ?? '',
             specialtyId: data['specialtyId'] as String? ?? '',
+            specialtyIds: _specialtyIdsOf(data),
             specialtyAr: data['specialtyAr'] as String? ?? '',
           );
         })
@@ -362,7 +377,7 @@ class JobRepository {
     // قطع الغيار: تطابق اختصاص صارم فقط (بدون توسيع لكل الورش).
     var ranked = candidates.where((t) {
       if (job.isPartsOrder && job.specialtyId.isNotEmpty) {
-        return t.specialtyId == job.specialtyId;
+        return t.specialtyIds.contains(job.specialtyId);
       }
       return true;
     }).toList()
