@@ -22,6 +22,46 @@ service cloud.firestore {
     function isAdmin() {
       return hasRole('admin');
     }
+    // غياب adminLevel أو أي قيمة غير 'admin' = سوبر (مطابق لـ adminLevel.ts).
+    function isSuperAdmin() {
+      return isAdmin() && userDoc().get('adminLevel', '') != 'admin';
+    }
+    function adminPerm(key) {
+      return userDoc().get('adminPermissions', {}).get(key, 'none');
+    }
+    function adminCanRead(key) {
+      return isSuperAdmin()
+        || (isAdmin() && adminPerm(key) in ['read', 'write']);
+    }
+    function adminCanWrite(key) {
+      return isSuperAdmin()
+        || (isAdmin() && adminPerm(key) == 'write');
+    }
+    // قراءة/كتابة users حسب دور المستند وصلاحية القسم.
+    function adminCanReadUserDoc() {
+      return isSuperAdmin()
+        || (adminCanRead('users') && resource.data.role == 'admin')
+        || (adminCanRead('customers') && resource.data.role == 'customer')
+        || (adminCanRead('technicians') && resource.data.role == 'technician')
+        || (adminCanRead('workshops')
+          && resource.data.role in ['workshop', 'oilWorkshop', 'paintShop']);
+    }
+    function adminCanWriteUserDoc() {
+      return isSuperAdmin()
+        || (adminCanWrite('users') && resource.data.role == 'admin')
+        || (adminCanWrite('customers') && resource.data.role == 'customer')
+        || (adminCanWrite('technicians') && resource.data.role == 'technician')
+        || (adminCanWrite('workshops')
+          && resource.data.role in ['workshop', 'oilWorkshop', 'paintShop']);
+    }
+    function adminCanCreateUserDoc() {
+      return isSuperAdmin()
+        || (adminCanWrite('users') && request.resource.data.role == 'admin')
+        || (adminCanWrite('customers') && request.resource.data.role == 'customer')
+        || (adminCanWrite('technicians') && request.resource.data.role == 'technician')
+        || (adminCanWrite('workshops')
+          && request.resource.data.role in ['workshop', 'oilWorkshop', 'paintShop']);
+    }
     function isTechnicianRole() {
       return hasRole('technician');
     }
@@ -42,10 +82,9 @@ service cloud.firestore {
       return signedIn() && uid == request.auth.uid;
     }
 
-    // لوحة التحكم: الأدمن يقرأ ويكتب ويحذف في كل المجموعات.
-    // هذا يغطي المجموعات الحالية والجديدة دون تكرار القواعد لكل واحدة.
+    // سوبر أدمن فقط على القاعدة العامة. الأدمن المحدود عبر قواعد المجموعات أدناه.
     match /{document=**} {
-      allow read, write: if isAdmin();
+      allow read, write: if isSuperAdmin();
     }
 
     match /users/{uid} {
@@ -71,15 +110,15 @@ service cloud.firestore {
         return resource.data.role in ['technician', 'workshop', 'oilWorkshop', 'paintShop'];
       }
 
-      allow read: if isAdmin()
+      allow read: if adminCanReadUserDoc()
         || isUser(uid)
         || (signedIn() && isPublicProviderProfile());
 
       // الفني يقرأ رصيد العميل عند التسوية فقط (قراءة مستند، لا قائمة).
       allow get: if isProviderRole() && resource.data.role == 'customer';
 
-      // الأدمن ينشئ أي حساب؛ التطبيق ينشئ حسابه فقط وفق القيود.
-      allow create: if isAdmin()
+      // الأدمن (بصلاحية القسم) ينشئ حساباً؛ التطبيق ينشئ حسابه فقط وفق القيود.
+      allow create: if adminCanCreateUserDoc()
         || (isUser(uid)
           && request.resource.data.walletBalance == 0
           && request.resource.data.ratingCount == 0
@@ -101,7 +140,7 @@ service cloud.firestore {
               && request.resource.data.verificationStatus == 'pending')
           ));
 
-      allow update: if isAdmin()
+      allow update: if adminCanWriteUserDoc()
         || (isUser(uid) && keepsProtectedFields())
         || (isUser(uid) && commissionDebit())
         || customerWalletSettle()
@@ -166,17 +205,20 @@ service cloud.firestore {
           && request.resource.data.walletBalance <= resource.data.walletBalance;
       }
 
-      allow delete: if isAdmin();
+      allow delete: if adminCanWriteUserDoc();
     }
 
     // كتالوج الخدمات يُدار من لوحة التحكم فقط، والتطبيق يقرأه.
     match /services/{id} {
-      allow read: if signedIn();
+      allow read: if signedIn() || adminCanRead('services');
+      allow write: if adminCanWrite('services');
     }
 
     match /jobLocations/{jobId} {
-      allow read, update: if isOwner(resource.data.customerId);
-      allow create: if isOwner(request.resource.data.customerId);
+      allow read: if isOwner(resource.data.customerId) || adminCanRead('orders');
+      allow update: if isOwner(resource.data.customerId) || adminCanWrite('orders');
+      allow create: if isOwner(request.resource.data.customerId) || adminCanWrite('orders');
+      allow delete: if adminCanWrite('orders');
     }
 
     match /jobs/{jobId} {
@@ -206,10 +248,13 @@ service cloud.firestore {
               .hasOnly(['technicianId', 'technicianName', 'initialPrice', 'status']);
       }
 
-      allow create: if creatingOwnJob();
-      allow read: if isCustomer() || isTech() || isOpenForBidding();
+      allow create: if creatingOwnJob() || adminCanWrite('orders');
+      allow read: if isCustomer() || isTech() || isOpenForBidding()
+        || adminCanRead('orders') || adminCanRead('ratings') || adminCanRead('reports');
       // لا يُسمح لأي مزود بتحديث طلب مفتوح بحرية — فقط العميل أو الفني المعيّن أو قبول طارئ ذاتي.
-      allow update: if isCustomer() || isTech() || claimingOpenJob();
+      allow update: if isCustomer() || isTech() || claimingOpenJob()
+        || adminCanWrite('orders');
+      allow delete: if adminCanWrite('orders');
     }
 
     match /jobOffers/{offerId} {
@@ -223,9 +268,11 @@ service cloud.firestore {
         return existingOfferJob().customerId;
       }
 
-      allow read: if isOwner(resource.data.technicianId) || isOwner(jobCustomerId());
+      allow read: if isOwner(resource.data.technicianId) || isOwner(jobCustomerId())
+        || adminCanRead('orders');
       // العميل ينشئ عروضاً معلّقة عند التوزيع؛ المزود ينشئ/يملك عرضه فقط.
-      allow create: if signedIn()
+      allow create: if adminCanWrite('orders')
+        || (signedIn()
         && request.resource.data.jobId is string
         && request.resource.data.technicianId is string
         && request.resource.data.status in ['pending', 'submitted']
@@ -234,7 +281,7 @@ service cloud.firestore {
             && request.resource.data.status == 'pending')
           || (isProviderRole()
             && isOwner(request.resource.data.technicianId))
-        );
+        ));
       // الفني الفائز يغلق عروض الباقين (حالة فقط) بعد ما يُسند الطلب له.
       function winnerClosingOffer() {
         return isProviderRole()
@@ -246,7 +293,9 @@ service cloud.firestore {
 
       allow update: if isOwner(resource.data.technicianId)
         || isOwner(jobCustomerId())
-        || winnerClosingOffer();
+        || winnerClosingOffer()
+        || adminCanWrite('orders');
+      allow delete: if adminCanWrite('orders');
     }
 
     // ---------------------------------------------------------------
@@ -256,66 +305,83 @@ service cloud.firestore {
 
     // بيانات مرجعية يقرأها التطبيق: التصنيفات، السيارات، المناطق، الإعدادات.
     match /serviceCategories/{id} {
-      allow read: if signedIn();
+      allow read: if signedIn() || adminCanRead('services');
+      allow write: if adminCanWrite('services');
     }
     match /carBrands/{id} {
-      allow read: if signedIn();
+      allow read: if signedIn() || adminCanRead('cars');
+      allow write: if adminCanWrite('cars');
     }
     match /carModels/{id} {
-      allow read: if signedIn();
+      allow read: if signedIn() || adminCanRead('cars');
+      allow write: if adminCanWrite('cars');
     }
     match /carYears/{id} {
-      allow read: if signedIn();
+      allow read: if signedIn() || adminCanRead('cars');
+      allow write: if adminCanWrite('cars');
     }
     match /vehicleTypes/{id} {
-      allow read: if signedIn();
+      allow read: if signedIn() || adminCanRead('cars');
+      allow write: if adminCanWrite('cars');
     }
     match /oilTypes/{id} {
-      allow read: if signedIn();
+      allow read: if signedIn() || adminCanRead('workshops');
+      allow write: if adminCanWrite('workshops');
     }
     // كتالوج الاختصاصات للقوائم المنسدلة أثناء التسجيل (قبل تسجيل الدخول).
     match /workshopSpecialties/{id} {
       allow get, list: if true;
+      allow write: if adminCanWrite('workshops');
     }
     match /cities/{id} {
-      allow read: if signedIn();
+      allow read: if signedIn() || adminCanRead('regions');
+      allow write: if adminCanWrite('regions');
     }
     match /serviceAreas/{id} {
-      allow read: if signedIn();
+      allow read: if signedIn() || adminCanRead('regions');
+      allow write: if adminCanWrite('regions');
     }
     match /appSettings/{id} {
-      allow read: if signedIn();
+      allow read: if signedIn() || adminCanRead('settings') || adminCanRead('dashboard');
+      allow write: if adminCanWrite('settings');
     }
 
     // الضمان: صاحب الطلب أو الفني ينشئ ويقرأ، والإدارة تتابع.
     match /warranties/{id} {
       allow read: if isOwner(resource.data.customerId)
-        || isOwner(resource.data.technicianId);
+        || isOwner(resource.data.technicianId)
+        || adminCanRead('warranties');
       allow create: if isOwner(request.resource.data.customerId)
-        || isOwner(request.resource.data.technicianId);
+        || isOwner(request.resource.data.technicianId)
+        || adminCanWrite('warranties');
+      allow update, delete: if adminCanWrite('warranties');
     }
     match /warrantyClaims/{id} {
       allow read: if isOwner(resource.data.customerId)
-        || isOwner(resource.data.technicianId);
-      allow create: if isOwner(request.resource.data.customerId);
+        || isOwner(resource.data.technicianId)
+        || adminCanRead('warranties');
+      allow create: if isOwner(request.resource.data.customerId)
+        || adminCanWrite('warranties');
+      allow update, delete: if adminCanWrite('warranties');
     }
 
-    // المحاسبة: كل طرف يرى حركاته فقط. الكتابة عبر Cloud Functions (Admin SDK).
+    // المحاسبة: كل طرف يرى حركاته فقط. الكتابة عبر Admin SDK أو صلاحية payments.
     match /transactions/{id} {
-      allow read: if isOwner(resource.data.userId);
+      allow read: if isOwner(resource.data.userId) || adminCanRead('payments');
+      allow write: if adminCanWrite('payments');
     }
     // دفتر المحفظة: الأدمن يكتب عبر القاعدة العامة. الفني ينشئ حركة عمولة فقط
     // ضمن نفس الطلب الذي يخصم الرصيد، وبمعرّف ثابت يمنع التكرار.
     match /walletEntries/{id} {
-      allow list: if isOwner(resource.data.userId);
+      allow list: if isOwner(resource.data.userId) || adminCanRead('payments');
       // المعاملة تقرأ commission_{jobId} قبل إنشائها، والمستند غير موجود بعد.
-      allow get: if signedIn() && (
+      allow get: if adminCanRead('payments') || (signedIn() && (
         (!exists(/databases/$(database)/documents/walletEntries/$(id))
           && (id.matches('commission_.+')
             || id.matches('spend_.+')
             || id.matches('change_.+')))
         || isOwner(resource.data.userId)
-      );
+      ));
       allow create: if request.resource.data.type == 'commission'
         && request.resource.data.jobId is string
         && id == 'commission_' + request.resource.data.jobId
@@ -355,14 +421,16 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.technicianId == request.auth.uid
         && getAfter(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.customerId == request.resource.data.userId
         && getAfter(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.status == 'completed';
+      allow create, update, delete: if adminCanWrite('payments');
     }
     match /payouts/{id} {
-      allow read: if isOwner(resource.data.technicianId);
+      allow read: if isOwner(resource.data.technicianId) || adminCanRead('payments');
+      allow write: if adminCanWrite('payments');
     }
 
     // طلبات شحن المحفظة: المزود (فني/ورشة/زيوت/دهان) ينشئ طلباً معلّقاً مع فاتورة.
     match /walletTopUps/{id} {
-      allow read: if isOwner(resource.data.technicianId);
+      allow read: if isOwner(resource.data.technicianId) || adminCanRead('payments');
       allow create: if isOwner(request.resource.data.technicianId)
         && isProviderRole()
         && request.resource.data.status == 'pending'
@@ -370,26 +438,35 @@ service cloud.firestore {
         && request.resource.data.amount > 0
         && request.resource.data.receiptUrl is string
         && request.resource.data.receiptUrl.size() > 8;
+      allow update, delete: if adminCanWrite('payments');
     }
 
     // الدعم والنزاعات: المستخدم يفتح التذكرة ويقرأ تذاكره.
     match /supportTickets/{id} {
-      allow read: if isOwner(resource.data.userId);
-      allow create: if isOwner(request.resource.data.userId);
+      allow read: if isOwner(resource.data.userId) || adminCanRead('support');
+      allow create: if isOwner(request.resource.data.userId) || adminCanWrite('support');
+      allow update, delete: if adminCanWrite('support');
     }
     match /disputes/{id} {
       allow read: if isOwner(resource.data.customerId)
-        || isOwner(resource.data.technicianId);
+        || isOwner(resource.data.technicianId)
+        || adminCanRead('orders')
+        || adminCanRead('support');
       allow create: if isOwner(request.resource.data.customerId)
-        || isOwner(request.resource.data.technicianId);
+        || isOwner(request.resource.data.technicianId)
+        || adminCanWrite('orders');
+      allow update, delete: if adminCanWrite('orders') || adminCanWrite('support');
     }
 
     // الإشعارات: المستلم يقرأ ويعلّم إشعاره كمقروء.
     match /notifications/{id} {
-      allow read: if isOwner(resource.data.userId);
-      allow update: if isOwner(resource.data.userId)
+      allow read: if isOwner(resource.data.userId) || adminCanRead('notifications');
+      allow create: if adminCanWrite('notifications');
+      allow update: if (isOwner(resource.data.userId)
         && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['read', 'readAt']);
+            .hasOnly(['read', 'readAt']))
+        || adminCanWrite('notifications');
+      allow delete: if adminCanWrite('notifications');
     }
 
     // جلسات OTP — Admin SDK فقط (السيرفر على VPS). حتى الأدمن لا يحتاجها من العميل.
@@ -397,6 +474,6 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // مجموعات إدارية بحتة (adminLogs...) تكفيها القاعدة العامة أعلاه.
+    // مجموعات إدارية بحتة (adminLogs...) — سوبر فقط عبر القاعدة العامة.
   }
 }

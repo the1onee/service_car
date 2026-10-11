@@ -6,7 +6,7 @@ class AppTerms {
 
   static const version = '1';
 
-  static const title = 'شروط استخدام تطبيق البطريق';
+  static String get title => 'شروط استخدام تطبيق ${AppBrand.appName}';
 
   /// نص كامل يُعرض في شاشة القبول وصفحة «حسابي».
   static String get body => '''

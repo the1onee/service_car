@@ -42,6 +42,10 @@ android {
                 keyPassword = keystoreProperties["keyPassword"] as String
                 storeFile = file(keystoreProperties["storeFile"] as String)
                 storePassword = keystoreProperties["storePassword"] as String
+                val storeTypeProp = keystoreProperties["storeType"] as String?
+                if (!storeTypeProp.isNullOrBlank()) {
+                    storeType = storeTypeProp
+                }
             }
         }
     }

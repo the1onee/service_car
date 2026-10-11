@@ -103,9 +103,9 @@ class _BrandHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        const Text(
+        Text(
           AppStrings.appName,
-          style: TextStyle(
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 26,
             fontWeight: FontWeight.w800,

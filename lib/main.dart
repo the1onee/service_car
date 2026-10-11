@@ -3,12 +3,14 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:barrr/app.dart';
+import 'package:barrr/core/app_brand.dart';
 import 'package:barrr/features/shell/auth_gate.dart';
 import 'package:barrr/firebase_options.dart';
 import 'package:barrr/services/fcm_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppBrand.load();
   runApp(const _BootApp());
 }
 

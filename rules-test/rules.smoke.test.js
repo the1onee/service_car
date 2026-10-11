@@ -16,9 +16,13 @@ describe('firestore.rules smoke', () => {
     assert.match(rules, /rules_version\s*=\s*'2'/);
   });
 
-  it('admin wildcard access', () => {
+  it('admin wildcard is super-only; scoped adminPermissions helpers exist', () => {
     assert.match(rules, /function isAdmin\(\)/);
-    assert.match(rules, /allow read, write:\s*if isAdmin\(\)/);
+    assert.match(rules, /function isSuperAdmin\(\)/);
+    assert.match(rules, /function adminCanRead\(/);
+    assert.match(rules, /function adminCanWrite\(/);
+    assert.match(rules, /allow read, write:\s*if isSuperAdmin\(\)/);
+    assert.match(rules, /adminPermissions/);
   });
 
   it('protects walletBalance and role on users', () => {

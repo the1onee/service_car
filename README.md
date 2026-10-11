@@ -1,5 +1,8 @@
 # البطريق (Flutter + Firebase)
 
+**دليل سريع:** [GUIDE.md](./GUIDE.md) — الشعار والهوية: `assets/branding/brand.env` + `logo.png`.  
+**إنتاج:** [PRODUCTION.md](./PRODUCTION.md).
+
 تطبيق واحد بثلاثة أدوار: **عميل** و**فني** و**إدارة**. النطاق الافتراضي على الخريطة: **مركز البصرة**.
 
 المطابقة هجينة:
@@ -64,25 +67,22 @@ firebase deploy --only firestore:rules,firestore:indexes
 
 1. أنشئ مفتاح الرفع (مرة واحدة، احفظه بأمان):
 
-```bash
-keytool -genkey -v -keystore android/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias barrr
+الملفات المحلية `android/upload-keystore.pfx` + `android/key.properties` جاهزة (لا تُرفع إلى Git).
+انظر `android/RELEASE_SHA1.txt` و`PRODUCTION.md`.
+
+```powershell
+powershell -File scripts/build-release-apk.ps1
 ```
 
-2. انسخ `android/key.properties.example` إلى `android/key.properties` واملأ كلمات المرور والمسار.
-3. ابنِ:
+في **release** يتصل التطبيق بـ `https://albatariq.com` تلقائياً.
 
-```bash
-flutter build apk --release
-# أو مع عنوان API إن لزم بعد الدومين:
-# flutter build apk --release --dart-define=BARRR_API_BASE=https://your-domain.com
-```
+بصمات SHA لمفتاح الرفع تُضاف عبر:
+`npx firebase-tools apps:android:sha:create <appId> <hash>`
 
-4. أضف **SHA-1** لمفتاح الرفع في Firebase Console → Project settings → Your apps (Android)، وإلا قد يفشل Google Sign-In في الإصدار.
-
-HTTPS على لوحة الأدمن: انظر `../barrr-admin/deploy/HTTPS.md` (يتطلب دومين).
+لوحة الأدمن: https://albatariq.com — انظر `../barrr-admin/deploy/HTTPS.md` و`PRODUCTION.md`.
 
 ## لوحة التحكم (ويب)
 
 مشروع منفصل في `../barrr-admin` (Vite + React + TypeScript) على نفس مشروع Firebase.
-الصلاحيات: القاعدة العامة في `firestore.rules` تمنح الأدمن قراءة وكتابة وحذفاً على كل
-المجموعات، وكتالوج `services` للأدمن فقط بينما يقرأه التطبيق.
+الصلاحيات: السوبر أدمن كامل؛ الأدمن المحدود عبر `adminPermissions` في القواعد والواجهة.
+كتالوج `services` يقرأه التطبيق ويُدار من اللوحة.

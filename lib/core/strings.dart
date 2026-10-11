@@ -1,8 +1,8 @@
 import 'package:barrr/core/app_brand.dart';
 
 class AppStrings {
-  static const appName = AppBrand.appName;
-  static const tagline = AppBrand.tagline;
+  static String get appName => AppBrand.appName;
+  static String get tagline => AppBrand.tagline;
 
   // المصادقة
   static const login = 'تسجيل الدخول';

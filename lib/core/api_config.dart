@@ -11,10 +11,14 @@ class ApiConfig {
 
   static const _fromEnv = String.fromEnvironment('BARRR_API_BASE');
 
-  /// أولوية: `--dart-define=BARRR_API_BASE=...` ثم افتراضي محلي حسب المنصة.
+  /// إنتاج: https://albatariq.com — تجاوز عبر `--dart-define=BARRR_API_BASE=...`.
+  static const productionBase = 'https://albatariq.com';
+
+  /// أولوية: dart-define ثم إنتاج في release ثم محلي حسب المنصة.
   static String get baseUrl {
     final env = _fromEnv.trim();
     if (env.isNotEmpty) return env.replaceAll(RegExp(r'/+$'), '');
+    if (kReleaseMode) return productionBase;
     // محاكي أندرويد يصل للمضيف عبر 10.0.2.2
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return 'http://10.0.2.2:8787';

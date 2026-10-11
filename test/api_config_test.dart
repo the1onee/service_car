@@ -21,6 +21,10 @@ void main() {
       expect(ApiConfig.baseUrl.endsWith('/'), isFalse);
     });
 
+    test('productionBase points at albatariq.com', () {
+      expect(ApiConfig.productionBase, 'https://albatariq.com');
+    });
+
     test('android emulator host when no dart-define', () {
       expect(ApiConfig.baseUrl, isNotEmpty);
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
