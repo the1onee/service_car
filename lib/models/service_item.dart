@@ -49,6 +49,7 @@ class ServiceItem {
     this.highlightsAr = const [],
     this.providerKind = ServiceProviderKind.mobile,
     this.sortOrder = 0,
+    this.showInTechnicianRequest = false,
   });
 
   final String id;
@@ -64,6 +65,8 @@ class ServiceItem {
   final List<String> highlightsAr;
   final ServiceProviderKind providerKind;
   final int sortOrder;
+  /// إن كانت true تظهر في قائمة «نوع الخدمة» عند طلب فني.
+  final bool showInTechnicianRequest;
 
   /// معدل العمولة ككسر (مثلاً 0.10 لـ 10%).
   double get commissionRate => (commissionPercent.clamp(0, 100)) / 100;
@@ -79,6 +82,7 @@ class ServiceItem {
         'highlightsAr': highlightsAr,
         'providerKind': providerKind.firestoreValue,
         'sortOrder': sortOrder,
+        'showInTechnicianRequest': showInTechnicianRequest,
       };
 
   factory ServiceItem.fromMap(String id, Map<String, dynamic> data) {
@@ -92,11 +96,22 @@ class ServiceItem {
             .where((e) => e.isNotEmpty)
             .toList()
         : const <String>[];
+    final providerKind =
+        ServiceProviderKindX.fromFirestore(data['providerKind'] as String?);
+    final isEmergency = data['isEmergency'] as bool? ?? false;
+    final showRaw = data['showInTechnicianRequest'];
+    final showInTechnicianRequest = showRaw is bool
+        ? showRaw
+        : _legacyShowInTechnicianRequest(
+            id: id,
+            providerKind: providerKind,
+            isEmergency: isEmergency,
+          );
     return ServiceItem(
       id: id,
       titleAr: data['titleAr'] as String? ?? id,
       category: data['category'] as String? ?? '',
-      isEmergency: data['isEmergency'] as bool? ?? false,
+      isEmergency: isEmergency,
       active: data['active'] as bool? ?? true,
       commissionPercent:
           commissionRaw is num ? commissionRaw.toDouble().clamp(0, 100) : 10,
@@ -104,9 +119,24 @@ class ServiceItem {
           discountRaw is num ? discountRaw.toDouble().clamp(0, 100) : 0,
       descriptionAr: data['descriptionAr'] as String? ?? '',
       highlightsAr: highlights,
-      providerKind:
-          ServiceProviderKindX.fromFirestore(data['providerKind'] as String?),
+      providerKind: providerKind,
       sortOrder: sortRaw is num ? sortRaw.toInt() : 0,
+      showInTechnicianRequest: showInTechnicianRequest,
     );
   }
+}
+
+/// توافق مع وثائق قديمة بلا الحقل: نفس منطق عرض مسار الفني السابق.
+bool _legacyShowInTechnicianRequest({
+  required String id,
+  required ServiceProviderKind providerKind,
+  required bool isEmergency,
+}) {
+  const excluded = {'parts', 'wash', 'oil', 'paint'};
+  const fieldIds = {'technician', 'battery', 'brakes', 'spark', 'ac'};
+  if (excluded.contains(id)) return false;
+  if (isEmergency) return false;
+  if (providerKind == ServiceProviderKind.partsShop) return false;
+  if (providerKind == ServiceProviderKind.paintShop) return false;
+  return providerKind == ServiceProviderKind.fieldTech || fieldIds.contains(id);
 }

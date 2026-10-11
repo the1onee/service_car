@@ -228,7 +228,8 @@ void main() {
       expect(jobIsDone(_job(id: 'c', status: JobStatus.completed)), isTrue);
       expect(jobIsDone(_job(id: 'r', status: JobStatus.rated)), isTrue);
       expect(jobIsClosed(_job(id: 'x', status: JobStatus.cancelled)), isTrue);
-      expect(jobIsClosed(_job(id: 'n', status: JobStatus.noTechnician)), isTrue);
+      expect(jobIsOpen(_job(id: 'n', status: JobStatus.noTechnician)), isTrue);
+      expect(jobIsClosed(_job(id: 'n', status: JobStatus.noTechnician)), isFalse);
     });
   });
 

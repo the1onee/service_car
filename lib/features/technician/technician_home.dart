@@ -31,7 +31,6 @@ import 'package:barrr/models/wallet_entry.dart';
 import 'package:barrr/models/wallet_top_up.dart';
 import 'package:barrr/services/fcm_service.dart';
 import 'package:barrr/services/profile_photo_upload.dart';
-import 'package:barrr/services/user_repository.dart';
 import 'package:barrr/services/wallet_top_up_upload.dart';
 
 
@@ -59,9 +58,6 @@ class _TechnicianHomeState extends State<TechnicianHome> {
   CityZone? _zone;
   var _booted = false;
   var _tab = 0;
-  var _dutyBusy = false;
-  bool? _duty;
-  String? _dutyHint;
   DateTime? _lastGeoWrite;
   VoidCallback? _fcmFocusListener;
   FcmService? _fcm;
@@ -146,7 +142,13 @@ class _TechnicianHomeState extends State<TechnicianHome> {
     final me = await scope.location.currentOrDefault(fallback: fallback);
     _meNotifier.value = me;
     _zone = zone;
-    if (widget.profile.isOnline) _startTracking();
+    _startTracking();
+    unawaited(scope.users.ensureProviderReady(widget.profile.id));
+    unawaited(
+      scope.jobs.redispatchWaitingJobs(
+        providerRole: widget.profile.role.name,
+      ),
+    );
     if (mounted) setState(() {});
   }
 
@@ -165,58 +167,6 @@ class _TechnicianHomeState extends State<TechnicianHome> {
     });
     final me = _meNotifier.value;
     scope.users.setGeo(widget.profile.id, GeoPoint(me.latitude, me.longitude));
-  }
-
-  Future<void> _toggleOnline(bool value) async {
-    if (_dutyBusy) return;
-    setState(() {
-      _dutyBusy = true;
-      _duty = value;
-      _dutyHint = null;
-    });
-    final scope = AppScope.of(context);
-    try {
-      final result = await scope.users.setOnline(widget.profile.id, value);
-      if (!mounted) return;
-      if (!value) {
-        await _posSub?.cancel();
-        _posSub = null;
-        return;
-      }
-      if (!result.ok) {
-        final message = switch (result.block) {
-          OnlineBlock.rejected => 'تم رفض طلب الانضمام. راجع الإدارة.',
-          OnlineBlock.lowBalance =>
-            'رصيدك ${result.balance.toStringAsFixed(0)} د.ع والحد الأدنى لاستقبال الطلبات ${result.minBalance.toStringAsFixed(0)} د.ع',
-          OnlineBlock.pending || OnlineBlock.none => AppStrings.pendingVerify,
-        };
-        setState(() {
-          _duty = false;
-          _dutyHint = message;
-        });
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(message)));
-        return;
-      }
-      final me = _meNotifier.value;
-      await scope.users.setGeo(
-        widget.profile.id,
-        GeoPoint(me.latitude, me.longitude),
-      );
-      _lastGeoWrite = DateTime.now();
-      _startTracking();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _duty = !value;
-        _dutyHint = 'تعذر تغيير حالة الاتصال';
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر تغيير حالة الاتصال: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _dutyBusy = false);
-    }
   }
 
   @override
@@ -266,11 +216,7 @@ class _TechnicianHomeState extends State<TechnicianHome> {
           meListenable: _meNotifier,
           userStream: userStream,
           activeJobStream: _activeJobStream!,
-          dutyOverride: _duty,
-          dutyBusy: _dutyBusy,
-          dutyHint: _dutyHint,
           incoming: _incoming,
-          onToggle: _toggleOnline,
           onClearIncoming: () => setState(() {
             final id = _incoming?.id;
             if (id != null) _closedOffers.add(id);
@@ -340,18 +286,9 @@ class _TechnicianHomeState extends State<TechnicianHome> {
       stream: userStream,
       builder: (context, snap) {
         final me = snap.data ?? widget.profile;
-        final online = _duty ?? me.isOnline;
-        if (_duty != null && _duty == me.isOnline && !_dutyBusy) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) setState(() => _duty = null);
-          });
-        }
         return _WalletPage(
           me: me,
-          online: online,
-          dutyHint: _dutyHint,
           city: _zone?.nameAr,
-          onToggle: _toggleOnline,
           onAccount: () => setState(() => _tab = 3),
         );
       },
@@ -382,11 +319,7 @@ class _TechnicianMapTab extends StatelessWidget {
     required this.meListenable,
     required this.userStream,
     required this.activeJobStream,
-    required this.dutyOverride,
-    required this.dutyBusy,
-    required this.dutyHint,
     required this.incoming,
-    required this.onToggle,
     required this.onClearIncoming,
     required this.onLocated,
   });
@@ -397,11 +330,7 @@ class _TechnicianMapTab extends StatelessWidget {
   final ValueNotifier<LatLng> meListenable;
   final Stream<AppUser?> userStream;
   final Stream<Job?> activeJobStream;
-  final bool? dutyOverride;
-  final bool dutyBusy;
-  final String? dutyHint;
   final JobOffer? incoming;
-  final Future<void> Function(bool value) onToggle;
   final VoidCallback onClearIncoming;
   final ValueChanged<LatLng> onLocated;
 
@@ -411,7 +340,7 @@ class _TechnicianMapTab extends StatelessWidget {
       stream: userStream,
       builder: (context, profileSnap) {
         final me = profileSnap.data ?? fallbackProfile;
-        final online = dutyOverride ?? me.isOnline;
+        final ready = me.canReceiveJobs;
         return StreamBuilder<Job?>(
           stream: activeJobStream,
           builder: (context, jobSnap) {
@@ -460,11 +389,15 @@ class _TechnicianMapTab extends StatelessWidget {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     StatusPill(
-                                      label: online ? 'متصل' : 'غير متصل',
-                                      color: online
+                                      label: ready
+                                          ? 'جاهز للطلبات'
+                                          : (me.isApproved
+                                              ? 'رصيد غير كافٍ'
+                                              : 'بانتظار التوثيق'),
+                                      color: ready
                                           ? AppColors.emeraldDeep
                                           : AppColors.inkSoft,
-                                      background: online
+                                      background: ready
                                           ? AppColors.emeraldTint
                                           : AppColors.recessed,
                                     ),
@@ -485,40 +418,27 @@ class _TechnicianMapTab extends StatelessWidget {
                                   padding:
                                       const EdgeInsets.fromLTRB(16, 0, 16, 12),
                                   child: FieldCard(
-                                    child: Row(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                online
-                                                    ? 'متصل — بانتظار طلبات الخدمة'
-                                                    : 'غير متصل',
-                                                style: const TextStyle(
-                                                    fontWeight:
-                                                        FontWeight.w700),
-                                              ),
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                dutyHint ??
-                                                    'الرصيد ${formatIqd(me.walletBalance)}',
-                                                style: TextStyle(
-                                                  color: dutyHint == null
-                                                      ? AppColors.inkSoft
-                                                      : AppColors.danger,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
+                                        Text(
+                                          ready
+                                              ? 'بانتظار طلبات الخدمة'
+                                              : (me.isApproved
+                                                  ? 'اشحن المحفظة لاستقبال الطلبات'
+                                                  : AppStrings.pendingVerify),
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w700),
                                         ),
-                                        Switch(
-                                          value: online,
-                                          onChanged:
-                                              dutyBusy ? null : onToggle,
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'الرصيد ${formatIqd(me.walletBalance)}',
+                                          style: const TextStyle(
+                                            color: AppColors.inkSoft,
+                                            fontSize: 12,
+                                          ),
                                         ),
                                       ],
                                     ),

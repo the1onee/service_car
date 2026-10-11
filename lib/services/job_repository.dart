@@ -332,11 +332,6 @@ class JobRepository {
             specialtyAr: data['specialtyAr'] as String? ?? '',
           );
         })
-        .where((t) {
-          // طلبات القطع تصل لكل ورش التخصص دون شرط متاح/غير متاح.
-          if (job.isPartsOrder) return true;
-          return t.online;
-        })
         .where((t) => t.verified)
         .where((t) {
           // ورش القطع ترى الطلبات حتى مع رصيد منخفض؛ القفل عند التسعير فقط.
@@ -807,6 +802,45 @@ class JobRepository {
     await closeQuoteWindow(jobId);
   }
 
+  /// يعيد توزيع طلبات الانتظار (`noTechnician`) لمزوّدين من [providerRole].
+  Future<void> redispatchWaitingJobs({
+    required String providerRole,
+    int limit = 8,
+  }) async {
+    QuerySnapshot<Map<String, dynamic>> snap;
+    try {
+      snap = await _jobs
+          .where('status', isEqualTo: JobStatus.noTechnician.name)
+          .limit(limit * 3)
+          .get();
+    } catch (_) {
+      return;
+    }
+    var n = 0;
+    for (final doc in snap.docs) {
+      if (n >= limit) break;
+      final job = Job.fromDoc(doc);
+      if (!_jobMatchesProviderRole(job, providerRole)) continue;
+      n++;
+      try {
+        await maybeRedispatch(job.id, expirePending: false);
+      } catch (_) {}
+    }
+  }
+
+  bool _jobMatchesProviderRole(Job job, String providerRole) {
+    return switch (providerRole) {
+      'workshop' => job.isPartsOrder,
+      'oilWorkshop' => job.isOilOrder,
+      'paintShop' => job.isPaintOrder,
+      'technician' =>
+        !job.isPartsOrder &&
+            !job.isOilOrder &&
+            !job.isPaintOrder,
+      _ => false,
+    };
+  }
+
   Future<void> maybeRedispatch(String jobId, {bool expirePending = true}) async {
     final snap = await _jobs.doc(jobId).get();
     if (!snap.exists) return;
@@ -1066,9 +1100,6 @@ class JobRepository {
       final entrySnap = await tx.get(entryRef);
       final techRef = _db.collection(Cols.users).doc(techId);
       final techSnap = await tx.get(techRef);
-      final settingsSnap = await tx.get(_db.collection(Cols.appSettings).doc('main'));
-      final min = (settingsSnap.data()?['minWalletBalance'] as num?)?.toDouble() ??
-          AppConstants.minWalletBalance;
       final rateRaw = job['commissionRate'];
       final rate = rateRaw is num
           ? rateRaw.toDouble().clamp(0.0, 1.0)
@@ -1107,7 +1138,6 @@ class JobRepository {
       });
       tx.update(techRef, {
         'walletBalance': next,
-        if (next < min) 'isOnline': false,
       });
     });
     await expireOpenOffers(jobId);

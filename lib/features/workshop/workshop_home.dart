@@ -88,6 +88,8 @@ class _WorkshopHomeState extends State<WorkshopHome> {
       scope.fcm.focusJobId.value = null;
     };
     scope.fcm.focusJobId.addListener(_fcmFocusListener!);
+    unawaited(scope.users.ensureProviderReady(widget.profile.id));
+    unawaited(scope.jobs.redispatchWaitingJobs(providerRole: 'workshop'));
     _offersSub = scope.jobs.watchPendingOffers(widget.profile.id).listen(
       (offers) {
         if (!mounted) return;

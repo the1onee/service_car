@@ -5,18 +5,12 @@ enum _LedgerFilter { movements, payouts }
 class _WalletPage extends StatefulWidget {
   const _WalletPage({
     required this.me,
-    required this.online,
-    required this.onToggle,
     required this.onAccount,
-    this.dutyHint,
     this.city,
   });
 
   final AppUser me;
-  final bool online;
-  final String? dutyHint;
   final String? city;
-  final ValueChanged<bool> onToggle;
   final VoidCallback onAccount;
 
   @override
@@ -99,10 +93,7 @@ class _WalletPageState extends State<_WalletPage> {
                             balance: me.walletBalance,
                             minBalance: min,
                             locked: locked,
-                            online: widget.online,
-                            dutyHint: widget.dutyHint,
                             city: widget.city,
-                            onToggle: widget.onToggle,
                           ),
                           if (required > 0) ...[
                             const SizedBox(height: 10),
@@ -196,19 +187,13 @@ class _BalanceCard extends StatelessWidget {
     required this.balance,
     required this.minBalance,
     required this.locked,
-    required this.online,
-    required this.onToggle,
-    this.dutyHint,
     this.city,
   });
 
   final double balance;
   final double minBalance;
   final bool locked;
-  final bool online;
-  final String? dutyHint;
   final String? city;
-  final ValueChanged<bool> onToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -335,8 +320,13 @@ class _BalanceCard extends StatelessWidget {
                     color: Color(0xFF002113),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.sensors,
-                      color: Color(0xFF4EDEA3), size: 18),
+                  child: Icon(
+                    locked ? Icons.lock_outline : Icons.sensors,
+                    color: locked
+                        ? const Color(0xFFFFB4AB)
+                        : const Color(0xFF4EDEA3),
+                    size: 18,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -344,9 +334,9 @@ class _BalanceCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        online
-                            ? 'متصل — جاهز لاستقبال الطلبات'
-                            : 'غير متصل',
+                        locked
+                            ? 'المحفظة مقفلة — اشحن لاستقبال الطلبات'
+                            : 'جاهز لاستقبال الطلبات',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 13,
@@ -355,9 +345,9 @@ class _BalanceCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        online
-                            ? 'جاهز للبلاغات الفورية في $place'
-                            : 'لن تصلك بلاغات حتى تعيد الاتصال',
+                        locked
+                            ? 'الحد الأدنى ${formatIqd(minBalance)}'
+                            : 'البلاغات الفورية في $place',
                         style: const TextStyle(
                           color: Color(0xFF7C839B),
                           fontSize: 12,
@@ -366,58 +356,10 @@ class _BalanceCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                _DutySwitch(online: online, onToggle: onToggle),
               ],
             ),
           ),
-          if (dutyHint != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              dutyHint!,
-              style: const TextStyle(color: Color(0xFFFFB4AB), fontSize: 12),
-            ),
-          ],
         ],
-      ),
-    );
-  }
-}
-
-class _DutySwitch extends StatelessWidget {
-  const _DutySwitch({required this.online, required this.onToggle});
-
-  final bool online;
-  final ValueChanged<bool> onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => onToggle(!online),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        width: 48,
-        height: 28,
-        padding: const EdgeInsets.all(2),
-        alignment: online
-            ? AlignmentDirectional.centerEnd
-            : AlignmentDirectional.centerStart,
-        decoration: BoxDecoration(
-          color: online ? const Color(0xFF002113) : const Color(0xFFD3E4FE),
-          borderRadius: BorderRadius.circular(99),
-        ),
-        child: Container(
-          width: 24,
-          height: 24,
-          decoration: BoxDecoration(
-            color: online ? const Color(0xFF6FFBBE) : const Color(0xFF76777D),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            online ? Icons.check : Icons.close,
-            size: 14,
-            color: online ? const Color(0xFF002113) : Colors.white,
-          ),
-        ),
       ),
     );
   }
@@ -1189,7 +1131,7 @@ class _LowBalanceNote extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'إذا انخفض الرصيد عن ${formatIqd(minBalance)} تتحول حالتك تلقائياً إلى غير متصل حتى تعيد الشحن وترفع فاتورة التحويل للموافقة.',
+                  'إذا انخفض الرصيد عن ${formatIqd(minBalance)} يتوقف استقبال الطلبات الجديدة حتى تعيد الشحن وترفع فاتورة التحويل للموافقة.',
                   style: const TextStyle(
                     color: Color(0xFF45464D),
                     fontSize: 12,

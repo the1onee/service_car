@@ -16,7 +16,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light(),
-        home: const Scaffold(body: Text(AppStrings.appName)),
+        home: Scaffold(body: Text(AppStrings.appName)),
       ),
     );
     expect(find.text(AppStrings.appName), findsOneWidget);
@@ -157,7 +157,7 @@ void main() {
       expect(jobIsDone(makeJob(id: 'c', status: JobStatus.rated)), isTrue);
       expect(jobIsClosed(makeJob(id: 'd', status: JobStatus.cancelled)), isTrue);
       expect(
-          jobIsClosed(makeJob(id: 'e', status: JobStatus.noTechnician)), isTrue);
+          jobIsOpen(makeJob(id: 'e', status: JobStatus.noTechnician)), isTrue);
       expect(jobIsOpen(makeJob(id: 'f', status: JobStatus.completed)), isFalse);
     });
 

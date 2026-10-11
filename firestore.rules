@@ -469,6 +469,19 @@ service cloud.firestore {
       allow delete: if adminCanWrite('notifications');
     }
 
+    // فهرس الهواتف — get فقط (لا list) حتى يتحقق العميل من التفرد دون قراءة users.
+    match /phoneRegistry/{phoneKey} {
+      allow get: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.phone is string;
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow list: if isSuperAdmin();
+    }
+
     // جلسات OTP — Admin SDK فقط (السيرفر على VPS). حتى الأدمن لا يحتاجها من العميل.
     match /otpSessions/{id} {
       allow read, write: if false;

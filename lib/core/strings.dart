@@ -110,6 +110,11 @@ class AppStrings {
   static const receivedAmount = 'المبلغ المستلم';
   static const jobCreatedDispatchFailed =
       'تم إنشاء الطلب وتعذر بدء المطابقة. تابع من الطلبات.';
+  /// حالة لا مزوّد متاحاً الآن — الطلب يبقى في الانتظار.
+  static const waitingForProviderTitle = 'بانتظار توفر خدمة';
+  static const waitingForProviderBody =
+      'حالياً لا يتوفر مقدّمو خدمة. سيُرسل طلبك تلقائياً عند التوفر. يمكنك متابعة الطلب من هنا أو إلغاؤه.';
+  static const retrySearchProviders = 'إعادة البحث الآن';
   static const arrived = 'وصلت إلى الموقع';
   static const startWork = 'بدء العمل';
   static const endJob = 'إنهاء المهمة';

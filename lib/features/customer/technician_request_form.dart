@@ -6,7 +6,7 @@ import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/cloudinary_config.dart';
 import 'package:barrr/core/geo.dart';
 import 'package:barrr/core/strings.dart';
-import 'package:barrr/core/theme.dart';
+import 'package:barrr/core/theme.dart' show AppColors;
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
@@ -313,19 +313,52 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                       children: [
                         _sectionTitle(1, 'نوع الخدمة'),
                         const SizedBox(height: 10),
-                        if (services.isEmpty)
-                          const _Card(
-                            child: Text(
-                              'لا توجد خدمات فني.',
-                              style: TextStyle(color: AppColors.inkSoft),
-                            ),
-                          )
-                        else
-                          _CategoryGrid(
-                            items: services,
-                            selectedId: _selected?.id,
-                            onSelect: (s) => setState(() => _selected = s),
-                          ),
+                        _Card(
+                          child: services.isEmpty
+                              ? const Text(
+                                  'لا توجد خدمات مفعّلة لطلب فني. فعّل الخيار من لوحة الأدمن.',
+                                  style: TextStyle(color: AppColors.inkSoft),
+                                )
+                              : Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    const _FieldLabel('اختر نوع الخدمة'),
+                                    const SizedBox(height: 8),
+                                    DropdownButtonFormField<String>(
+                                      // ignore: deprecated_member_use
+                                      value: services.any(
+                                              (s) => s.id == _selected?.id)
+                                          ? _selected!.id
+                                          : null,
+                                      isExpanded: true,
+                                      decoration: _inputDecoration(
+                                        hint: 'نوع الخدمة',
+                                      ),
+                                      hint: const Text('اختر نوع الخدمة'),
+                                      items: [
+                                        for (final s in services)
+                                          DropdownMenuItem<String>(
+                                            value: s.id,
+                                            child: Text(
+                                              s.titleAr,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                      ],
+                                      onChanged: (id) {
+                                        if (id == null) return;
+                                        for (final s in services) {
+                                          if (s.id == id) {
+                                            setState(() => _selected = s);
+                                            return;
+                                          }
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
+                        ),
                         const SizedBox(height: 22),
                         _sectionTitle(2, 'بيانات المركبة'),
                         const SizedBox(height: 10),
@@ -741,16 +774,6 @@ InputDecoration _inputDecoration({required String hint}) {
   );
 }
 
-IconData _iconForService(String id) => switch (id) {
-      'battery' => Icons.electric_bolt_rounded,
-      'brakes' => Icons.build_rounded,
-      'spark' => Icons.power_settings_new_rounded,
-      'ac' => Icons.ac_unit_rounded,
-      'tires' => Icons.album_outlined,
-      'technician' => Icons.handyman_outlined,
-      _ => Icons.build_circle_outlined,
-    };
-
 class _FormTopBar extends StatelessWidget {
   const _FormTopBar({
     required this.city,
@@ -815,105 +838,6 @@ class _FormTopBar extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _CategoryGrid extends StatelessWidget {
-  const _CategoryGrid({
-    required this.items,
-    required this.selectedId,
-    required this.onSelect,
-  });
-
-  final List<ServiceItem> items;
-  final String? selectedId;
-  final ValueChanged<ServiceItem> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: items.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisExtent: 86,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-      ),
-      itemBuilder: (context, i) {
-        final s = items[i];
-        final on = selectedId == s.id;
-        return Material(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          child: InkWell(
-            onTap: () => onSelect(s),
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: on ? AppColors.amber : AppColors.outline,
-                  width: on ? 2 : 1,
-                ),
-                boxShadow: AppTheme.cardShadow(),
-              ),
-              child: Stack(
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: on ? AppColors.amber : AppColors.recessed,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(
-                          _iconForService(s.id),
-                          size: 20,
-                          color: on ? AppColors.ink : AppColors.inkSoft,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              s.titleAr,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (on)
-                    const Positioned(
-                      top: 0,
-                      left: 0,
-                      child: Icon(
-                        Icons.check_circle,
-                        size: 18,
-                        color: AppColors.amberDeep,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }

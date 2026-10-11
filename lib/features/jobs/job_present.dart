@@ -3,8 +3,7 @@ import 'package:barrr/models/job.dart';
 bool jobIsDone(Job job) =>
     job.status == JobStatus.completed || job.status == JobStatus.rated;
 
-bool jobIsClosed(Job job) =>
-    job.status == JobStatus.cancelled || job.status == JobStatus.noTechnician;
+bool jobIsClosed(Job job) => job.status == JobStatus.cancelled;
 
 bool jobIsOpen(Job job) => !jobIsDone(job) && !jobIsClosed(job);
 

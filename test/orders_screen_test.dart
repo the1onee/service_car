@@ -37,7 +37,7 @@ void main() {
       expect(jobIsDone(done) && !jobIsOpen(done), isTrue);
       expect(jobIsDone(rated), isTrue);
       expect(jobIsClosed(cancelled) && !jobIsOpen(cancelled), isTrue);
-      expect(jobIsClosed(noTech), isTrue);
+      expect(jobIsOpen(noTech) && !jobIsClosed(noTech), isTrue);
     });
 
     test('OrdersFilter enum covers expected views', () {

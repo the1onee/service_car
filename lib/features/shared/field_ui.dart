@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/shared/app_network_or_data_image.dart';
 import 'package:barrr/models/app_user.dart';
@@ -346,7 +347,7 @@ String jobStatusLabel(
       case JobStatus.rated:
         return 'مقيَّم';
       case JobStatus.noTechnician:
-        return 'لا توجد ورشة';
+        return AppStrings.waitingForProviderTitle;
       case JobStatus.cancelled:
         return 'ملغى';
     }
@@ -370,7 +371,7 @@ String jobStatusLabel(
       case JobStatus.rated:
         return 'مقيَّم';
       case JobStatus.noTechnician:
-        return 'لا يوجد مغسل';
+        return AppStrings.waitingForProviderTitle;
       case JobStatus.cancelled:
         return 'ملغى';
     }
@@ -396,7 +397,7 @@ String jobStatusLabel(
     case JobStatus.rated:
       return 'مقيَّم';
     case JobStatus.noTechnician:
-      return 'لا يوجد فني';
+      return AppStrings.waitingForProviderTitle;
     case JobStatus.cancelled:
       return 'ملغى';
   }
@@ -409,8 +410,9 @@ String jobStatusLabel(
       case JobStatus.rated:
         return (AppColors.emeraldDeep, AppColors.emeraldTint);
       case JobStatus.cancelled:
-      case JobStatus.noTechnician:
         return (AppColors.danger, AppColors.dangerTint);
+      case JobStatus.noTechnician:
+        return (const Color(0xFF92400E), AppColors.amberTint);
       case JobStatus.inProgress:
       case JobStatus.finalQuote:
         return (AppColors.emeraldDeep, AppColors.emeraldTint);
@@ -428,8 +430,9 @@ String jobStatusLabel(
     case JobStatus.inProgress:
       return (AppColors.emeraldDeep, AppColors.emeraldTint);
     case JobStatus.cancelled:
-    case JobStatus.noTechnician:
       return (AppColors.danger, AppColors.dangerTint);
+    case JobStatus.noTechnician:
+      return (const Color(0xFF92400E), AppColors.amberTint);
     case JobStatus.enRoute:
     case JobStatus.arrived:
     case JobStatus.finalQuote:

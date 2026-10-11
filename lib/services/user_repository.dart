@@ -175,25 +175,66 @@ class UserRepository {
   }
 
   /// يحفظ رقم هاتف عراقي بعد التسجيل (Google/بريد بلا رقم).
+  /// يستخدم [Cols.phoneRegistry] لأن استعلام users بالهاتف ممنوع بقواعد القراءة.
   Future<void> updatePhone(String uid, String rawPhone) async {
     final e164 = normalizeIraqiPhone(rawPhone);
     if (!looksLikeIraqiMobile(e164)) {
       throw const FormatException('رقم الهاتف غير صالح. مثال: 07701234567');
     }
+    final phoneKey = e164.replaceAll('+', '');
+    final regRef = _db.collection(Cols.phoneRegistry).doc(phoneKey);
+    final userRef = _userRef(uid);
 
-    final taken = await _db
-        .collection(Cols.users)
-        .where('phone', isEqualTo: e164)
-        .limit(1)
-        .get();
-    if (taken.docs.isNotEmpty && taken.docs.first.id != uid) {
-      throw FirebaseAuthException(
-        code: 'phone-already-registered',
-        message: 'هذا الرقم مستخدم لحساب آخر.',
-      );
-    }
+    await _db.runTransaction((tx) async {
+      final userSnap = await tx.get(userRef);
+      final previous = (userSnap.data()?['phone'] as String?)?.trim() ?? '';
+      final prevKey = previous.isEmpty
+          ? ''
+          : normalizeIraqiPhone(previous).replaceAll('+', '');
+      final oldRef = prevKey.isNotEmpty && prevKey != phoneKey
+          ? _db.collection(Cols.phoneRegistry).doc(prevKey)
+          : null;
 
-    await _userRef(uid).set({'phone': e164}, SetOptions(merge: true));
+      final regSnap = await tx.get(regRef);
+      final oldSnap = oldRef == null ? null : await tx.get(oldRef);
+
+      if (regSnap.exists) {
+        final owner = regSnap.data()?['uid'] as String? ?? '';
+        if (owner.isNotEmpty && owner != uid) {
+          throw FirebaseAuthException(
+            code: 'phone-already-registered',
+            message: 'هذا الرقم مستخدم لحساب آخر.',
+          );
+        }
+      }
+
+      if (!regSnap.exists) {
+        tx.set(regRef, {
+          'uid': uid,
+          'phone': e164,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        tx.set(
+          regRef,
+          {
+            'uid': uid,
+            'phone': e164,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+
+      if (oldRef != null &&
+          oldSnap != null &&
+          oldSnap.exists &&
+          (oldSnap.data()?['uid'] as String? ?? '') == uid) {
+        tx.delete(oldRef);
+      }
+
+      tx.set(userRef, {'phone': e164}, SetOptions(merge: true));
+    });
   }
 
   Future<void> setServiceIds(String uid, List<String> ids) {
@@ -272,8 +313,51 @@ class UserRepository {
       'verified': approved,
       'verificationStatus':
           approved ? VerificationStatus.approved.name : VerificationStatus.rejected.name,
-      if (!approved) 'isOnline': false,
+      'isOnline': approved,
     }, SetOptions(merge: true));
+  }
+
+  /// يبقي المزوّد المعتمد جاهزاً للتوزيع (بدون مفتاح متصل/غير متصل).
+  Future<void> ensureProviderReady(String uid) async {
+    final user = await get(uid);
+    if (user == null) return;
+    if (!user.isTechnician &&
+        !user.isWorkshop &&
+        !user.isOilWorkshop &&
+        !user.isPaintShop) {
+      return;
+    }
+    if (!user.isApproved) return;
+    final patch = <String, dynamic>{'isOnline': true};
+    if (user.isWorkshop) {
+      if (user.serviceIds.isEmpty) patch['serviceIds'] = const ['parts'];
+    } else if (user.isOilWorkshop) {
+      if (user.serviceIds.isEmpty) patch['serviceIds'] = const ['oil'];
+      if (user.vehicleTypeIds.isEmpty) {
+        patch['vehicleTypeIds'] = seedVehicleTypes.map((t) => t.id).toList();
+      }
+    } else if (user.isPaintShop) {
+      if (user.serviceIds.isEmpty) {
+        patch['serviceIds'] = seedServices
+            .where((s) => s.id == 'paint' || s.category == 'paint')
+            .map((s) => s.id)
+            .toList();
+        if ((patch['serviceIds'] as List).isEmpty) {
+          patch['serviceIds'] = const ['paint'];
+        }
+      }
+    } else {
+      if (user.serviceIds.isEmpty) {
+        patch['serviceIds'] = seedServices
+            .where((s) => s.id != 'oil' && s.id != 'parts')
+            .map((s) => s.id)
+            .toList();
+      }
+      if (user.vehicleTypeIds.isEmpty) {
+        patch['vehicleTypeIds'] = seedVehicleTypes.map((t) => t.id).toList();
+      }
+    }
+    await _userRef(uid).set(patch, SetOptions(merge: true));
   }
 
   Future<void> applyRating(String uid, int stars) async {

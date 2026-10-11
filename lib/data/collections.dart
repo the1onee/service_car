@@ -12,4 +12,6 @@ class Cols {
   static const walletEntries = 'walletEntries';
   static const walletTopUps = 'walletTopUps';
   static const notifications = 'notifications';
+  /// فهرس أرقام الهاتف: phoneRegistry/{9647…} → { uid }
+  static const phoneRegistry = 'phoneRegistry';
 }

@@ -7,6 +7,7 @@ const seedServices = <ServiceItem>[
     titleAr: 'فني سيارات',
     category: 'صيانة',
     providerKind: ServiceProviderKind.fieldTech,
+    showInTechnicianRequest: true,
     sortOrder: 0,
     descriptionAr:
         'نوفّر فني سيارات متخصصاً حسب نوع المشكلة، سواء كانت كهربائية أو ميكانيكية. '
@@ -97,6 +98,7 @@ const seedServices = <ServiceItem>[
     titleAr: 'بطارية: اشتراك وشحن وتبديل',
     category: 'كهرباء',
     providerKind: ServiceProviderKind.fieldTech,
+    showInTechnicianRequest: true,
     sortOrder: 50,
   ),
   ServiceItem(
@@ -111,6 +113,7 @@ const seedServices = <ServiceItem>[
     titleAr: 'تبديل الفحمات',
     category: 'صيانة سريعة',
     providerKind: ServiceProviderKind.fieldTech,
+    showInTechnicianRequest: true,
     sortOrder: 70,
   ),
   ServiceItem(
@@ -118,6 +121,7 @@ const seedServices = <ServiceItem>[
     titleAr: 'تبديل البواجي',
     category: 'صيانة سريعة',
     providerKind: ServiceProviderKind.fieldTech,
+    showInTechnicianRequest: true,
     sortOrder: 80,
   ),
   ServiceItem(
@@ -125,6 +129,7 @@ const seedServices = <ServiceItem>[
     titleAr: 'شحن فريون المكيف',
     category: 'صيانة سريعة',
     providerKind: ServiceProviderKind.fieldTech,
+    showInTechnicianRequest: true,
     sortOrder: 90,
   ),
   ServiceItem(
@@ -157,21 +162,9 @@ const emergencyServiceIds = {'locks', 'fuel'};
 
 bool isEmergencyService(String serviceId) => emergencyServiceIds.contains(serviceId);
 
-/// خدمات تُستبعد من مسار «فني» (قطع / غسيل / زيوت / دهان).
-const _excludedFromTechnician = {'parts', 'wash', 'oil', 'paint'};
-
-/// معرفات صيانة ميدانية تُعرض مع بلاطة الفني.
-const technicianFieldServiceIds = {
-  'technician',
-  'battery',
-  'brakes',
-  'spark',
-  'ac',
-};
-
 /// يصفّي الكتالوج حسب نقطة الدخول من الهبوط.
 ///
-/// - `technician`: خدمات فني ميداني فقط (بدون قطع/غسيل/زيوت/دهان/طوارئ).
+/// - `technician`: الخدمات المفعّلة التي حدّدها الأدمن لصفحة طلب الفني.
 /// - معرف خدمة محددة: تلك الخدمة وحدها.
 /// - `null`: القائمة كما هي.
 List<ServiceItem> filterServicesForEntry(
@@ -181,14 +174,7 @@ List<ServiceItem> filterServicesForEntry(
   if (entryId == null || entryId.isEmpty) return all;
   if (entryId == 'technician') {
     return all
-        .where((s) {
-          if (_excludedFromTechnician.contains(s.id)) return false;
-          if (s.isEmergency) return false;
-          if (s.providerKind == ServiceProviderKind.partsShop) return false;
-          if (s.providerKind == ServiceProviderKind.paintShop) return false;
-          return s.providerKind == ServiceProviderKind.fieldTech ||
-              technicianFieldServiceIds.contains(s.id);
-        })
+        .where((s) => s.active && s.showInTechnicianRequest)
         .toList()
       ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
   }

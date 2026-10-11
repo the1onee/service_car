@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/strings.dart';
@@ -14,11 +16,53 @@ import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/services/job_repository.dart';
 
-class CustomerJobPanel extends StatelessWidget {
+class CustomerJobPanel extends StatefulWidget {
   const CustomerJobPanel({super.key, required this.job, required this.me});
 
   final Job job;
   final AppUser me;
+
+  @override
+  State<CustomerJobPanel> createState() => _CustomerJobPanelState();
+}
+
+class _CustomerJobPanelState extends State<CustomerJobPanel> {
+  Timer? _waitRetry;
+
+  Job get job => widget.job;
+  AppUser get me => widget.me;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncWaitRetry();
+  }
+
+  @override
+  void didUpdateWidget(covariant CustomerJobPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.job.status != job.status || oldWidget.job.id != job.id) {
+      _syncWaitRetry();
+    }
+  }
+
+  @override
+  void dispose() {
+    _waitRetry?.cancel();
+    super.dispose();
+  }
+
+  void _syncWaitRetry() {
+    _waitRetry?.cancel();
+    _waitRetry = null;
+    if (job.status != JobStatus.noTechnician) return;
+    _waitRetry = Timer.periodic(const Duration(seconds: 50), (_) async {
+      if (!mounted || job.status != JobStatus.noTechnician) return;
+      try {
+        await AppScope.of(context).jobs.maybeRedispatch(job.id);
+      } catch (_) {}
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -178,11 +222,7 @@ class CustomerJobPanel extends StatelessWidget {
         if (tow) return 'تم النقل';
         return 'انتهت المهمة';
       case JobStatus.noTechnician:
-        if (parts) return 'لم تُعثر على ورشة';
-        if (oil) return 'لم تُعثر على ورشة زيوت';
-        if (wash) return 'لم يُعثر على مغسل';
-        if (tow) return 'لم يُعثر على سطحة';
-        return 'لم يُعثر على فني';
+        return AppStrings.waitingForProviderTitle;
       case JobStatus.cancelled:
         return 'تم إلغاء الطلب';
       case JobStatus.rated:
@@ -509,21 +549,25 @@ class CustomerJobPanel extends StatelessWidget {
         ];
       case JobStatus.noTechnician:
         return [
-          Text(
-            job.isOilOrder
-                ? 'لم تتوفر ورشة زيوت الآن. حاول مرة أخرى.'
-                : job.isWashOrder
-                    ? 'لم يتوفر مغسل الآن. حاول مرة أخرى.'
-                    : job.isTowOrder
-                        ? 'لم تتوفر سطحة الآن. حاول مرة أخرى.'
-                        : (job.isPartsOrder
-                            ? 'لم تتوفر ورشة الآن. حاول مرة أخرى.'
-                            : 'لم يتوفر فني الآن. حاول مرة أخرى.'),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.amberTint,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Text(
+              AppStrings.waitingForProviderBody,
+              style: TextStyle(
+                height: 1.55,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF92400E),
+              ),
+            ),
           ),
           const SizedBox(height: 12),
-          FilledButton(
+          OutlinedButton(
             onPressed: () => jobs.maybeRedispatch(job.id),
-            child: const Text('إعادة البحث'),
+            child: const Text(AppStrings.retrySearchProviders),
           ),
         ];
       default:
