@@ -1,22 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_brand.dart';
 import 'package:barrr/core/theme.dart';
-import 'package:barrr/legal/terms_of_use.dart';
+import 'package:barrr/legal/role_terms.dart';
+import 'package:barrr/models/app_user.dart';
 
 /// عرض شروط الاستخدام (قراءة فقط — من حسابي أو رابط).
 class TermsViewScreen extends StatelessWidget {
-  const TermsViewScreen({super.key});
+  const TermsViewScreen({super.key, required this.role});
 
-  static void open(BuildContext context) {
+  final UserRole role;
+
+  static void open(BuildContext context, {UserRole role = UserRole.customer}) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const TermsViewScreen()),
+      MaterialPageRoute<void>(
+        builder: (_) => TermsViewScreen(role: role),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(AppTerms.title)),
+      appBar: AppBar(title: Text(RoleTerms.titleFor(role))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
         children: [
@@ -30,7 +35,7 @@ class TermsViewScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            AppTerms.body.trim(),
+            RoleTerms.bodyFor(role).trim(),
             style: const TextStyle(
               height: 1.65,
               fontSize: 15,

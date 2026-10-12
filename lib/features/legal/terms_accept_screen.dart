@@ -3,7 +3,7 @@ import 'package:barrr/core/app_brand.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/legal/terms_view_screen.dart';
-import 'package:barrr/legal/terms_of_use.dart';
+import 'package:barrr/legal/role_terms.dart';
 import 'package:barrr/models/app_user.dart';
 
 /// قبول شروط الاستخدام مرة واحدة (أو عند رفع رقم النسخة).
@@ -28,7 +28,10 @@ class _TermsAcceptScreenState extends State<TermsAcceptScreen> {
       _error = null;
     });
     try {
-      await AppScope.of(context).users.acceptTerms(widget.profile.id);
+      await AppScope.of(context).users.acceptTerms(
+        widget.profile.id,
+        role: widget.profile.role,
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -74,7 +77,7 @@ class _TermsAcceptScreenState extends State<TermsAcceptScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        AppTerms.title,
+                        RoleTerms.titleFor(widget.profile.role),
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
@@ -84,7 +87,7 @@ class _TermsAcceptScreenState extends State<TermsAcceptScreen> {
                       Expanded(
                         child: SingleChildScrollView(
                           child: Text(
-                            AppTerms.body.trim(),
+                            RoleTerms.bodyFor(widget.profile.role).trim(),
                             style: const TextStyle(
                               height: 1.6,
                               color: AppColors.inkSoft,
@@ -94,7 +97,10 @@ class _TermsAcceptScreenState extends State<TermsAcceptScreen> {
                         ),
                       ),
                       TextButton(
-                        onPressed: () => TermsViewScreen.open(context),
+                        onPressed: () => TermsViewScreen.open(
+                          context,
+                          role: widget.profile.role,
+                        ),
                         child: const Text('فتح الشروط في صفحة كاملة'),
                       ),
                       CheckboxListTile(

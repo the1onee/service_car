@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:barrr/core/constants.dart';
-import 'package:barrr/legal/terms_of_use.dart';
+import 'package:barrr/legal/role_terms.dart';
 
 enum UserRole { customer, technician, workshop, oilWorkshop, paintShop, admin }
 
@@ -76,7 +76,7 @@ class AppUser {
   final String termsAcceptedVersion;
 
   bool get hasAcceptedCurrentTerms =>
-      termsAcceptedVersion.trim() == AppTerms.version;
+      termsAcceptedVersion.trim() == RoleTerms.versionFor(role);
 
   bool get isTechnician => role == UserRole.technician;
   bool get isWorkshop => role == UserRole.workshop;

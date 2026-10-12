@@ -13,6 +13,7 @@ import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/auth/add_phone_screen.dart';
 import 'package:barrr/features/legal/terms_view_screen.dart';
+import 'package:barrr/features/support/support_screen.dart';
 import 'package:barrr/features/jobs/orders_screen.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
@@ -183,7 +184,7 @@ class _WorkshopHomeState extends State<WorkshopHome> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingError(e))),
+        SnackBar(content: Text('$e')),
       );
     }
   }

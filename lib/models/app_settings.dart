@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:barrr/core/app_brand.dart';
 import 'package:barrr/core/constants.dart';
 
 class AppSettings {
@@ -18,6 +19,7 @@ class AppSettings {
     this.topUpCardLabel = defaultTopUpCardLabel,
     this.topUpAccountName = '',
     this.topUpInstructions = defaultTopUpInstructions,
+    this.supportPhone = '',
   });
 
   final String activeCityId;
@@ -29,6 +31,14 @@ class AppSettings {
   final String topUpCardLabel;
   final String topUpAccountName;
   final String topUpInstructions;
+  /// رقم الدعم — إن فُرغ يُستخدم [AppBrand.supportPhone].
+  final String supportPhone;
+
+  String get resolvedSupportPhone {
+    final fromSettings = supportPhone.trim();
+    if (fromSettings.isNotEmpty) return fromSettings;
+    return AppBrand.supportPhone;
+  }
 
   factory AppSettings.fromMap(Map<String, dynamic>? data) {
     if (data == null) return const AppSettings();
@@ -51,6 +61,7 @@ class AppSettings {
       topUpCardLabel: str('topUpCardLabel', defaultTopUpCardLabel),
       topUpAccountName: str('topUpAccountName', ''),
       topUpInstructions: str('topUpInstructions', defaultTopUpInstructions),
+      supportPhone: str('supportPhone', ''),
     );
   }
 }

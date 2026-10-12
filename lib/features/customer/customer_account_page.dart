@@ -13,6 +13,7 @@ import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/core/app_brand.dart';
 import 'package:barrr/features/legal/terms_view_screen.dart';
+import 'package:barrr/features/support/support_screen.dart';
 import 'package:barrr/features/warranty/warranties_screen.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
@@ -348,7 +349,17 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                     _MenuTile(
                       icon: Icons.description_outlined,
                       title: 'شروط الاستخدام',
-                      onTap: () => TermsViewScreen.open(context),
+                      onTap: () => TermsViewScreen.open(
+                        context,
+                        role: me.role,
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    _MenuTile(
+                      icon: Icons.support_agent_outlined,
+                      title: 'الدعم',
+                      subtitle: 'اتصال أو إرسال تعليق',
+                      onTap: () => SupportScreen.open(context, me),
                     ),
                   ],
                 ),

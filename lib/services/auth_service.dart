@@ -60,8 +60,11 @@ class AuthService {
         return doc.exists ? u.uid : null;
       });
 
-  String? get currentUid =>
-      _currentUidOverride?.call() ?? _auth.currentUser?.uid;
+  String? get currentUid {
+    final override = _currentUidOverride;
+    if (override != null) return override();
+    return _auth.currentUser?.uid;
+  }
 
   String? get currentPhone => _auth.currentUser?.phoneNumber ?? pendingPhone;
 
@@ -169,6 +172,19 @@ class AuthService {
     pendingPhone = phone.isEmpty ? null : phone;
     registering.value = true;
 
+    if (phone.isNotEmpty) {
+      final phoneKey = phone.replaceAll('+', '');
+      final reg = await _db.collection(Cols.phoneRegistry).doc(phoneKey).get();
+      final owner = (reg.data()?['uid'] as String?)?.trim() ?? '';
+      if (reg.exists && owner.isNotEmpty) {
+        registering.value = false;
+        throw FirebaseAuthException(
+          code: 'phone-already-registered',
+          message: 'هذا الحساب مسجّل مسبقاً. سجّل الدخول.',
+        );
+      }
+    }
+
     final leftover = _auth.currentUser;
     if (leftover != null && !await _hasProfile(leftover.uid)) {
       await _discardIncompleteAccount(leftover);
@@ -236,6 +252,25 @@ class AuthService {
         'authProvider': authProvider,
         'createdAt': FieldValue.serverTimestamp(),
       });
+      if (phone.isNotEmpty && looksLikeIraqiMobile(phone)) {
+        final phoneKey = phone.replaceAll('+', '');
+        final regRef = _db.collection(Cols.phoneRegistry).doc(phoneKey);
+        await _db.runTransaction((tx) async {
+          final regSnap = await tx.get(regRef);
+          final owner = (regSnap.data()?['uid'] as String?)?.trim() ?? '';
+          if (regSnap.exists && owner.isNotEmpty && owner != user.uid) {
+            throw FirebaseAuthException(
+              code: 'phone-already-registered',
+              message: 'هذا الحساب مسجّل مسبقاً. سجّل الدخول.',
+            );
+          }
+          tx.set(regRef, {
+            'uid': user.uid,
+            'phone': phone,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        });
+      }
     } catch (e) {
       if (discardOnFailure) await _discardIncompleteAccount(user);
       rethrow;
@@ -287,6 +322,21 @@ class AuthService {
   }
 
   Future<void> _discardIncompleteAccount(User user) async {
+    try {
+      final snap = await _db.collection(Cols.users).doc(user.uid).get();
+      final phone = (snap.data()?['phone'] as String?)?.trim() ?? '';
+      if (snap.exists) {
+        await _db.collection(Cols.users).doc(user.uid).delete();
+      }
+      if (phone.isNotEmpty && looksLikeIraqiMobile(phone)) {
+        final regRef =
+            _db.collection(Cols.phoneRegistry).doc(phone.replaceAll('+', ''));
+        final reg = await regRef.get();
+        if (reg.exists && (reg.data()?['uid'] as String?) == user.uid) {
+          await regRef.delete();
+        }
+      }
+    } catch (_) {}
     try {
       await user.delete();
     } catch (_) {

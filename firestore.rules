@@ -441,11 +441,36 @@ service cloud.firestore {
       allow update, delete: if adminCanWrite('payments');
     }
 
-    // الدعم والنزاعات: المستخدم يفتح التذكرة ويقرأ تذاكره.
+    // الدعم والنزاعات: المستخدم يفتح التذكرة ويقرأ تذاكره ويرد برسالة.
     match /supportTickets/{id} {
+      function supportOwnerCreateOk() {
+        return isOwner(request.resource.data.userId)
+          && request.resource.data.keys().hasAll([
+            'subject', 'body', 'userId', 'userRole', 'status', 'messages'
+          ])
+          && request.resource.data.status == 'open'
+          && request.resource.data.subject is string
+          && request.resource.data.body is string
+          && request.resource.data.messages is list;
+      }
+      function supportOwnerReplyOk() {
+        let prevCount = (resource.data.keys().hasAny(['messages'])
+            && resource.data.messages is list)
+          ? resource.data.messages.size()
+          : 0;
+        return isOwner(resource.data.userId)
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.userRole == resource.data.userRole
+          && request.resource.data.subject == resource.data.subject
+          && request.resource.data.body == resource.data.body
+          && request.resource.data.status in ['open', 'closed']
+          && request.resource.data.messages is list
+          && request.resource.data.messages.size() >= prevCount;
+      }
       allow read: if isOwner(resource.data.userId) || adminCanRead('support');
-      allow create: if isOwner(request.resource.data.userId) || adminCanWrite('support');
-      allow update, delete: if adminCanWrite('support');
+      allow create: if supportOwnerCreateOk() || adminCanWrite('support');
+      allow update: if adminCanWrite('support') || supportOwnerReplyOk();
+      allow delete: if adminCanWrite('support');
     }
     match /disputes/{id} {
       allow read: if isOwner(resource.data.customerId)
@@ -470,15 +495,29 @@ service cloud.firestore {
     }
 
     // فهرس الهواتف — get فقط (لا list) حتى يتحقق العميل من التفرد دون قراءة users.
+    // الأدمن ذو صلاحية كتابة للمستخدمين يمكنه ربط رقم لحساب ينشئه.
+    function adminCanWritePhoneRegistry() {
+      return adminCanWrite('users')
+        || adminCanWrite('customers')
+        || adminCanWrite('technicians')
+        || adminCanWrite('workshops');
+    }
     match /phoneRegistry/{phoneKey} {
       allow get: if signedIn();
-      allow create: if signedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.phone is string;
-      allow update: if signedIn()
-        && resource.data.uid == request.auth.uid
-        && request.resource.data.uid == request.auth.uid;
-      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if (signedIn()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.phone is string)
+        || (adminCanWritePhoneRegistry()
+          && request.resource.data.uid is string
+          && request.resource.data.phone is string);
+      allow update: if (signedIn()
+          && resource.data.uid == request.auth.uid
+          && request.resource.data.uid == request.auth.uid)
+        || (adminCanWritePhoneRegistry()
+          && request.resource.data.uid is string
+          && request.resource.data.phone is string);
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid
+        || adminCanWritePhoneRegistry();
       allow list: if isSuperAdmin();
     }
 

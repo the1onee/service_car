@@ -277,7 +277,17 @@ class _AccountPageState extends State<_AccountPage> {
                     _OilMenuTile(
                       icon: Icons.description_outlined,
                       title: 'شروط الاستخدام',
-                      onTap: () => TermsViewScreen.open(context),
+                      onTap: () => TermsViewScreen.open(
+                        context,
+                        role: me.role,
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    _OilMenuTile(
+                      icon: Icons.support_agent_outlined,
+                      title: 'الدعم',
+                      subtitle: 'اتصال أو إرسال تعليق',
+                      onTap: () => SupportScreen.open(context, me),
                     ),
                   ],
                 ),

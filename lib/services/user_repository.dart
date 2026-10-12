@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:barrr/legal/terms_of_use.dart';
+import 'package:barrr/legal/role_terms.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/phone.dart';
 import 'package:barrr/data/collections.dart';
@@ -150,9 +150,9 @@ class UserRepository {
     }, SetOptions(merge: true));
   }
 
-  Future<void> acceptTerms(String uid) {
+  Future<void> acceptTerms(String uid, {required UserRole role}) {
     return _userRef(uid).set({
-      'termsAcceptedVersion': AppTerms.version,
+      'termsAcceptedVersion': RoleTerms.versionFor(role),
       'termsAcceptedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
