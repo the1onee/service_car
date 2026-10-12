@@ -9,24 +9,132 @@ import 'package:barrr/features/oil_workshop/oil_job_details.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/models/job_offer.dart';
 
-/// عرض وارد لورشة الزيوت مع تفاصيل الطلب الكاملة.
+/// طابور عروض واردة لورشة الزيوت — بدون قفل انشغال.
 class OilOfferOverlay extends StatefulWidget {
   const OilOfferOverlay({
     super.key,
-    required this.offer,
+    required this.offers,
     required this.workshopName,
-    required this.onDone,
+    required this.onSoftDismiss,
+    required this.onConsumed,
   });
 
-  final JobOffer offer;
+  final List<JobOffer> offers;
   final String workshopName;
-  final VoidCallback onDone;
+  final ValueChanged<String> onSoftDismiss;
+  final ValueChanged<String> onConsumed;
 
   @override
   State<OilOfferOverlay> createState() => _OilOfferOverlayState();
 }
 
 class _OilOfferOverlayState extends State<OilOfferOverlay> {
+  late final PageController _page;
+
+  @override
+  void initState() {
+    super.initState();
+    _page = PageController();
+  }
+
+  @override
+  void dispose() {
+    _page.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final offers = widget.offers;
+    if (offers.isEmpty) return const SizedBox.shrink();
+    return Material(
+      color: Colors.black54,
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
+            Text(
+              offers.length == 1
+                  ? 'طلب زيت وارد'
+                  : 'طلبات زيت — مرّر أو اسحب للإبعاد',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+            Expanded(
+              child: PageView.builder(
+                controller: _page,
+                itemCount: offers.length,
+                itemBuilder: (context, i) {
+                  final offer = offers[i];
+                  return Dismissible(
+                    key: ValueKey(offer.id),
+                    direction: DismissDirection.horizontal,
+                    onDismissed: (_) => widget.onSoftDismiss(offer.id),
+                    background: Container(
+                      color: AppColors.slate.withValues(alpha: 0.35),
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.symmetric(horizontal: 28),
+                      child: const Text(
+                        'إبعاد',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    secondaryBackground: Container(
+                      color: AppColors.slate.withValues(alpha: 0.35),
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.symmetric(horizontal: 28),
+                      child: const Text(
+                        'إبعاد',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    child: _OilOfferCard(
+                      offer: offer,
+                      index: i,
+                      total: offers.length,
+                      workshopName: widget.workshopName,
+                      onConsumed: () => widget.onConsumed(offer.id),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OilOfferCard extends StatefulWidget {
+  const _OilOfferCard({
+    required this.offer,
+    required this.index,
+    required this.total,
+    required this.workshopName,
+    required this.onConsumed,
+  });
+
+  final JobOffer offer;
+  final int index;
+  final int total;
+  final String workshopName;
+  final VoidCallback onConsumed;
+
+  @override
+  State<_OilOfferCard> createState() => _OilOfferCardState();
+}
+
+class _OilOfferCardState extends State<_OilOfferCard> {
   late int _left;
   Timer? _timer;
   void Function()? _stopLostWatch;
@@ -47,7 +155,7 @@ class _OilOfferOverlayState extends State<OilOfferOverlay> {
       technicianId: widget.offer.technicianId,
       onLost: () {
         if (!mounted) return;
-        widget.onDone();
+        widget.onConsumed();
       },
     );
   }
@@ -99,135 +207,141 @@ class _OilOfferOverlayState extends State<OilOfferOverlay> {
             ? 'تعذر إرسال العرض. قد يكون العميل قبل عرضاً آخر.'
             : 'فاتك الطلب أو انتهت المهلة.';
       });
-      widget.onDone();
+      widget.onConsumed();
       return;
     }
-    widget.onDone();
+    widget.onConsumed();
   }
 
   @override
   Widget build(BuildContext context) {
     final offer = widget.offer;
-    return Material(
-      color: Colors.black54,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420, maxHeight: 640),
-          child: Card(
-            margin: const EdgeInsets.all(20),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'طلب تبديل زيت جديد',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                offer.oilDisplayTitle,
-                                style: const TextStyle(
-                                  color: AppColors.amberDeep,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (!_openEnded)
-                          CircleAvatar(
-                            radius: 26,
-                            backgroundColor: AppColors.amberTint,
-                            child: Text(
-                              '$_left',
-                              style: const TextStyle(
-                                fontSize: 20,
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 640),
+        child: Card(
+          margin: const EdgeInsets.all(20),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'طلب تبديل زيت جديد',
+                              style: TextStyle(
+                                fontSize: 18,
                                 fontWeight: FontWeight.w800,
-                                color: AppColors.amberDeep,
                               ),
                             ),
-                          )
-                        else
-                          const StatusPill(
-                            label: 'بدون مهلة',
-                            color: AppColors.emeraldDeep,
-                            background: AppColors.emeraldTint,
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    OilJobDetailsCard.fromOffer(offer),
-                    const SizedBox(height: 10),
-                    Text(
-                      _openEnded
-                          ? 'أرسل سعرك متى جاهز. الموقع والهاتف يظهران بعد قبول العميل.'
-                          : 'الموقع تقريبي ورقم الهاتف مخفي حتى يقبل العميل عرضك.',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.inkSoft,
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _price,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: AppStrings.initialPrice,
-                        hintText: '5000',
-                        helperText: 'الحد الأدنى 3000 وينتهي بـ 000',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    if (_error != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          _error!,
-                          style: const TextStyle(color: AppColors.danger),
+                            const SizedBox(height: 2),
+                            Text(
+                              offer.oilDisplayTitle,
+                              style: const TextStyle(
+                                color: AppColors.amberDeep,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    const SizedBox(height: 14),
-                    FilledButton(
-                      onPressed: _busy ? null : _accept,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 48),
-                        backgroundColor: AppColors.slate,
-                      ),
-                      child: Text(_busy ? 'جارٍ الإرسال…' : 'تقديم عرض السعر'),
+                      if (widget.total > 1)
+                        Padding(
+                          padding: const EdgeInsetsDirectional.only(end: 8),
+                          child: StatusPill(
+                            label: '${widget.index + 1}/${widget.total}',
+                            color: AppColors.inkSoft,
+                            background: AppColors.recessed,
+                          ),
+                        ),
+                      if (!_openEnded)
+                        CircleAvatar(
+                          radius: 26,
+                          backgroundColor: AppColors.amberTint,
+                          child: Text(
+                            '$_left',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.amberDeep,
+                            ),
+                          ),
+                        )
+                      else
+                        const StatusPill(
+                          label: 'بدون مهلة',
+                          color: AppColors.emeraldDeep,
+                          background: AppColors.emeraldTint,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  OilJobDetailsCard.fromOffer(offer),
+                  const SizedBox(height: 10),
+                  Text(
+                    _openEnded
+                        ? 'أرسل سعرك متى جاهز. الموقع والهاتف يظهران بعد قبول العميل.'
+                        : 'الموقع تقريبي ورقم الهاتف مخفي حتى يقبل العميل عرضك.',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.inkSoft,
+                      height: 1.4,
                     ),
-                    const SizedBox(height: 8),
-                    OutlinedButton(
-                      onPressed: _busy
-                          ? null
-                          : () async {
-                              await AppScope.of(context)
-                                  .jobs
-                                  .rejectOffer(offer.id);
-                              widget.onDone();
-                            },
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(0, 44),
-                      ),
-                      child: const Text(AppStrings.reject),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _price,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: AppStrings.initialPrice,
+                      hintText: '5000',
+                      helperText: 'الحد الأدنى 3000 وينتهي بـ 000',
+                      border: OutlineInputBorder(),
                     ),
-                  ],
-                ),
+                  ),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(color: AppColors.danger),
+                      ),
+                    ),
+                  const SizedBox(height: 14),
+                  FilledButton(
+                    onPressed: _busy ? null : _accept,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 48),
+                      backgroundColor: AppColors.slate,
+                    ),
+                    child: Text(_busy ? 'جارٍ الإرسال…' : 'تقديم عرض السعر'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton(
+                    onPressed: _busy
+                        ? null
+                        : () async {
+                            await AppScope.of(context)
+                                .jobs
+                                .rejectOffer(offer.id);
+                            widget.onConsumed();
+                          },
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 44),
+                    ),
+                    child: const Text(AppStrings.reject),
+                  ),
+                ],
               ),
             ),
           ),

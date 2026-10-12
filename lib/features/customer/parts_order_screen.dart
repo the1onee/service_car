@@ -5,6 +5,7 @@ import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/cloudinary_config.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/features/shared/field_ui.dart';
@@ -94,7 +95,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
       setState(() {
         _specialties = const [];
         _loadingSpecialties = false;
-        _specialtiesError = 'تعذر تحميل الاختصاصات: $e';
+        _specialtiesError = userFacingError(e, prefix: 'تعذر تحميل الاختصاصات.');
       });
     }
   }
@@ -138,7 +139,9 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
       if (!mounted) return;
       if (!e.toString().contains('cancelled')) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تعذر إرفاق الصورة: $e')),
+          SnackBar(
+          content: Text(userFacingError(e, prefix: 'تعذر إرفاق الصورة.')),
+        ),
         );
       }
     } finally {
@@ -247,7 +250,9 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر إرسال الطلب: $e')),
+        SnackBar(
+          content: Text(userFacingError(e, prefix: 'تعذر إرسال الطلب.')),
+        ),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);

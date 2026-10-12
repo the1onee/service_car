@@ -7,6 +7,7 @@ import 'package:barrr/core/cloudinary_config.dart';
 import 'package:barrr/core/geo.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart' show AppColors, AppTheme;
+import 'package:barrr/core/user_error.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
@@ -163,7 +164,9 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
       if (!mounted) return;
       if (e.toString().contains('cancelled')) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر إرفاق الصورة: $e')),
+        SnackBar(
+          content: Text(userFacingError(e, prefix: 'تعذر إرفاق الصورة.')),
+        ),
       );
     } finally {
       if (mounted) setState(() => _pickingImage = false);
@@ -265,7 +268,9 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر إرسال الطلب: $e')),
+        SnackBar(
+          content: Text(userFacingError(e, prefix: 'تعذر إرسال الطلب.')),
+        ),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);

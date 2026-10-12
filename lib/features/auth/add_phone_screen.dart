@@ -1,10 +1,10 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/phone.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/core/user_error.dart';
 
 /// نص صف الهاتف في الحساب: الرقم بصيغة مقروءة، أو دعوة للإضافة إن كان فارغاً.
 String profilePhoneLabel(String raw) {
@@ -80,18 +80,11 @@ class _PhoneEditorDialogState extends State<_PhoneEditorDialog> {
       await AppScope.of(context).users.updatePhone(widget.uid, _phone.text);
       if (!mounted) return;
       Navigator.pop(context, true);
-    } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.code == 'phone-already-registered'
-            ? 'هذا الرقم مستخدم لحساب آخر.'
-            : (e.message ?? 'تعذّر حفظ الرقم.');
-      });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e is FormatException
-          ? (e.message)
-          : 'تعذّر حفظ الرقم. حاول مرة أخرى.');
+      setState(
+        () => _error = userFacingError(e, prefix: 'تعذّر حفظ الرقم.'),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }

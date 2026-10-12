@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/customer/parts_offers_section.dart';
 import 'package:barrr/features/customer/quote_compare_list.dart';
 import 'package:barrr/features/customer/tow_job_details.dart';
@@ -277,7 +278,9 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
       await AppScope.of(context).jobs.customerCancelJob(job.id, reason: reason);
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingError(e))),
+      );
     }
   }
 
@@ -285,8 +288,29 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
     switch (job.status) {
       case JobStatus.dispatching:
       case JobStatus.offerPending:
+        final head = <Widget>[
+          if (job.cancelledBy == 'technician') ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.amberTint,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Text(
+                'انسحب المزود — جاري البحث عن بديل.',
+                style: TextStyle(
+                  height: 1.55,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF92400E),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ];
         if (job.isEmergency) {
           return [
+            ...head,
             const LinearProgressIndicator(),
             const SizedBox(height: 12),
             const Text('بانتظار القبول'),
@@ -294,11 +318,13 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
         }
         if (job.isPartsOrder) {
           return [
+            ...head,
             PartsOffersSection(job: job, selectable: true),
           ];
         }
         if (job.isOilOrder) {
           return [
+            ...head,
             const Text(
               'اختر عرض ورشة الزيوت عندما يصل — بدون مهلة زمنية.',
               style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
@@ -309,6 +335,7 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
         }
         if (job.isWashOrder) {
           return [
+            ...head,
             const Text(
               'اختر عرض الغسيل عندما يصل — بدون مهلة زمنية.',
               style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
@@ -319,6 +346,7 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
         }
         if (job.isTowOrder) {
           return [
+            ...head,
             const Text(
               'اختر عرض السطحة عندما يصل — بدون مهلة زمنية.',
               style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
@@ -329,6 +357,7 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
         }
         if (job.isTechnicianJob) {
           return [
+            ...head,
             const Text(
               'اختر عرض الفني عندما يصل — بدون مهلة زمنية.',
               style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
@@ -338,6 +367,7 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
           ];
         }
         return [
+          ...head,
           const LinearProgressIndicator(),
           const SizedBox(height: 12),
           const Text('بانتظار العروض'),
@@ -570,8 +600,37 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
             child: const Text(AppStrings.retrySearchProviders),
           ),
         ];
-      default:
+      case JobStatus.cancelled:
+        return [
+          StatusPill(
+            label: _cancelledByLabel(job.cancelledBy),
+            color: AppColors.danger,
+            background: AppColors.dangerTint,
+            icon: Icons.cancel_outlined,
+          ),
+          if (job.cancelReason.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'السبب: ${job.cancelReason.trim()}',
+              style: const TextStyle(color: AppColors.inkSoft, height: 1.4),
+            ),
+          ],
+        ];
+      case JobStatus.rated:
         return const [SizedBox.shrink()];
+    }
+  }
+
+  String _cancelledByLabel(String by) {
+    switch (by) {
+      case 'customer':
+        return 'ألغيت الطلب';
+      case 'technician':
+        return 'انسحب المزود';
+      case 'workshop':
+        return 'ألغت الورشة الطلب';
+      default:
+        return 'ملغى';
     }
   }
 
@@ -618,7 +677,11 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
           } catch (e) {
             if (!context.mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('تعذّر تأكيد الاستلام: $e')),
+              SnackBar(
+                content: Text(
+                  userFacingError(e, prefix: 'تعذّر تأكيد الاستلام.'),
+                ),
+              ),
             );
           }
         },

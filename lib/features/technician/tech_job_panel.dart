@@ -3,6 +3,7 @@ import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/customer/tow_job_details.dart';
 import 'package:barrr/features/customer/wash_job_details.dart';
 import 'package:barrr/features/jobs/rating_sheet.dart';
@@ -464,19 +465,7 @@ class _TechJobPanelState extends State<TechJobPanel> {
   }
 }
 
-String _readableError(Object e) {
-  final dynamic err = e;
-  try {
-    final inner = err.error;
-    if (inner != null) {
-      final dynamic boxed = inner;
-      final message = boxed.message ?? boxed.code;
-      if (message != null) return '$message';
-      return '$inner';
-    }
-  } catch (_) {}
-  return '$e';
-}
+String _readableError(Object e) => userFacingError(e);
 
 double? _parseMoney(String raw) {
   var s = raw.trim();

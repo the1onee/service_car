@@ -1108,31 +1108,6 @@ class _IconBox extends StatelessWidget {
   }
 }
 
-class _Stat extends StatelessWidget {
-  const _Stat({required this.title, required this.value});
-
-  final String title;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return FieldCard(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(value,
-              style:
-                  const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-          const SizedBox(height: 4),
-          Text(title,
-              style: const TextStyle(color: AppColors.inkSoft, fontSize: 11)),
-        ],
-      ),
-    );
-  }
-}
-
 String _walletWhen(DateTime? date) {
   if (date == null) return '';
   final local = date.toLocal();

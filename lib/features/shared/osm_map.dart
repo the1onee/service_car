@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/constants.dart';
+import 'package:barrr/features/shared/cached_osm_tile_provider.dart';
 import 'package:barrr/services/location_service.dart';
 
 /// خريطة OpenStreetMap مشتركة (بدون مفتاح).
@@ -92,6 +93,11 @@ class _OsmMapState extends State<OsmMap> {
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.barrr.barrr',
+              tileProvider: CachedOsmTileProvider(
+                headers: const {
+                  'User-Agent': 'barrr/1.0 (com.barrr.barrr)',
+                },
+              ),
             ),
             if (widget.circles.isNotEmpty) CircleLayer(circles: widget.circles),
             if (widget.markers.isNotEmpty) MarkerLayer(markers: widget.markers),

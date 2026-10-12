@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/customer/parts_offers_section.dart';
 import 'package:barrr/features/customer/quote_compare_list.dart';
 import 'package:barrr/features/customer/wash_job_details.dart';
@@ -517,7 +518,9 @@ class _BodyState extends State<_Body> {
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذّر تأكيد الاستلام: $e')),
+        SnackBar(
+          content: Text(userFacingError(e, prefix: 'تعذّر تأكيد الاستلام.')),
+        ),
       );
     }
   }
@@ -532,7 +535,9 @@ class _BodyState extends State<_Body> {
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذّر تأكيد الإرسال: $e')),
+        SnackBar(
+          content: Text(userFacingError(e, prefix: 'تعذّر تأكيد الإرسال.')),
+        ),
       );
     }
   }
@@ -572,7 +577,7 @@ class _BodyState extends State<_Body> {
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
     }
   }
 

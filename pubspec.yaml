@@ -40,9 +40,9 @@ flutter:
       fonts:
         - asset: assets/fonts/NotoSansArabic-Regular.ttf
           weight: 400
-        - asset: assets/fonts/NotoSansArabic-Medium.ttf
+        - asset: assets/fonts/NotoSansArabic-Regular.ttf
           weight: 500
-        - asset: assets/fonts/NotoSansArabic-SemiBold.ttf
+        - asset: assets/fonts/NotoSansArabic-Bold.ttf
           weight: 600
         - asset: assets/fonts/NotoSansArabic-Bold.ttf
           weight: 700

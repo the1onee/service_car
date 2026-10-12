@@ -62,11 +62,12 @@ class LocationService {
     }
   }
 
+  /// بث موقع ميداني مُرشَّح بالمسافة لتقليل الأحداث وكتابات Firestore.
   Stream<Position> track() {
     return Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 25,
+        distanceFilter: 80,
       ),
     );
   }

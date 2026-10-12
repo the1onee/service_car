@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/strings.dart';
+import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/auth/add_phone_screen.dart';
 import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
@@ -90,7 +91,9 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
       final msg = e.toString();
       if (msg.contains('cancelled') || msg.contains('Canceled')) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر رفع الصورة: $e')),
+        SnackBar(
+          content: Text(userFacingError(e, prefix: 'تعذر رفع الصورة.')),
+        ),
       );
     } finally {
       if (mounted) setState(() => _uploadingPhoto = false);
@@ -123,7 +126,9 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر حفظ الاسم: $e')),
+        SnackBar(
+          content: Text(userFacingError(e, prefix: 'تعذر حفظ الاسم.')),
+        ),
       );
     } finally {
       if (mounted) setState(() => _savingName = false);
@@ -199,7 +204,9 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر حفظ العنوان: $e')),
+        SnackBar(
+          content: Text(userFacingError(e, prefix: 'تعذر حفظ العنوان.')),
+        ),
       );
     } finally {
       if (mounted) setState(() => _savingAddress = false);

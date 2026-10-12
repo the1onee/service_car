@@ -61,7 +61,7 @@ class AuthService {
       });
 
   String? get currentUid =>
-      _currentUidOverride != null ? _currentUidOverride!() : _auth.currentUser?.uid;
+      _currentUidOverride?.call() ?? _auth.currentUser?.uid;
 
   String? get currentPhone => _auth.currentUser?.phoneNumber ?? pendingPhone;
 

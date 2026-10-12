@@ -1,10 +1,10 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:barrr/core/app_brand.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/phone.dart';
 import 'package:barrr/core/strings.dart';
+import 'package:barrr/core/user_error.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/services/auth_service.dart';
 
@@ -59,7 +59,7 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       await action();
     } catch (e) {
-      if (mounted) setState(() => _error = _friendlyError(e));
+      if (mounted) setState(() => _error = userFacingError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -178,52 +178,6 @@ class _AuthScreenState extends State<AuthScreen> {
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened) {
       await launchUrl(uri, mode: LaunchMode.platformDefault);
-    }
-  }
-
-  String _friendlyError(Object e) {
-    if (e is! FirebaseAuthException) return 'تعذر إكمال العملية. حاول مرة أخرى.';
-    switch (e.code) {
-      case 'invalid-phone-number':
-        return 'رقم الهاتف غير صالح. استخدم صيغة 07701234567';
-      case 'invalid-credential':
-      case 'wrong-password':
-        return 'رقم الهاتف أو كلمة المرور غير صحيحة.';
-      case 'invalid-email':
-        return e.message?.trim().isNotEmpty == true
-            ? e.message!
-            : 'البريد الإلكتروني غير صالح.';
-      case 'user-not-found':
-        // Firebase غالباً يخفي وجود الحساب؛ نعرض رسالة عامة.
-        return AppStrings.resetEmailSentBody;
-      case 'user-disabled':
-        return 'هذا الحساب موقوف. راجع الإدارة.';
-      case 'phone-already-registered':
-        return 'هذا الحساب مسجّل مسبقاً. سجّل الدخول.';
-      case 'too-many-requests':
-        return 'محاولات كثيرة. انتظر قليلاً ثم أعد المحاولة.';
-      case 'google-sign-in-failed':
-        return e.message?.trim().isNotEmpty == true
-            ? e.message!
-            : 'تعذّر تسجيل الدخول عبر Google.';
-      case 'operation-not-allowed':
-        return 'مزوّد الدخول غير مفعّل في Firebase.';
-      case 'network-request-failed':
-        return e.message?.trim().isNotEmpty == true
-            ? e.message!
-            : 'لا يوجد اتصال بالإنترنت.';
-      case 'weak-password':
-        return 'كلمة المرور ضعيفة، استخدم ٦ أحرف على الأقل.';
-      case 'internal-error':
-        return e.message?.trim().isNotEmpty == true
-            ? e.message!
-            : 'تعذر إكمال العملية. حاول مرة أخرى.';
-      default:
-        final message = e.message?.trim() ?? '';
-        if (message.length < 12) {
-          return 'تعذر إكمال العملية (${e.code}). حاول مرة أخرى.';
-        }
-        return message;
     }
   }
 

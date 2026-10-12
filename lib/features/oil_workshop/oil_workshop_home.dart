@@ -11,6 +11,7 @@ import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/auth/add_phone_screen.dart';
 import 'package:barrr/features/legal/terms_view_screen.dart';
 import 'package:barrr/features/jobs/orders_screen.dart';
@@ -27,6 +28,7 @@ import 'package:barrr/models/job_offer.dart';
 import 'package:barrr/models/wallet_entry.dart';
 import 'package:barrr/models/wallet_top_up.dart';
 import 'package:barrr/services/fcm_service.dart';
+import 'package:barrr/services/geo_write_throttle.dart';
 import 'package:barrr/services/profile_photo_upload.dart';
 import 'package:barrr/services/wallet_top_up_upload.dart';
 
@@ -43,18 +45,18 @@ class OilWorkshopHome extends StatefulWidget {
   State<OilWorkshopHome> createState() => _OilWorkshopHomeState();
 }
 
-class _OilWorkshopHomeState extends State<OilWorkshopHome> {
+class _OilWorkshopHomeState extends State<OilWorkshopHome>
+    with WidgetsBindingObserver {
   StreamSubscription? _posSub;
   StreamSubscription<List<JobOffer>>? _offersSub;
-  StreamSubscription<Job?>? _activeJobSub;
   late final ValueNotifier<LatLng> _meNotifier;
-  JobOffer? _incoming;
+  List<JobOffer> _liveOffers = const [];
   final Set<String> _closedOffers = {};
-  Job? _activeJob;
   CityZone? _zone;
   var _booted = false;
   var _tab = 0;
-  DateTime? _lastGeoWrite;
+  var _showOfferQueue = false;
+  final _geoThrottle = GeoWriteThrottle();
   VoidCallback? _fcmFocusListener;
   FcmService? _fcm;
   Stream<AppUser?>? _userStream;
@@ -64,9 +66,24 @@ class _OilWorkshopHomeState extends State<OilWorkshopHome> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _meNotifier = ValueNotifier(
       const LatLng(AppConstants.defaultLat, AppConstants.defaultLng),
     );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_booted) return;
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _startTracking();
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        _stopTracking();
+    }
   }
 
   @override
@@ -77,37 +94,29 @@ class _OilWorkshopHomeState extends State<OilWorkshopHome> {
     _userStream ??= scope.users.watch(uid);
     if (_booted) return;
     _booted = true;
-    _activeJobSub = scope.jobs.watchActiveForTechnician(uid).listen((job) {
-      if (!mounted) return;
-      setState(() {
-        if (job == null && _activeJob != null) {
-          _incoming = null;
-        }
-        _activeJob = job;
-      });
-    });
     _offersSub = scope.jobs.watchPendingOffers(uid).listen((offers) {
       if (!mounted) return;
-      final live = offers
-          .where((o) => !_closedOffers.contains(o.id))
-          .toList();
-      if (_incoming != null &&
-          live.every((o) => o.id != _incoming!.id)) {
-        setState(() => _incoming = null);
-        return;
-      }
-      if (_incoming == null && live.isNotEmpty && _activeJob == null) {
-        setState(() {
-          _incoming = live.first;
+      final live =
+          offers.where((o) => !_closedOffers.contains(o.id)).toList();
+      setState(() {
+        _liveOffers = live;
+        if (live.isEmpty) {
+          _showOfferQueue = false;
+        } else if (!_showOfferQueue) {
+          // الورشة: بدون قفل انشغال — تظهر العروض حتى مع طلب نشط.
+          _showOfferQueue = true;
           _tab = 0;
-        });
-      }
+        }
+      });
     });
     _fcm = scope.fcm;
     _fcmFocusListener = () {
       final id = scope.fcm.focusJobId.value;
       if (id == null || id.isEmpty || !mounted) return;
-      setState(() => _tab = 0);
+      setState(() {
+        _tab = 0;
+        if (_liveOffers.isNotEmpty) _showOfferQueue = true;
+      });
       scope.fcm.focusJobId.value = null;
     };
     scope.fcm.focusJobId.addListener(_fcmFocusListener!);
@@ -142,25 +151,30 @@ class _OilWorkshopHomeState extends State<OilWorkshopHome> {
     _posSub = scope.location.track().listen((p) {
       final next = LatLng(p.latitude, p.longitude);
       _meNotifier.value = next;
-      final now = DateTime.now();
-      final due = _lastGeoWrite == null ||
-          now.difference(_lastGeoWrite!) > const Duration(seconds: 8);
-      if (!due) return;
-      _lastGeoWrite = now;
-      scope.users.setGeo(widget.profile.id, GeoPoint(p.latitude, p.longitude));
+      final geo = GeoPoint(p.latitude, p.longitude);
+      if (!_geoThrottle.shouldWrite(geo)) return;
+      scope.users.setGeo(widget.profile.id, geo);
     });
     final me = _meNotifier.value;
-    scope.users.setGeo(widget.profile.id, GeoPoint(me.latitude, me.longitude));
+    final geo = GeoPoint(me.latitude, me.longitude);
+    if (_geoThrottle.shouldWrite(geo, force: true)) {
+      scope.users.setGeo(widget.profile.id, geo);
+    }
+  }
+
+  void _stopTracking() {
+    _posSub?.cancel();
+    _posSub = null;
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (_fcmFocusListener != null) {
       _fcm?.focusJobId.removeListener(_fcmFocusListener!);
     }
-    _posSub?.cancel();
+    _stopTracking();
     _offersSub?.cancel();
-    _activeJobSub?.cancel();
     _meNotifier.dispose();
     super.dispose();
   }
@@ -209,11 +223,19 @@ class _OilWorkshopHomeState extends State<OilWorkshopHome> {
           meListenable: _meNotifier,
           userStream: userStream,
           activeJobStream: activeJobStream!,
-          incoming: _incoming,
-          onClearIncoming: () => setState(() {
-            final id = _incoming?.id;
-            if (id != null) _closedOffers.add(id);
-            _incoming = null;
+          liveOffers: _liveOffers,
+          showOfferQueue: _showOfferQueue,
+          onSoftDismissOffer: (id) => setState(() {
+            _closedOffers.add(id);
+            _liveOffers =
+                _liveOffers.where((o) => o.id != id).toList(growable: false);
+            if (_liveOffers.isEmpty) _showOfferQueue = false;
+          }),
+          onConsumedOffer: (id) => setState(() {
+            _closedOffers.add(id);
+            _liveOffers =
+                _liveOffers.where((o) => o.id != id).toList(growable: false);
+            if (_liveOffers.isEmpty) _showOfferQueue = false;
           }),
           onLocated: (point) => _meNotifier.value = point,
         ),
@@ -272,8 +294,10 @@ class _OilMapTab extends StatelessWidget {
     required this.meListenable,
     required this.userStream,
     required this.activeJobStream,
-    required this.incoming,
-    required this.onClearIncoming,
+    required this.liveOffers,
+    required this.showOfferQueue,
+    required this.onSoftDismissOffer,
+    required this.onConsumedOffer,
     required this.onLocated,
   });
 
@@ -283,8 +307,10 @@ class _OilMapTab extends StatelessWidget {
   final ValueNotifier<LatLng> meListenable;
   final Stream<AppUser?> userStream;
   final Stream<Job?> activeJobStream;
-  final JobOffer? incoming;
-  final VoidCallback onClearIncoming;
+  final List<JobOffer> liveOffers;
+  final bool showOfferQueue;
+  final ValueChanged<String> onSoftDismissOffer;
+  final ValueChanged<String> onConsumedOffer;
   final ValueChanged<LatLng> onLocated;
 
   @override
@@ -409,12 +435,13 @@ class _OilMapTab extends StatelessWidget {
                     );
                   },
                 ),
-                if (incoming != null && job == null)
+                if (showOfferQueue && liveOffers.isNotEmpty)
                   Positioned.fill(
                     child: OilOfferOverlay(
-                      offer: incoming!,
+                      offers: liveOffers,
                       workshopName: me.name,
-                      onDone: onClearIncoming,
+                      onSoftDismiss: onSoftDismissOffer,
+                      onConsumed: onConsumedOffer,
                     ),
                   ),
               ],

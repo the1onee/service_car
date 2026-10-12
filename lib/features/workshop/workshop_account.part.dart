@@ -69,7 +69,9 @@ class _AccountPageState extends State<_AccountPage> {
       final msg = e.toString();
       if (msg.contains('cancelled') || msg.contains('Canceled')) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر رفع الصورة: $e')),
+        SnackBar(
+          content: Text(userFacingError(e, prefix: 'تعذر رفع الصورة.')),
+        ),
       );
     } finally {
       if (mounted) setState(() => _uploadingPhoto = false);
@@ -102,7 +104,9 @@ class _AccountPageState extends State<_AccountPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر حفظ الاسم: $e')),
+        SnackBar(
+          content: Text(userFacingError(e, prefix: 'تعذر حفظ الاسم.')),
+        ),
       );
     } finally {
       if (mounted) setState(() => _savingName = false);
@@ -155,7 +159,9 @@ class _AccountPageState extends State<_AccountPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر حفظ العنوان: $e')),
+        SnackBar(
+          content: Text(userFacingError(e, prefix: 'تعذر حفظ العنوان.')),
+        ),
       );
     } finally {
       if (mounted) setState(() => _savingAddress = false);

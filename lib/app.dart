@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/core/service_unavailable_screen.dart';
 import 'package:barrr/features/shell/auth_gate.dart';
 import 'package:barrr/services/auth_service.dart';
 import 'package:barrr/services/dispatch_service.dart';
@@ -55,27 +56,7 @@ class FanniApp extends StatelessWidget {
         },
         home: firebaseReady
             ? const AuthGate()
-            : const _FirebaseMissingScreen(),
-      ),
-    );
-  }
-}
-
-class _FirebaseMissingScreen extends StatelessWidget {
-  const _FirebaseMissingScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Center(
-          child: Text(
-            'تعذر تهيئة Firebase.\nشغّل flutterfire configure وضع ملف google-services.json ثم أعد التشغيل.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-        ),
+            : const ServiceUnavailableScreen(),
       ),
     );
   }

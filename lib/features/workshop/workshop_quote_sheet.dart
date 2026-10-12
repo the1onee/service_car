@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/shared/app_network_or_data_image.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/models/job.dart';
@@ -132,7 +133,7 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = 'تعذر إرسال العرض: $e';
+        _error = userFacingError(e, prefix: 'تعذر إرسال العرض.');
       });
     }
   }
@@ -189,7 +190,7 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
               if ((job?.carModel ?? widget.offer.carModel).isNotEmpty)
                 job?.carModel ?? widget.offer.carModel,
               if ((job?.carYear ?? '').isNotEmpty) '(${job!.carYear})',
-            ].where((e) => e != null && e.toString().isNotEmpty).join(' ');
+            ].where((e) => e.toString().isNotEmpty).join(' ');
             final imageUrl = () {
               final fromJob = job?.partImageUrl.trim() ?? '';
               if (fromJob.isNotEmpty) return fromJob;

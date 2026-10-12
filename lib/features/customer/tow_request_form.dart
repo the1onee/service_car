@@ -6,6 +6,7 @@ import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/geo.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/core/user_error.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
@@ -238,7 +239,9 @@ class _TowRequestFormState extends State<TowRequestForm> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر إرسال الطلب: $e')),
+        SnackBar(
+          content: Text(userFacingError(e, prefix: 'تعذر إرسال الطلب.')),
+        ),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);

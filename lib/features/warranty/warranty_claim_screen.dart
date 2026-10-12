@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/warranty/warranty_form.dart';
@@ -77,7 +78,9 @@ class _WarrantyClaimScreenState extends State<WarrantyClaimScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر إرسال المطالبة: $e')),
+        SnackBar(
+          content: Text(userFacingError(e, prefix: 'تعذر إرسال المطالبة.')),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);

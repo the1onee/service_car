@@ -541,6 +541,9 @@ class JobRepository {
       tx.update(jobRef, {
         'technicianId': technicianId,
         'technicianName': technicianName,
+        'lastAssignedTechnicianId': technicianId,
+        'cancelledBy': FieldValue.delete(),
+        'cancelReason': FieldValue.delete(),
         'initialPrice': initialPrice,
         'status': JobStatus.enRoute.name,
       });
@@ -679,6 +682,9 @@ class JobRepository {
               : (isParts
                   ? 'ورشة'
                   : (job?.isTowOrder == true ? 'سطحة' : 'فني'))),
+      'lastAssignedTechnicianId': offer.technicianId,
+      'cancelledBy': FieldValue.delete(),
+      'cancelReason': FieldValue.delete(),
       'initialPrice': price,
       if (isParts && price != null) 'finalPrice': price,
       'status': directAssign ? JobStatus.enRoute.name : JobStatus.quoted.name,
@@ -914,10 +920,13 @@ class JobRepository {
       throw StateError('لا يمكن إلغاء الطلب بعد بدء العمل');
     }
     await expireOpenOffers(jobId);
+    final prevTech = job.technicianId;
     await _jobs.doc(jobId).update({
       'status': JobStatus.cancelled.name,
       'technicianId': null,
       'technicianName': null,
+      if (prevTech != null && prevTech.isNotEmpty)
+        'lastAssignedTechnicianId': prevTech,
       'cancelledBy': 'customer',
       'cancelReason': reason.trim(),
     });
@@ -931,10 +940,13 @@ class JobRepository {
       throw StateError('لا يمكن الانسحاب بعد بدء العمل');
     }
     await expireOpenOffers(jobId);
+    final prevTech = job.technicianId;
     await _jobs.doc(jobId).update({
       'status': JobStatus.dispatching.name,
       'technicianId': null,
       'technicianName': null,
+      if (prevTech != null && prevTech.isNotEmpty)
+        'lastAssignedTechnicianId': prevTech,
       'cancelledBy': 'technician',
       'cancelReason': reason.trim(),
       'exactLocation': null,
@@ -953,10 +965,13 @@ class JobRepository {
       throw StateError('لا يمكن إلغاء الطلب بعد بدء التنفيذ');
     }
     await expireOpenOffers(jobId);
+    final prevTech = job.technicianId;
     await _jobs.doc(jobId).update({
       'status': JobStatus.cancelled.name,
       'technicianId': null,
       'technicianName': null,
+      if (prevTech != null && prevTech.isNotEmpty)
+        'lastAssignedTechnicianId': prevTech,
       'cancelledBy': 'workshop',
       'cancelReason': reason.trim(),
       'exactLocation': null,

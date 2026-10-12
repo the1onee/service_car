@@ -10,6 +10,7 @@ import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/geo.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/customer/customer_landing.dart';
 import 'package:barrr/features/customer/customer_request_map.dart';
 import 'package:barrr/features/customer/customer_ledger_page.dart';
@@ -309,7 +310,9 @@ class _CustomerHomeState extends State<CustomerHome> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر إرسال الطلب: $e')),
+        SnackBar(
+          content: Text(userFacingError(e, prefix: 'تعذر إرسال الطلب.')),
+        ),
       );
       if (mounted) setState(() => _submitting = false);
     }
