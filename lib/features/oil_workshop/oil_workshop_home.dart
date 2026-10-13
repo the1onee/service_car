@@ -1,17 +1,19 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
-import 'package:barrr/core/user_error.dart';
+import 'package:barrr/features/shared/account_shared.dart';
 import 'package:barrr/features/auth/add_phone_screen.dart';
 import 'package:barrr/features/legal/privacy_view_screen.dart';
 import 'package:barrr/features/legal/terms_view_screen.dart';
@@ -19,7 +21,6 @@ import 'package:barrr/features/support/support_screen.dart';
 import 'package:barrr/features/jobs/orders_screen.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/oil_workshop/oil_offer_overlay.dart';
-import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/shared/osm_map.dart';
 import 'package:barrr/features/technician/tech_job_panel.dart';
@@ -31,7 +32,6 @@ import 'package:barrr/models/wallet_entry.dart';
 import 'package:barrr/models/wallet_top_up.dart';
 import 'package:barrr/services/fcm_service.dart';
 import 'package:barrr/services/geo_write_throttle.dart';
-import 'package:barrr/services/profile_photo_upload.dart';
 import 'package:barrr/services/wallet_top_up_upload.dart';
 
 part 'oil_workshop_wallet.part.dart';

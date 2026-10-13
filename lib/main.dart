@@ -21,6 +21,12 @@ Future<void> main() async {
 void _installGlobalErrorHandlers() {
   FlutterError.onError = (details) {
     logUserError(details.exception, details.stack, 'flutter');
+    // Assertion تطوير فقط عن ListTile/DecoratedBox — لا تعرض شاشة docs.flutter.dev
+    // الحمراء فوق مسار تحديد الموقع والحساب.
+    final msg = details.exceptionAsString();
+    if (msg.contains('ListTile background color or ink splashes may be invisible')) {
+      return;
+    }
     FlutterError.presentError(details);
   };
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
@@ -512,15 +513,12 @@ class _BodyState extends State<_Body> {
     try {
       await AppScope.of(context).jobs.customerConfirmPartsReceived(job.id);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم تأكيد استلام الطلب.')),
-      );
+      AppSnackBar.showSuccess(context, 'تم تأكيد استلام الطلب.');
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(userFacingError(e, prefix: 'تعذّر تأكيد الاستلام.')),
-        ),
+      AppSnackBar.showError(
+        context,
+        userFacingError(e, prefix: 'تعذّر تأكيد الاستلام.'),
       );
     }
   }
@@ -529,15 +527,12 @@ class _BodyState extends State<_Body> {
     try {
       await AppScope.of(context).jobs.markPartsShipped(job.id);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم تأكيد تجهيز/إرسال القطعة للعميل.')),
-      );
+      AppSnackBar.showSuccess(context, 'تم تأكيد تجهيز/إرسال القطعة للعميل.');
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(userFacingError(e, prefix: 'تعذّر تأكيد الإرسال.')),
-        ),
+      AppSnackBar.showError(
+        context,
+        userFacingError(e, prefix: 'تعذّر تأكيد الإرسال.'),
       );
     }
   }
@@ -572,12 +567,10 @@ class _BodyState extends State<_Body> {
     try {
       await AppScope.of(context).jobs.customerCancelJob(job.id, reason: reason);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم إلغاء الطلب.')),
-      );
+      AppSnackBar.showInfo(context, 'تم إلغاء الطلب.');
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
+      AppSnackBar.showError(context, userFacingError(e));
     }
   }
 

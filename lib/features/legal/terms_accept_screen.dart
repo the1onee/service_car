@@ -65,82 +65,82 @@ class _TermsAcceptScreenState extends State<TermsAcceptScreen> {
               ),
               const SizedBox(height: 12),
               Expanded(
-                child: Container(
-                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
-                  decoration: BoxDecoration(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Material(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        RoleTerms.titleFor(widget.profile.role),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: Text(
-                            RoleTerms.bodyFor(widget.profile.role).trim(),
+                    clipBehavior: Clip.antiAlias,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            RoleTerms.titleFor(widget.profile.role),
                             style: const TextStyle(
-                              height: 1.6,
-                              color: AppColors.inkSoft,
-                              fontSize: 14,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => TermsViewScreen.open(
-                          context,
-                          role: widget.profile.role,
-                        ),
-                        child: const Text('فتح الشروط في صفحة كاملة'),
-                      ),
-                      TextButton(
-                        onPressed: () => PrivacyViewScreen.open(context),
-                        child: const Text('سياسة الخصوصية'),
-                      ),
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        value: _checked,
-                        onChanged: _busy
-                            ? null
-                            : (v) => setState(() => _checked = v == true),
-                        title: const Text(
-                          'أوافق على شروط الاستخدام وسياسة الخصوصية',
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-                      if (_error != null) ...[
-                        Text(
-                          _error!,
-                          style: const TextStyle(color: AppColors.danger),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                      FilledButton(
-                        onPressed: (_checked && !_busy) ? _accept : null,
-                        child: _busy
-                            ? const SizedBox(
-                                height: 22,
-                                width: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                          const SizedBox(height: 12),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: Text(
+                                RoleTerms.bodyFor(widget.profile.role).trim(),
+                                style: const TextStyle(
+                                  height: 1.6,
+                                  color: AppColors.inkSoft,
+                                  fontSize: 14,
                                 ),
-                              )
-                            : const Text('متابعة'),
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => TermsViewScreen.open(
+                              context,
+                              role: widget.profile.role,
+                            ),
+                            child: const Text('فتح الشروط في صفحة كاملة'),
+                          ),
+                          TextButton(
+                            onPressed: () => PrivacyViewScreen.open(context),
+                            child: const Text('سياسة الخصوصية'),
+                          ),
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            value: _checked,
+                            onChanged: _busy
+                                ? null
+                                : (v) => setState(() => _checked = v == true),
+                            title: const Text(
+                              'أوافق على شروط الاستخدام وسياسة الخصوصية',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            controlAffinity: ListTileControlAffinity.leading,
+                          ),
+                          if (_error != null) ...[
+                            Text(
+                              _error!,
+                              style: const TextStyle(color: AppColors.danger),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          FilledButton(
+                            onPressed: (_checked && !_busy) ? _accept : null,
+                            child: _busy
+                                ? const SizedBox(
+                                    height: 22,
+                                    width: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('متابعة'),
+                          ),
+                        ],
                       ),
-                    ],
                     ),
                   ),
                 ),

@@ -1,23 +1,24 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
+import 'package:barrr/features/shared/account_shared.dart';
 import 'package:barrr/features/auth/add_phone_screen.dart';
 import 'package:barrr/features/legal/privacy_view_screen.dart';
 import 'package:barrr/features/legal/terms_view_screen.dart';
 import 'package:barrr/features/support/support_screen.dart';
 import 'package:barrr/features/jobs/orders_screen.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
-import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/features/shared/app_network_or_data_image.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/workshop/workshop_quote_sheet.dart';
@@ -28,7 +29,6 @@ import 'package:barrr/models/job_offer.dart';
 import 'package:barrr/models/wallet_entry.dart';
 import 'package:barrr/models/wallet_top_up.dart';
 import 'package:barrr/services/fcm_service.dart';
-import 'package:barrr/services/profile_photo_upload.dart';
 import 'package:barrr/services/wallet_top_up_upload.dart';
 
 part 'workshop_wallet.part.dart';
@@ -141,9 +141,7 @@ class _WorkshopHomeState extends State<WorkshopHome> {
   Future<void> _markShipped(Job job) async {
     await AppScope.of(context).jobs.markPartsShipped(job.id);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم تأكيد تجهيز/إرسال القطعة للعميل.')),
-    );
+    AppSnackBar.showSuccess(context, 'تم تأكيد تجهيز/إرسال القطعة للعميل.');
   }
 
   Future<void> _cancelJob(Job job) async {
@@ -179,23 +177,21 @@ class _WorkshopHomeState extends State<WorkshopHome> {
             reason: reason,
           );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم إلغاء الطلب.')),
-      );
+      AppSnackBar.showInfo(context, 'تم إلغاء الطلب.');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$e')),
+      AppSnackBar.showError(
+        context,
+        userFacingError(e, prefix: 'تعذر إلغاء الطلب.'),
       );
     }
   }
 
   void _openQuote(JobOffer offer, {required bool locked}) {
     if (locked) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('الحساب مقفل — اشحن الرصيد المطلوب أولاً.'),
-        ),
+      AppSnackBar.showError(
+        context,
+        'الحساب مقفل — اشحن الرصيد المطلوب أولاً.',
       );
       _onTab(2);
       return;

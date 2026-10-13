@@ -8,14 +8,17 @@ class _AuthBackdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Positioned.fill(
       child: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [AppColors.slate, AppColors.slateMid, AppColors.canvas],
-            stops: [0, 0.32, 0.66],
+            colors: isDark
+                ? const [Color(0xFF020617), Color(0xFF0F172A), Color(0xFF0B1120)]
+                : const [AppColors.slate, AppColors.slateMid, AppColors.canvas],
+            stops: const [0, 0.32, 0.66],
           ),
         ),
         child: Stack(
@@ -136,11 +139,12 @@ class _StageSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       height: 50,
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        color: AppColors.canvas,
+        color: isDark ? const Color(0xFF0F172A) : AppColors.canvas,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Stack(
@@ -204,23 +208,24 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 21,
             fontWeight: FontWeight.w800,
-            color: AppColors.ink,
+            color: isDark ? const Color(0xFFF1F5F9) : AppColors.ink,
           ),
         ),
         const SizedBox(height: 4),
         Text(
           subtitle,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13.5,
-            color: AppColors.inkSoft,
+            color: isDark ? const Color(0xFF94A3B8) : AppColors.inkSoft,
             height: 1.5,
           ),
         ),

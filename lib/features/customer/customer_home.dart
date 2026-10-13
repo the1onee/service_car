@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/geo.dart';
@@ -250,18 +251,14 @@ class _CustomerHomeState extends State<CustomerHome> {
     final vehicle = _vehicleType;
     if (service == null) return;
     if (vehicle == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.selectVehicleTypeRequired)),
-      );
+      AppSnackBar.showError(context, AppStrings.selectVehicleTypeRequired);
       return;
     }
     try {
       _pin = _map.camera.center;
     } catch (_) {}
     if (!_pinInZone()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.outsideCoverage)),
-      );
+      AppSnackBar.showError(context, AppStrings.outsideCoverage);
       return;
     }
     setState(() => _submitting = true);
@@ -294,11 +291,7 @@ class _CustomerHomeState extends State<CustomerHome> {
       }
       if (!mounted) return;
       if (dispatchFailed) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(AppStrings.jobCreatedDispatchFailed),
-          ),
-        );
+        AppSnackBar.showInfo(context, AppStrings.jobCreatedDispatchFailed);
       }
       setState(() {
         _submitting = false;
@@ -309,10 +302,9 @@ class _CustomerHomeState extends State<CustomerHome> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(userFacingError(e, prefix: 'تعذر إرسال الطلب.')),
-        ),
+      AppSnackBar.showError(
+        context,
+        userFacingError(e, prefix: 'تعذر إرسال الطلب.'),
       );
       if (mounted) setState(() => _submitting = false);
     }
@@ -365,20 +357,18 @@ class _CustomerHomeState extends State<CustomerHome> {
     if (!mounted) return;
     if (result.outcome != LocationOutcome.ok) {
       final forever = result.outcome == LocationOutcome.deniedForever;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            forever
-                ? AppStrings.locationPermissionDeniedForever
-                : AppStrings.locationPermissionDenied,
-          ),
-          action: forever
-              ? SnackBarAction(
-                  label: AppStrings.openSettings,
-                  onPressed: () => scope.location.openAppSettings(),
-                )
-              : null,
-        ),
+      AppSnackBar.showError(
+        context,
+        forever
+            ? AppStrings.locationPermissionDeniedForever
+            : AppStrings.locationPermissionDenied,
+        action: forever
+            ? SnackBarAction(
+                label: AppStrings.openSettings,
+                textColor: Colors.white,
+                onPressed: () => scope.location.openAppSettings(),
+              )
+            : null,
       );
     }
     _pin = result.latLng;

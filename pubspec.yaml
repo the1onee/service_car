@@ -23,6 +23,9 @@ dependencies:
   http: ^1.2.2
   shared_preferences: ^2.5.3
   cached_network_image: ^3.4.1
+  flutter_svg: ^2.0.10
+  google_fonts: ^6.2.1
+  just_audio: ^0.9.34
   google_sign_in: ^7.2.0
   flutter_dotenv: ^6.0.1
 
@@ -52,6 +55,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/
+    - assets/icons/
+    - assets/sounds/
   fonts:
     - family: NotoSansArabic
       fonts:

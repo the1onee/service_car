@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/geo.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
@@ -191,29 +192,21 @@ class _OilRequestFormState extends State<OilRequestForm> {
     if (_submitting) return;
     final vehicleType = _vehicleType;
     if (vehicleType == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('اختر نوع المركبة')),
-      );
+      AppSnackBar.showError(context, 'اختر نوع المركبة');
       return;
     }
     final oil = _oil;
     if (oil == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('اختر نوع الزيت')),
-      );
+      AppSnackBar.showError(context, 'اختر نوع الزيت');
       return;
     }
     if (!_inZone) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('الموقع خارج نطاق التغطية')),
-      );
+      AppSnackBar.showError(context, 'الموقع خارج نطاق التغطية');
       return;
     }
     final phone = _phone.text.trim();
     if (phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('أدخل رقم الاتصال')),
-      );
+      AppSnackBar.showError(context, 'أدخل رقم الاتصال');
       return;
     }
 
@@ -279,19 +272,14 @@ class _OilRequestFormState extends State<OilRequestForm> {
       }
       if (!mounted) return;
       if (dispatchFailed) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(AppStrings.jobCreatedDispatchFailed),
-          ),
-        );
+        AppSnackBar.showInfo(context, AppStrings.jobCreatedDispatchFailed);
       }
       widget.onSubmitted();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(userFacingError(e, prefix: 'تعذر إرسال الطلب.')),
-        ),
+      AppSnackBar.showError(
+        context,
+        userFacingError(e, prefix: 'تعذر إرسال الطلب.'),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);

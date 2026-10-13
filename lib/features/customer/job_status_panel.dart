@@ -253,20 +253,23 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
     final reserve = bill <= 0 ? 0.0 : (balance < bill ? balance : bill);
     return [
       const SizedBox(height: 12),
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        value: job.useWallet,
-        title: Text('استخدم الرصيد (${formatIqd(balance)})'),
-        subtitle: job.useWallet
-            ? Text('يُخصم ${formatIqd(job.walletReserve)} من المطلوب نقداً')
-            : null,
-        onChanged: (use) {
-          AppScope.of(context).jobs.setUseWallet(
-                jobId: job.id,
-                use: use,
-                reserve: use ? reserve : 0,
-              );
-        },
+      Material(
+        type: MaterialType.transparency,
+        child: SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: job.useWallet,
+          title: Text('استخدم الرصيد (${formatIqd(balance)})'),
+          subtitle: job.useWallet
+              ? Text('يُخصم ${formatIqd(job.walletReserve)} من المطلوب نقداً')
+              : null,
+          onChanged: (use) {
+            AppScope.of(context).jobs.setUseWallet(
+                  jobId: job.id,
+                  use: use,
+                  reserve: use ? reserve : 0,
+                );
+          },
+        ),
       ),
     ];
   }

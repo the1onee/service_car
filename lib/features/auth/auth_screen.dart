@@ -216,18 +216,60 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
             ),
           ),
+          PositionedDirectional(
+            top: 16,
+            end: 16,
+            child: SafeArea(
+              child: ValueListenableBuilder<ThemeMode>(
+                valueListenable: AppTheme.themeModeNotifier,
+                builder: (context, mode, _) {
+                  final isDark = mode == ThemeMode.dark ||
+                      (mode == ThemeMode.system &&
+                          Theme.of(context).brightness == Brightness.dark);
+                  return IconButton(
+                    style: IconButton.styleFrom(
+                      backgroundColor: isDark
+                          ? const Color(0xFF1E293B)
+                          : Colors.white.withValues(alpha: 0.9),
+                      foregroundColor:
+                          isDark ? AppColors.amber : AppColors.slate,
+                      elevation: 2,
+                    ),
+                    tooltip: isDark
+                        ? 'التبديل إلى الوضع النهاري'
+                        : 'التبديل إلى الوضع الليلي',
+                    icon: Icon(
+                      isDark
+                          ? Icons.light_mode_rounded
+                          : Icons.dark_mode_rounded,
+                      size: 20,
+                    ),
+                    onPressed: AppTheme.toggleTheme,
+                  );
+                },
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _card() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: isDark ? const Color(0xFF1E293B) : AppColors.surface,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.6)),
-        boxShadow: AppTheme.softShadow(opacity: 0.14),
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF334155)
+              : Colors.white.withValues(alpha: 0.6),
+        ),
+        boxShadow: AppTheme.softShadow(
+          color: isDark ? Colors.black : AppColors.slate,
+          opacity: isDark ? 0.35 : 0.14,
+        ),
       ),
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 24),
       child: AnimatedSize(

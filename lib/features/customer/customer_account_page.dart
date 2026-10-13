@@ -1,15 +1,13 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/strings.dart';
-import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/auth/add_phone_screen.dart';
+import 'package:barrr/features/shared/account_shared.dart';
 import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
-import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/core/app_brand.dart';
 import 'package:barrr/features/legal/privacy_view_screen.dart';
@@ -18,7 +16,6 @@ import 'package:barrr/features/support/support_screen.dart';
 import 'package:barrr/features/warranty/warranties_screen.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
-import 'package:barrr/services/profile_photo_upload.dart';
 
 /// صفحة حساب العميل — تعديل الاسم وصورة البروفايل.
 class CustomerAccountPage extends StatefulWidget {
@@ -78,63 +75,28 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
   Future<void> _changePhoto() async {
     if (_uploadingPhoto) return;
     setState(() => _uploadingPhoto = true);
-    final users = AppScope.of(context).users;
-    final uid = widget.profile.id;
-    try {
-      final url = await ProfilePhotoUpload().pickAndUpload();
-      await users.updateProfile(uid, photoUrl: url);
-      if (!mounted) return;
-      setState(() => _photoSaved = true);
+    final url = await AccountActions.changePhoto(context, uid: widget.profile.id);
+    if (!mounted) return;
+    setState(() {
+      _uploadingPhoto = false;
+      if (url != null) _photoSaved = true;
+    });
+    if (url != null) {
       Future<void>.delayed(const Duration(milliseconds: 1400), () {
         if (mounted) setState(() => _photoSaved = false);
       });
-    } catch (e) {
-      if (!mounted) return;
-      final msg = e.toString();
-      if (msg.contains('cancelled') || msg.contains('Canceled')) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(userFacingError(e, prefix: 'تعذر رفع الصورة.')),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _uploadingPhoto = false);
     }
   }
 
   Future<void> _editName() async {
-    final next = await showDialog<String>(
-      context: context,
-      builder: (ctx) => _PromptDialog(
-        title: 'تعديل الاسم',
-        initial: widget.profile.name,
-      ),
-    );
-    if (next == null || !mounted) return;
-    if (next.isEmpty || next == widget.profile.name) return;
-
-    final users = AppScope.of(context).users;
-    final uid = widget.profile.id;
+    if (_savingName) return;
     setState(() => _savingName = true);
-    try {
-      await users.updateProfile(uid, name: next);
-      try {
-        await FirebaseAuth.instance.currentUser?.updateDisplayName(next);
-      } catch (_) {}
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم تحديث الاسم')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(userFacingError(e, prefix: 'تعذر حفظ الاسم.')),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _savingName = false);
-    }
+    await AccountActions.editName(
+      context,
+      uid: widget.profile.id,
+      currentName: widget.profile.name,
+    );
+    if (mounted) setState(() => _savingName = false);
   }
 
   void _showAbout(BuildContext context) {
@@ -165,65 +127,22 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
     final LatLng? initial = me.geo != null
         ? LatLng(me.geo!.latitude, me.geo!.longitude)
         : null;
-    final picked = await pickAddressOnMap(
+    setState(() => _savingAddress = true);
+    await AccountActions.editAddress(
       context,
-      initial: initial,
+      uid: me.id,
+      currentGeo: initial,
+      currentAddress: me.address,
       title: 'تحديد عنوانك',
     );
-    if (picked == null || !mounted) return;
-
-    final confirmed = await showDialog<String>(
-      context: context,
-      builder: (ctx) => _PromptDialog(
-        title: 'تأكيد العنوان',
-        initial: picked.label.isNotEmpty
-            ? picked.label
-            : (me.address.trim().isEmpty ? '' : me.address),
-        maxLines: 3,
-      ),
-    );
-    if (confirmed == null || !mounted) return;
-    if (confirmed.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('اكتب العنوان قبل الحفظ')),
-      );
-      return;
-    }
-
-    final users = AppScope.of(context).users;
-    final uid = me.id;
-    setState(() => _savingAddress = true);
-    try {
-      await users.setAddressAndGeo(
-        uid,
-        address: confirmed,
-        geo: GeoPoint(picked.latLng.latitude, picked.latLng.longitude),
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم تحديث العنوان')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(userFacingError(e, prefix: 'تعذر حفظ العنوان.')),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _savingAddress = false);
-    }
+    if (mounted) setState(() => _savingAddress = false);
   }
 
   Future<void> _editPhone() async {
-    final saved = await showPhoneEditor(
+    await AccountActions.editPhone(
       context,
       uid: widget.profile.id,
       currentPhone: widget.profile.phone,
-    );
-    if (!saved || !mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم حفظ الرقم')),
     );
   }
 
@@ -232,7 +151,7 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
     final me = widget.profile;
     final city = widget.city ?? me.cityNameAr;
     return ColoredBox(
-      color: const Color(0xFFF8F9FF),
+      color: Theme.of(context).scaffoldBackgroundColor,
       child: Column(
         children: [
           FieldTopBar(
@@ -339,6 +258,8 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                               : me.address),
                       onTap: _savingAddress ? () {} : _editAddress,
                     ),
+                    const Divider(height: 1),
+                    const AccountThemeTile(),
                     const Divider(height: 1),
                     _MenuTile(
                       icon: Icons.info_outline_rounded,
@@ -481,10 +402,12 @@ class _ProfileHero extends StatelessWidget {
                                     ),
                                   ),
                                 )
-                              : Image.network(
-                                  photo,
+                              : CachedNetworkImage(
+                                  imageUrl: photo,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Center(
+                                  placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+
+                                  errorWidget: (context, url, error) => Center(
                                     child: Text(
                                       initial,
                                       style: const TextStyle(
@@ -583,165 +506,7 @@ class _ProfileHero extends StatelessWidget {
   }
 }
 
-class _StatCard extends StatelessWidget {
-  const _StatCard({
-    required this.icon,
-    required this.title,
-    required this.value,
-  });
+typedef _StatCard = AccountStatCard;
+typedef _MenuCard = AccountMenuCard;
+typedef _MenuTile = AccountTile;
 
-  final IconData icon;
-  final String title;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: AppTheme.cardShadow(),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: AppColors.amberDeep),
-          const SizedBox(height: 10),
-          Text(
-            value,
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 22,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MenuCard extends StatelessWidget {
-  const _MenuCard({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: AppTheme.cardShadow(),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Material(
-        color: Colors.white,
-        child: Column(children: children),
-      ),
-    );
-  }
-}
-
-class _MenuTile extends StatelessWidget {
-  const _MenuTile({
-    required this.icon,
-    required this.title,
-    required this.onTap,
-    this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      onTap: onTap,
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: AppColors.recessed,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, color: AppColors.slate, size: 20),
-      ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-      subtitle: subtitle == null
-          ? null
-          : Text(
-              subtitle!,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
-            ),
-      trailing: const Icon(Icons.chevron_left, color: AppColors.inkSoft),
-    );
-  }
-}
-
-class _PromptDialog extends StatefulWidget {
-  const _PromptDialog({
-    required this.title,
-    required this.initial,
-    this.maxLines = 1,
-  });
-
-  final String title;
-  final String initial;
-  final int maxLines;
-
-  @override
-  State<_PromptDialog> createState() => _PromptDialogState();
-}
-
-class _PromptDialogState extends State<_PromptDialog> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initial);
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _save() => Navigator.of(context).pop(_controller.text.trim());
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        maxLines: widget.maxLines,
-        textInputAction:
-            widget.maxLines == 1 ? TextInputAction.done : TextInputAction.newline,
-        decoration: InputDecoration(
-          hintText: widget.maxLines == 1 ? 'الاسم' : 'العنوان',
-          border: const OutlineInputBorder(),
-        ),
-        onSubmitted: widget.maxLines == 1 ? (_) => _save() : null,
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('إلغاء'),
-        ),
-        FilledButton(
-          onPressed: _save,
-          style: FilledButton.styleFrom(backgroundColor: AppColors.slate),
-          child: const Text('حفظ'),
-        ),
-      ],
-    );
-  }
-}

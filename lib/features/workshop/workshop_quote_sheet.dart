@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
@@ -125,8 +126,9 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
         });
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم إرسال عرض السعر للعميل بنجاح.')),
+      AppSnackBar.showSuccess(
+        context,
+        'تم إرسال عرض السعر للعميل بنجاح.',
       );
       widget.onDone();
     } catch (e) {
@@ -663,25 +665,29 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
                                   onChanged: (_) => setState(() {}),
                                 ),
                                 const SizedBox(height: 14),
-                                SwitchListTile.adaptive(
-                                  contentPadding: EdgeInsets.zero,
-                                  value: _warrantyEnabled,
-                                  onChanged: (v) => setState(() {
-                                    _warrantyEnabled = v;
-                                    if (v && _warrantyDays.text.trim().isEmpty) {
-                                      _warrantyDays.text = '7';
-                                    }
-                                  }),
-                                  title: const Text(
-                                    'إضافة ضمان للقطعة',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
+                                Material(
+                                  type: MaterialType.transparency,
+                                  child: SwitchListTile.adaptive(
+                                    contentPadding: EdgeInsets.zero,
+                                    value: _warrantyEnabled,
+                                    onChanged: (v) => setState(() {
+                                      _warrantyEnabled = v;
+                                      if (v &&
+                                          _warrantyDays.text.trim().isEmpty) {
+                                        _warrantyDays.text = '7';
+                                      }
+                                    }),
+                                    title: const Text(
+                                      'إضافة ضمان للقطعة',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
                                     ),
-                                  ),
-                                  subtitle: const Text(
-                                    'اختياري — غير مفعّل تلقائياً',
-                                    style: TextStyle(fontSize: 12),
+                                    subtitle: const Text(
+                                      'اختياري — غير مفعّل تلقائياً',
+                                      style: TextStyle(fontSize: 12),
+                                    ),
                                   ),
                                 ),
                                 if (_warrantyEnabled) ...[

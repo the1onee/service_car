@@ -54,13 +54,19 @@ class FieldShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: AppColors.canvas,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: body,
       bottomNavigationBar: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          border: Border(top: BorderSide(color: AppColors.outline)),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          border: Border(
+            top: BorderSide(
+              color: isDark ? const Color(0xFF334155) : AppColors.outline,
+            ),
+          ),
         ),
         child: SafeArea(
           top: false,
@@ -117,8 +123,9 @@ class FieldTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bg = Theme.of(context).scaffoldBackgroundColor;
     return Material(
-      color: AppColors.canvas.withValues(alpha: 0.92),
+      color: bg.withValues(alpha: 0.92),
       child: SafeArea(
         bottom: false,
         child: SizedBox(
@@ -210,22 +217,21 @@ class FieldCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Material(
+      color: isDark ? const Color(0xFF1E293B) : AppColors.surface,
+      elevation: 1,
+      shadowColor: isDark ? Colors.black38 : AppColors.slate.withValues(alpha: 0.12),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: AppTheme.cardShadow(),
+        side: BorderSide(
+          color: isDark ? const Color(0xFF334155) : AppColors.outline,
+        ),
       ),
-      child: Material(
-        color: AppColors.surface,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.outline),
-        ),
-        child: Padding(
-          padding: padding,
-          child: child,
-        ),
+      child: Padding(
+        padding: padding,
+        child: child,
       ),
     );
   }

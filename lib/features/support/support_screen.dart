@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
 import 'package:barrr/models/app_user.dart';
@@ -57,14 +58,13 @@ class _SupportScreenState extends State<SupportScreen> {
       if (!mounted) return;
       _subject.clear();
       _body.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم إرسال طلب الدعم.')),
-      );
+      AppSnackBar.showSuccess(context, 'تم إرسال طلب الدعم.');
       FocusScope.of(context).unfocus();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingError(e, prefix: 'تعذّر الإرسال.'))),
+      AppSnackBar.showError(
+        context,
+        userFacingError(e, prefix: 'تعذّر الإرسال.'),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -248,9 +248,7 @@ class _TicketCardState extends State<_TicketCard> {
       _reply.clear();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userFacingError(e))),
-      );
+      AppSnackBar.showError(context, userFacingError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

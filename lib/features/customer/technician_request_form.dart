@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/cloudinary_config.dart';
 import 'package:barrr/core/geo.dart';
 import 'package:barrr/core/strings.dart';
@@ -162,9 +163,7 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
     } catch (e) {
       if (!mounted) return;
       if (e.toString().contains('cancelled')) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر إرفاق الصورة: $e')),
-      );
+      AppSnackBar.showError(context, 'تعذر إرفاق الصورة: $e');
     } finally {
       if (mounted) setState(() => _pickingImage = false);
     }
@@ -175,28 +174,20 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
     final service = _selected;
     final vehicleType = _vehicleType;
     if (service == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('اختر نوع الخدمة أو العطل')),
-      );
+      AppSnackBar.showError(context, 'اختر نوع الخدمة أو العطل');
       return;
     }
     if (vehicleType == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('اختر نوع المركبة')),
-      );
+      AppSnackBar.showError(context, 'اختر نوع المركبة');
       return;
     }
     if (!_inZone) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('الموقع خارج نطاق التغطية')),
-      );
+      AppSnackBar.showError(context, 'الموقع خارج نطاق التغطية');
       return;
     }
     final phone = _phone.text.trim();
     if (phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('أدخل رقم الاتصال')),
-      );
+      AppSnackBar.showError(context, 'أدخل رقم الاتصال');
       return;
     }
 
@@ -255,18 +246,12 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
       }
       if (!mounted) return;
       if (dispatchFailed) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(AppStrings.jobCreatedDispatchFailed),
-          ),
-        );
+        AppSnackBar.showInfo(context, AppStrings.jobCreatedDispatchFailed);
       }
       widget.onSubmitted();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر إرسال الطلب: $e')),
-      );
+      AppSnackBar.showError(context, 'تعذر إرسال الطلب: $e');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

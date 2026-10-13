@@ -60,22 +60,32 @@ class _AddressMapPageState extends State<_AddressMapPage> {
   }
 
   Future<void> _boot() async {
-    final scope = AppScope.of(context);
-    final settings = await scope.settings.getSettings();
-    final zone = await scope.settings.getActiveCity();
-    final fallback = widget.initial ??
-        (zone != null
-            ? LatLng(zone.centerLat, zone.centerLng)
-            : const LatLng(AppConstants.defaultLat, AppConstants.defaultLng));
-    final loc = widget.initial ??
-        await scope.location.currentOrDefault(fallback: fallback);
-    if (!mounted) return;
-    setState(() {
-      _zone = zone;
-      _zoom = settings.defaultZoom;
-      _pin = loc;
-      _ready = true;
-    });
+    try {
+      final scope = AppScope.of(context);
+      final settings = await scope.settings.getSettings();
+      final zone = await scope.settings.getActiveCity();
+      final fallback = widget.initial ??
+          (zone != null
+              ? LatLng(zone.centerLat, zone.centerLng)
+              : const LatLng(AppConstants.defaultLat, AppConstants.defaultLng));
+      final loc = widget.initial ??
+          await scope.location.currentOrDefault(fallback: fallback);
+      if (!mounted) return;
+      setState(() {
+        _zone = zone;
+        _zoom = settings.defaultZoom;
+        _pin = loc;
+        _ready = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _pin = widget.initial ??
+            const LatLng(AppConstants.defaultLat, AppConstants.defaultLng);
+        _zoom = 12;
+        _ready = true;
+      });
+    }
   }
 
   bool _inZone() {

@@ -399,9 +399,7 @@ class _WalletRechargePanelState extends State<_WalletRechargePanel> {
   Future<void> _copyCard(String number) async {
     await Clipboard.setData(ClipboardData(text: number));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم نسخ رقم البطاقة')),
-    );
+    AppSnackBar.showSuccess(context, 'تم نسخ رقم البطاقة');
   }
 
   Future<void> _pickReceipt() async {
@@ -442,10 +440,9 @@ class _WalletRechargePanelState extends State<_WalletRechargePanel> {
       _amountCtrl.clear();
       _noteCtrl.clear();
       setState(() => _receipt = null);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تم إرسال الطلب — بانتظار موافقة الإدارة لإضافة المبلغ'),
-        ),
+      AppSnackBar.showSuccess(
+        context,
+        'تم إرسال الطلب — بانتظار موافقة الإدارة لإضافة المبلغ',
       );
     } catch (e) {
       if (!mounted) return;

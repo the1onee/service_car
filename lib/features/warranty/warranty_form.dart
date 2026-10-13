@@ -25,11 +25,14 @@ class WarrantyForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SwitchListTile(
-          title: const Text('إضافة ضمان لمدة ${AppConstants.warrantyDays} يوم'),
-          subtitle: const Text('على القطعة أو على العملية'),
-          value: enabled,
-          onChanged: onEnabled,
+        Material(
+          type: MaterialType.transparency,
+          child: SwitchListTile(
+            title: const Text('إضافة ضمان لمدة ${AppConstants.warrantyDays} يوم'),
+            subtitle: const Text('على القطعة أو على العملية'),
+            value: enabled,
+            onChanged: onEnabled,
+          ),
         ),
         if (enabled) ...[
           SegmentedButton<WarrantyType>(
