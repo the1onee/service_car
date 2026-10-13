@@ -201,6 +201,8 @@ class _AccountPageState extends State<_AccountPage> {
                     const Divider(height: 1),
                     const AccountThemeTile(),
                     const Divider(height: 1),
+                    const AccountSoundTile(),
+                    const Divider(height: 1),
                     _OilMenuTile(
                       icon: Icons.description_outlined,
                       title: 'شروط الاستخدام',

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/app_snackbar.dart';
+import 'package:barrr/core/app_sound.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/auth/add_phone_screen.dart';
@@ -195,6 +196,98 @@ class AccountThemeTile extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// عنصر التحكم بالمؤثرات الصوتية وتجربتها في قوائم الحساب.
+class AccountSoundTile extends StatefulWidget {
+  const AccountSoundTile({super.key});
+
+  @override
+  State<AccountSoundTile> createState() => _AccountSoundTileState();
+}
+
+class _AccountSoundTileState extends State<AccountSoundTile> {
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      children: [
+        SwitchListTile(
+          value: AppSoundService.isEnabled,
+          onChanged: (val) {
+            setState(() => AppSoundService.isEnabled = val);
+            if (val) AppSoundService.playOfferPenguin();
+          },
+          secondary: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF0F172A) : AppColors.recessed,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              Icons.volume_up_rounded,
+              size: 20,
+              color: isDark ? AppColors.amber : AppColors.slate,
+            ),
+          ),
+          title: Text(
+            'المؤثرات الصوتية (نغمات الطلبات)',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+              color: isDark ? const Color(0xFFF1F5F9) : AppColors.ink,
+            ),
+          ),
+          subtitle: Text(
+            AppSoundService.isEnabled
+                ? 'مفعلة (صوت البطريق وقبول الطلب)'
+                : 'مكتومة',
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? const Color(0xFF94A3B8) : AppColors.inkSoft,
+            ),
+          ),
+        ),
+        if (AppSoundService.isEnabled)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 8),
+                      minimumSize: const Size(0, 36),
+                    ),
+                    onPressed: () => AppSoundService.playOfferPenguin(),
+                    icon: const Icon(Icons.play_arrow_rounded, size: 16),
+                    label: const Text('نغمة العرض',
+                        style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 8),
+                      minimumSize: const Size(0, 36),
+                    ),
+                    onPressed: () => AppSoundService.playAcceptClient(),
+                    icon: const Icon(Icons.check_circle_outline_rounded,
+                        size: 16),
+                    label: const Text('نغمة القبول',
+                        style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

@@ -261,6 +261,8 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                     const Divider(height: 1),
                     const AccountThemeTile(),
                     const Divider(height: 1),
+                    const AccountSoundTile(),
+                    const Divider(height: 1),
                     _MenuTile(
                       icon: Icons.info_outline_rounded,
                       title: 'عن التطبيق',

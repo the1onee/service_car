@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_sound.dart';
+import 'package:barrr/core/app_svg_icons.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/models/job.dart';
@@ -112,6 +114,7 @@ class PartsOffersSection extends StatelessWidget {
                         job.status != JobStatus.inProgress &&
                         job.status != JobStatus.completed,
                     onAccept: () async {
+                      AppSoundService.playAcceptClient();
                       await AppScope.of(context).dispatch.selectOffer(
                             jobId: job.id,
                             offer: q,
@@ -226,13 +229,21 @@ class _OfferCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Text(
-            offer.technicianName ?? 'ورشة',
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
-              height: 1.35,
-            ),
+          Row(
+            children: [
+              AppSvgIcons.workshop(size: 24),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  offer.technicianName ?? 'ورشة',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ],
           ),
           if (offer.specialtyAr.isNotEmpty) ...[
             const SizedBox(height: 4),

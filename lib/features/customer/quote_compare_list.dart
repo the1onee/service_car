@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_sound.dart';
+import 'package:barrr/core/app_svg_icons.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/shared/field_ui.dart';
@@ -63,6 +65,13 @@ class QuoteCompareList extends StatelessWidget {
                     children: [
                       Row(
                         children: [
+                          AppSvgIcons.offerIcon(
+                            isWorkshop: oil ||
+                                q.isAgencyOilWorkshop ||
+                                q.isTrustedOilWorkshop,
+                            size: 26,
+                          ),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               q.technicianName ??
@@ -116,11 +125,13 @@ class QuoteCompareList extends StatelessWidget {
                       if (selectable) ...[
                         const SizedBox(height: 10),
                         FilledButton(
-                          onPressed: () =>
-                              AppScope.of(context).dispatch.selectOffer(
-                                    jobId: job.id,
-                                    offer: q,
-                                  ),
+                          onPressed: () {
+                            AppSoundService.playAcceptClient();
+                            AppScope.of(context).dispatch.selectOffer(
+                                  jobId: job.id,
+                                  offer: q,
+                                );
+                          },
                           child: Text(pickLabel),
                         ),
                       ],

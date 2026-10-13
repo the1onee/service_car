@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/app_snackbar.dart';
+import 'package:barrr/core/app_sound.dart';
+import 'package:barrr/core/app_svg_icons.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
@@ -126,6 +128,7 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
         });
         return;
       }
+      AppSoundService.playOfferPenguin();
       AppSnackBar.showSuccess(
         context,
         'تم إرسال عرض السعر للعميل بنجاح.',
@@ -222,6 +225,8 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
                             onPressed: widget.onDone,
                             icon: const Icon(Icons.close),
                           ),
+                          AppSvgIcons.workshop(size: 24),
+                          const SizedBox(width: 8),
                           const Expanded(
                             child: Text(
                               'تقديم عرض السعر',

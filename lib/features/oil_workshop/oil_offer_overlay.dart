@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_sound.dart';
+import 'package:barrr/core/app_svg_icons.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
@@ -210,6 +212,7 @@ class _OilOfferCardState extends State<_OilOfferCard> {
       widget.onConsumed();
       return;
     }
+    AppSoundService.playOfferPenguin();
     widget.onConsumed();
   }
 
@@ -233,6 +236,8 @@ class _OilOfferCardState extends State<_OilOfferCard> {
                 children: [
                   Row(
                     children: [
+                      AppSvgIcons.workshop(size: 28),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,

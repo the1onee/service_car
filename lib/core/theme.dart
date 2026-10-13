@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// لوحة «Industrial Field Utility»: سليت صناعي، كهرماني للطوارئ، زمردي للحالات الموثقة.
 class AppColors {
@@ -68,8 +69,10 @@ class AppTheme {
     Color? color,
     double? height,
   }) {
-    return TextStyle(
-      fontFamily: fontFamily,
+    return GoogleFonts.notoSansArabic(
+      textStyle: const TextStyle(
+        fontFamilyFallback: [fontFamily, 'sans-serif'],
+      ),
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color,
@@ -140,11 +143,13 @@ class AppTheme {
       scrim: AppColors.slate,
     );
 
-    final base = ThemeData(brightness: Brightness.light).textTheme.apply(
-          fontFamily: fontFamily,
-          displayColor: AppColors.ink,
-          bodyColor: AppColors.ink,
-        );
+    final base = GoogleFonts.notoSansArabicTextTheme(
+      ThemeData(brightness: Brightness.light).textTheme,
+    ).apply(
+      fontFamilyFallback: const [fontFamily, 'sans-serif'],
+      displayColor: AppColors.ink,
+      bodyColor: AppColors.ink,
+    );
     final text = base.copyWith(
       displaySmall: base.displaySmall?.copyWith(
         fontFamily: fontFamily,
@@ -385,11 +390,13 @@ class AppTheme {
       scrim: Colors.black,
     );
 
-    final base = ThemeData(brightness: Brightness.dark).textTheme.apply(
-          fontFamily: fontFamily,
-          displayColor: _darkInk,
-          bodyColor: _darkInk,
-        );
+    final base = GoogleFonts.notoSansArabicTextTheme(
+      ThemeData(brightness: Brightness.dark).textTheme,
+    ).apply(
+      fontFamilyFallback: const [fontFamily, 'sans-serif'],
+      displayColor: _darkInk,
+      bodyColor: _darkInk,
+    );
     final text = base.copyWith(
       displaySmall: base.displaySmall?.copyWith(
         fontFamily: fontFamily,
