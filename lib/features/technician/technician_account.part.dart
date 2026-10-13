@@ -287,6 +287,12 @@ class _AccountPageState extends State<_AccountPage> {
                     ),
                     const Divider(height: 1),
                     _MenuTile(
+                      icon: Icons.privacy_tip_outlined,
+                      title: 'سياسة الخصوصية',
+                      onTap: () => PrivacyViewScreen.open(context),
+                    ),
+                    const Divider(height: 1),
+                    _MenuTile(
                       icon: Icons.support_agent_outlined,
                       title: 'الدعم',
                       subtitle: 'اتصال أو إرسال تعليق',

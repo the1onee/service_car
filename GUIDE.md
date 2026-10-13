@@ -62,7 +62,8 @@ ABOUT_BLURB=...
 |-------|------|
 | ألوان الواجهة | `lib/core/theme.dart` |
 | نصوص أزرار/شاشات | `lib/core/strings.dart` |
-| شروط الاستخدام | `lib/legal/terms_of_use.dart` (ارفع `version` عند تغيير جوهري) |
+| شروط الاستخدام | `lib/legal/*_terms.dart` (ارفع `version` عند تغيير جوهري) |
+| سياسة الخصوصية | `lib/legal/privacy_policy.dart` + `../barrr-admin/public/privacy.html` → https://albatariq.com/privacy.html |
 | عنوان API | `lib/core/api_config.dart` أو `--dart-define=BARRR_API_BASE=...` |
 | قواعد Firestore | `firestore.rules` ثم `firebase deploy --only firestore:rules` |
 

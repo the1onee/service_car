@@ -5,6 +5,7 @@
 | الخدمة | العنوان |
 |--------|---------|
 | لوحة الأدمن | https://albatariq.com |
+| سياسة الخصوصية (Play Store) | https://albatariq.com/privacy.html |
 | API / FCM | https://albatariq.com/api/health |
 | تطبيق Flutter (release) | `ApiConfig` → `https://albatariq.com` تلقائياً |
 

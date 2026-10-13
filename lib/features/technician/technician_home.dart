@@ -14,6 +14,7 @@ import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/auth/add_phone_screen.dart';
+import 'package:barrr/features/legal/privacy_view_screen.dart';
 import 'package:barrr/features/legal/terms_view_screen.dart';
 import 'package:barrr/features/support/support_screen.dart';
 import 'package:barrr/features/jobs/job_present.dart';

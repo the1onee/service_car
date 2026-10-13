@@ -12,6 +12,7 @@ import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/core/app_brand.dart';
+import 'package:barrr/features/legal/privacy_view_screen.dart';
 import 'package:barrr/features/legal/terms_view_screen.dart';
 import 'package:barrr/features/support/support_screen.dart';
 import 'package:barrr/features/warranty/warranties_screen.dart';
@@ -353,6 +354,12 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                         context,
                         role: me.role,
                       ),
+                    ),
+                    const Divider(height: 1),
+                    _MenuTile(
+                      icon: Icons.privacy_tip_outlined,
+                      title: 'سياسة الخصوصية',
+                      onTap: () => PrivacyViewScreen.open(context),
                     ),
                     const Divider(height: 1),
                     _MenuTile(

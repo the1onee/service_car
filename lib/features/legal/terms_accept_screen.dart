@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:barrr/core/app_brand.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/features/legal/privacy_view_screen.dart';
 import 'package:barrr/features/legal/terms_view_screen.dart';
 import 'package:barrr/legal/role_terms.dart';
 import 'package:barrr/models/app_user.dart';
@@ -103,6 +104,10 @@ class _TermsAcceptScreenState extends State<TermsAcceptScreen> {
                         ),
                         child: const Text('فتح الشروط في صفحة كاملة'),
                       ),
+                      TextButton(
+                        onPressed: () => PrivacyViewScreen.open(context),
+                        child: const Text('سياسة الخصوصية'),
+                      ),
                       CheckboxListTile(
                         contentPadding: EdgeInsets.zero,
                         value: _checked,
@@ -110,7 +115,7 @@ class _TermsAcceptScreenState extends State<TermsAcceptScreen> {
                             ? null
                             : (v) => setState(() => _checked = v == true),
                         title: const Text(
-                          'أوافق على شروط استخدام التطبيق',
+                          'أوافق على شروط الاستخدام وسياسة الخصوصية',
                           style: TextStyle(fontWeight: FontWeight.w600),
                         ),
                         controlAffinity: ListTileControlAffinity.leading,

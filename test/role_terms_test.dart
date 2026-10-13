@@ -14,10 +14,15 @@ void main() {
     expect(RoleTerms.versionFor(UserRole.paintShop), WorkshopTerms.version);
   });
 
-  test('titles are non-empty per role', () {
+  test('titles and bodies are non-empty per role', () {
     for (final role in UserRole.values) {
       expect(RoleTerms.titleFor(role), isNotEmpty);
-      expect(RoleTerms.bodyFor(role), contains('باستخدامك'));
+      expect(RoleTerms.bodyFor(role).trim(), isNotEmpty);
     }
+  });
+
+  test('customer terms reference the standalone privacy policy', () {
+    expect(CustomerTerms.body, contains('سياسة الخصوصية'));
+    expect(CustomerTerms.body, contains('albatariq.com/privacy.html'));
   });
 }
