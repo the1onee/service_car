@@ -67,6 +67,19 @@ ABOUT_BLURB=...
 | عنوان API | `lib/core/api_config.dart` أو `--dart-define=BARRR_API_BASE=...` |
 | قواعد Firestore | `firestore.rules` ثم `firebase deploy --only firestore:rules` |
 
+## خريطة صيانة (قبل المتجر)
+
+عدّل من الطبقة المشتركة أولاً — لا تنسخ UI لكل دور:
+
+| ماذا؟ | أين؟ |
+|-------|------|
+| حساب مزود (فني/ورشة/زيوت) | `lib/features/shared/provider_account_view.dart` + `account_shared.dart` — الـ `*_account.part.dart` wrappers رفيعة فقط |
+| محفظة مزود | `lib/features/shared/provider_wallet_page.dart` |
+| طابور عروض فني/زيوت | `lib/features/technician/offer_overlay.dart` |
+| واجهة نماذج طلب العميل (TopBar/Card/Map/Submit) | `lib/features/customer/customer_request_shared.dart` |
+
+**لا تُقسَّم قبل استقرار المتجر** (نواة حساسة): `lib/services/job_repository.dart`، `firestore.rules`، `provider_wallet_page.dart`، `workshop_quote_sheet.dart`، أجسام نماذج الطلب الأربعة. عروض ورشة القطع ما زالت محلية في `workshop_home.dart` — لا تُدمج مع `OfferOverlay` الآن.
+
 ## تشغيل وبناء
 
 ```bash

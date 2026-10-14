@@ -1,7 +1,4 @@
-import 'dart:convert';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:http/http.dart' as http;
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/geo.dart';
 import 'package:barrr/services/dispatch_filter.dart';
@@ -10,38 +7,6 @@ import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/models/job_offer.dart';
 import 'package:barrr/models/warranty.dart';
-
-// #region agent log
-void _agentJobLog({
-  required String hypothesisId,
-  required String location,
-  required String message,
-  Map<String, Object?> data = const {},
-  String runId = 'post-fix',
-}) {
-  final payload = <String, Object?>{
-    'sessionId': 'c58ab6',
-    'runId': runId,
-    'hypothesisId': hypothesisId,
-    'location': location,
-    'message': message,
-    'data': data,
-    'timestamp': DateTime.now().millisecondsSinceEpoch,
-  };
-  http
-      .post(
-        Uri.parse(
-          'http://127.0.0.1:7580/ingest/8dec2d03-b78f-4701-bc6f-f26e3c7c79b8',
-        ),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Debug-Session-Id': 'c58ab6',
-        },
-        body: jsonEncode(payload),
-      )
-      .catchError((_) => http.Response('', 500));
-}
-// #endregion
 
 bool _offerExpired(Map<String, dynamic> data, [DateTime? now]) {
   final created = (data['createdAt'] as Timestamp?)?.toDate();
@@ -1010,47 +975,15 @@ class JobRepository {
     final snap = await _jobs.doc(jobId).get();
     if (!snap.exists) return;
     final job = Job.fromDoc(snap);
-    // #region agent log
-    _agentJobLog(
-      hypothesisId: 'H1',
-      location: 'job_repository.dart:markArrived',
-      message: 'markArrived start',
-      data: {
-        'jobId': jobId,
-        'status': job.status.name,
-        'techId': job.technicianId,
-      },
-    );
-    // #endregion
-    try {
-      // غسيل / سطحة: بعد الوصول مباشرة للعمل واستلام المبلغ — بلا سعر نهائي/ضمان.
-      if (job.isWashOrder || job.isTowOrder) {
-        await _jobs.doc(jobId).update({
-          'status': JobStatus.inProgress.name,
-          if (job.finalPrice == null && job.initialPrice != null)
-            'finalPrice': job.initialPrice,
-        });
-      } else {
-        await _jobs.doc(jobId).update({'status': JobStatus.arrived.name});
-      }
-      // #region agent log
-      _agentJobLog(
-        hypothesisId: 'H1',
-        location: 'job_repository.dart:markArrived',
-        message: 'markArrived ok',
-        data: {'jobId': jobId},
-      );
-      // #endregion
-    } on FirebaseException catch (e) {
-      // #region agent log
-      _agentJobLog(
-        hypothesisId: 'H1',
-        location: 'job_repository.dart:markArrived',
-        message: 'markArrived denied/fail',
-        data: {'jobId': jobId, 'code': e.code, 'msg': e.message},
-      );
-      // #endregion
-      rethrow;
+    // غسيل / سطحة: بعد الوصول مباشرة للعمل واستلام المبلغ — بلا سعر نهائي/ضمان.
+    if (job.isWashOrder || job.isTowOrder) {
+      await _jobs.doc(jobId).update({
+        'status': JobStatus.inProgress.name,
+        if (job.finalPrice == null && job.initialPrice != null)
+          'finalPrice': job.initialPrice,
+      });
+    } else {
+      await _jobs.doc(jobId).update({'status': JobStatus.arrived.name});
     }
   }
 
@@ -1162,24 +1095,11 @@ class JobRepository {
     required double receivedAmount,
     required bool warrantyEnabled,
   }) async {
-    // #region agent log
-    _agentJobLog(
-      hypothesisId: 'H2',
-      location: 'job_repository.dart:completeJob',
-      message: 'completeJob start',
-      data: {
-        'jobId': jobId,
-        'receivedAmount': receivedAmount,
-        'warrantyEnabled': warrantyEnabled,
-      },
-    );
-    // #endregion
     final jobRef = _jobs.doc(jobId);
     final entryRef = _db.collection(Cols.walletEntries).doc('commission_$jobId');
     var customerId = '';
     var useWallet = false;
     var bill = 0.0;
-    try {
     await _db.runTransaction((tx) async {
       final jobSnap = await tx.get(jobRef);
       if (!jobSnap.exists) return;
@@ -1234,14 +1154,6 @@ class JobRepository {
     });
     await expireOpenOffers(jobId);
     if (customerId.isEmpty || (!useWallet && receivedAmount <= bill)) {
-      // #region agent log
-      _agentJobLog(
-        hypothesisId: 'H2',
-        location: 'job_repository.dart:completeJob',
-        message: 'completeJob ok (no customer settle)',
-        data: {'jobId': jobId, 'bill': bill},
-      );
-      // #endregion
       return;
     }
     await _settleCustomerChange(
@@ -1251,25 +1163,6 @@ class JobRepository {
       receivedAmount: receivedAmount,
       useWallet: useWallet,
     );
-    // #region agent log
-    _agentJobLog(
-      hypothesisId: 'H2',
-      location: 'job_repository.dart:completeJob',
-      message: 'completeJob ok (with settle)',
-      data: {'jobId': jobId, 'bill': bill},
-    );
-    // #endregion
-    } on FirebaseException catch (e) {
-      // #region agent log
-      _agentJobLog(
-        hypothesisId: 'H2',
-        location: 'job_repository.dart:completeJob',
-        message: 'completeJob denied/fail',
-        data: {'jobId': jobId, 'code': e.code, 'msg': e.message},
-      );
-      // #endregion
-      rethrow;
-    }
   }
 
   Future<void> _settleCustomerChange({
