@@ -39,4 +39,41 @@ describe('firestore.rules smoke', () => {
   it('provider public profile read helper', () => {
     assert.match(rules, /isPublicProviderProfile/);
   });
+
+  it('jobs update allows assigned tech via assignedTechJobUpdate (not bare isCustomer)', () => {
+    assert.match(rules, /function assignedTechJobUpdate\(\)/);
+    assert.match(rules, /function customerJobUpdate\(\)/);
+    assert.match(rules, /function openJobLifecycleUpdate\(\)/);
+    assert.match(rules, /function claimingOpenJob\(\)/);
+    assert.match(
+      rules,
+      /allow update:\s*if claimingOpenJob\(\)[\s\S]*assignedTechJobUpdate\(\)/,
+    );
+    // يجب ألا يعود التحديث المفتوح القديم للعميل أو isTech() بلا قيود حقول.
+    assert.doesNotMatch(
+      rules,
+      /allow update:\s*if isCustomer\(\)\s*\|\|\s*claimingOpenJob\(\)/,
+    );
+    assert.doesNotMatch(
+      rules,
+      /allow update:\s*if isCustomer\(\)\s*\|\|\s*isTech\(\)/,
+    );
+  });
+
+  it('claimingOpenJob includes lastAssignedTechnicianId used by app', () => {
+    assert.match(rules, /lastAssignedTechnicianId/);
+    assert.match(rules, /assignedTechJobUpdate[\s\S]*commissionRate/);
+  });
+
+  it('assigned tech can read jobLocations', () => {
+    assert.match(
+      rules,
+      /match \/jobLocations\/\{jobId\}[\s\S]*technicianId[\s\S]*== request\.auth\.uid/,
+    );
+  });
+
+  it('customerWalletSettle bounds walletApplied/changeAmount', () => {
+    assert.match(rules, /job\.walletApplied <= bill/);
+    assert.match(rules, /job\.changeAmount <= job\.receivedAmount/);
+  });
 });

@@ -94,7 +94,7 @@ class _OsmMapState extends State<OsmMap> {
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.barrr.barrr',
               tileProvider: CachedOsmTileProvider(
-                headers: const {
+                headers: {
                   'User-Agent': 'barrr/1.0 (com.barrr.barrr)',
                 },
               ),

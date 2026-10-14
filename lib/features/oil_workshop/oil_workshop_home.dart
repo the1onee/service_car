@@ -4,16 +4,14 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
-import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/shared/account_shared.dart';
+import 'package:barrr/features/shared/provider_wallet_page.dart';
 import 'package:barrr/features/auth/add_phone_screen.dart';
 import 'package:barrr/features/legal/privacy_view_screen.dart';
 import 'package:barrr/features/legal/terms_view_screen.dart';
@@ -28,13 +26,9 @@ import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/models/job_offer.dart';
-import 'package:barrr/models/wallet_entry.dart';
-import 'package:barrr/models/wallet_top_up.dart';
 import 'package:barrr/services/fcm_service.dart';
 import 'package:barrr/services/geo_write_throttle.dart';
-import 'package:barrr/services/wallet_top_up_upload.dart';
 
-part 'oil_workshop_wallet.part.dart';
 part 'oil_workshop_account.part.dart';
 
 /// لوحة ورشة الزيوت: استقبال العروض ودورة الزيارة المنزلية.
@@ -265,8 +259,9 @@ class _OilWorkshopHomeState extends State<OilWorkshopHome>
       stream: userStream,
       builder: (context, snap) {
         final me = snap.data ?? widget.profile;
-        return _WalletPage(
+        return ProviderWalletPage(
           me: me,
+          kind: ProviderWalletKind.oilWorkshop,
           city: _zone?.nameAr,
           onAccount: () => setState(() => _tab = 3),
         );

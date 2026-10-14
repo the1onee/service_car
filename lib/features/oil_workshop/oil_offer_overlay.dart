@@ -76,28 +76,16 @@ class _OilOfferOverlayState extends State<OilOfferOverlay> {
                     direction: DismissDirection.horizontal,
                     onDismissed: (_) => widget.onSoftDismiss(offer.id),
                     background: Container(
-                      color: AppColors.slate.withValues(alpha: 0.35),
+                      color: AppColors.danger.withValues(alpha: 0.4),
                       alignment: Alignment.centerRight,
                       padding: const EdgeInsets.symmetric(horizontal: 28),
-                      child: const Text(
-                        'إبعاد',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+                      child: const Icon(Icons.delete, color: Colors.white, size: 24),
                     ),
                     secondaryBackground: Container(
-                      color: AppColors.slate.withValues(alpha: 0.35),
+                      color: AppColors.danger.withValues(alpha: 0.4),
                       alignment: Alignment.centerLeft,
                       padding: const EdgeInsets.symmetric(horizontal: 28),
-                      child: const Text(
-                        'إبعاد',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+                      child: const Icon(Icons.delete, color: Colors.white, size: 24),
                     ),
                     child: _OilOfferCard(
                       offer: offer,
@@ -196,24 +184,32 @@ class _OilOfferCardState extends State<_OilOfferCard> {
       _error = null;
     });
     final ok = await AppScope.of(context).dispatch.acceptOffer(
-          offerId: widget.offer.id,
-          technicianId: widget.offer.technicianId,
-          technicianName: widget.workshopName,
-          initialPrice: parsed,
-        );
-    if (!mounted) return;
-    if (!ok) {
-      setState(() {
-        _busy = false;
-        _error = _openEnded
-            ? 'تعذر إرسال العرض. قد يكون العميل قبل عرضاً آخر.'
-            : 'فاتك الطلب أو انتهت المهلة.';
-      });
-      widget.onConsumed();
-      return;
-    }
-    AppSoundService.playOfferPenguin();
-    widget.onConsumed();
+      offerId: widget.offer.id,
+      technicianId: widget.offer.technicianId,
+      technicianName: widget.workshopName,
+      initialPrice: parsed,
+    );
+if (!mounted) return;
+if (!ok) {
+  setState(() {
+    _busy = false;
+    _error = _openEnded
+        ? 'تعذر إرسال العرض. قد يكون العميل قبل عرضاً آخر.'
+        : 'فاتك الطلب أو انتهت المهلة.';
+  });
+  widget.onConsumed();
+  return;
+}
+// Show confirmation snackbar
+ScaffoldMessenger.of(context).showSnackBar(
+  SnackBar(
+    content: const Text('تم إرسال عرضك للعميل'),
+    backgroundColor: AppColors.amberDeep,
+    duration: const Duration(seconds: 3),
+  ),
+);
+AppSoundService.playOfferPenguin();
+widget.onConsumed();
   }
 
   @override
@@ -247,6 +243,7 @@ class _OilOfferCardState extends State<_OilOfferCard> {
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
+                                color: AppColors.amberDeep,
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -327,9 +324,9 @@ class _OilOfferCardState extends State<_OilOfferCard> {
                     onPressed: _busy ? null : _accept,
                     style: FilledButton.styleFrom(
                       minimumSize: const Size(0, 48),
-                      backgroundColor: AppColors.slate,
+                      backgroundColor: AppColors.amberDeep,
                     ),
-                    child: Text(_busy ? 'جارٍ الإرسال…' : 'تقديم عرض السعر'),
+                    child: Text(_busy ? 'جارٍ الإرسال…' : 'إرسال العرض'),
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton(
@@ -343,6 +340,8 @@ class _OilOfferCardState extends State<_OilOfferCard> {
                           },
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(0, 44),
+                      foregroundColor: AppColors.danger,
+                      side: const BorderSide(color: AppColors.danger),
                     ),
                     child: const Text(AppStrings.reject),
                   ),

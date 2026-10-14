@@ -1,11 +1,47 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:http/http.dart' as http;
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/geo.dart';
+import 'package:barrr/services/dispatch_filter.dart';
 import 'package:barrr/data/collections.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/models/job_offer.dart';
 import 'package:barrr/models/warranty.dart';
+
+// #region agent log
+void _agentJobLog({
+  required String hypothesisId,
+  required String location,
+  required String message,
+  Map<String, Object?> data = const {},
+  String runId = 'post-fix',
+}) {
+  final payload = <String, Object?>{
+    'sessionId': 'c58ab6',
+    'runId': runId,
+    'hypothesisId': hypothesisId,
+    'location': location,
+    'message': message,
+    'data': data,
+    'timestamp': DateTime.now().millisecondsSinceEpoch,
+  };
+  http
+      .post(
+        Uri.parse(
+          'http://127.0.0.1:7580/ingest/8dec2d03-b78f-4701-bc6f-f26e3c7c79b8',
+        ),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': 'c58ab6',
+        },
+        body: jsonEncode(payload),
+      )
+      .catchError((_) => http.Response('', 500));
+}
+// #endregion
 
 bool _offerExpired(Map<String, dynamic> data, [DateTime? now]) {
   final created = (data['createdAt'] as Timestamp?)?.toDate();
@@ -249,7 +285,7 @@ class JobRepository {
         locPayload['dropoffLabel'] = dropoffLabel.trim();
       }
     }
-    batch.set(_db.collection('jobLocations').doc(ref.id), locPayload);
+    batch.set(_db.collection(Cols.jobLocations).doc(ref.id), locPayload);
     await batch.commit();
     return ref.id;
   }
@@ -271,11 +307,13 @@ class JobRepository {
             ? 'oilWorkshop'
             : (job.isPaintOrder ? 'paintShop' : 'technician'));
     // استعلام role فقط (متوافق مع قواعد القراءة). التصفية بالمعتمد محلياً.
+    // حد أقصى 200 مزود لتقليل استهلاك Firestore – التصفية الأدق محلياً.
     QuerySnapshot<Map<String, dynamic>> techsSnap;
     try {
       techsSnap = await _db
           .collection(Cols.users)
           .where('role', isEqualTo: providerRole)
+          .limit(AppConstants.maxProvidersPerQuery)
           .get();
     } catch (e) {
       // لا نترك الطلب معلّقاً على dispatching.
@@ -297,91 +335,70 @@ class JobRepository {
       }
       return;
     }
-    final used = previous.docs.map((d) => d.data()['technicianId'] as String?).toSet();
+    final used = previous.docs
+        .map((d) => d.data()['technicianId'] as String?)
+        .whereType<String>()
+        .toSet();
     final settingsSnap = await _db.collection(Cols.appSettings).doc('main').get();
     final minWallet =
         (settingsSnap.data()?['minWalletBalance'] as num?)?.toDouble() ??
             AppConstants.minWalletBalance;
 
-    final candidates = techs.docs
-        .map((d) {
-          final data = d.data();
-          final geo = data['geo'] as GeoPoint?;
-          final km = geo == null
-              ? 0.0 // بلا موقع: لا نستبعد ورش القطع بسبب المسافة
-              : haversineKm(
-                  job.approxLocation.latitude,
-                  job.approxLocation.longitude,
-                  geo.latitude,
-                  geo.longitude,
-                );
-          final serviceIds = List<String>.from(
-            data['serviceIds'] as List? ?? const [],
-          );
-          final vehicleTypeIds = List<String>.from(
-            data['vehicleTypeIds'] as List? ?? const [],
-          );
-          final role = data['role'] as String? ?? '';
-          final defaultName = switch (role) {
-            'workshop' => 'ورشة',
-            'oilWorkshop' => 'ورشة زيوت',
-            'paintShop' => 'ورشة دهان',
-            _ => 'فني',
-          };
-          return (
-            id: d.id,
-            online: data['isOnline'] == true,
-            km: km,
-            token: data['fcmToken'] as String?,
-            name: data['name'] as String? ?? defaultName,
-            rating: (data['ratingAvg'] as num?)?.toDouble() ?? 5,
-            verified: data['verified'] == true ||
-                data['verificationStatus'] == 'approved',
-            wallet: (data['walletBalance'] as num?)?.toDouble() ?? 0,
-            serviceIds: serviceIds,
-            vehicleTypeIds: vehicleTypeIds,
-            isWorkshop: role == 'workshop' || role == 'paintShop',
-            oilWorkshopTier: data['oilWorkshopTier'] as String? ?? '',
-            specialtyId: data['specialtyId'] as String? ?? '',
-            specialtyIds: _specialtyIdsOf(data),
-            specialtyAr: data['specialtyAr'] as String? ?? '',
-          );
-        })
-        .where((t) => t.verified)
-        .where((t) {
-          // ورش القطع ترى الطلبات حتى مع رصيد منخفض؛ القفل عند التسعير فقط.
-          if (job.isPartsOrder) return true;
-          return t.isWorkshop || t.wallet >= minWallet;
-        })
-        .where((t) => !used.contains(t.id))
-        .where((t) {
-          // ورش القطع لا تُفلتر بـ serviceIds (غالباً غير مضبوطة).
-          if (t.isWorkshop && job.isPartsOrder) return true;
-          return t.serviceIds.isEmpty || t.serviceIds.contains(job.serviceId);
-        })
-        .where((t) {
-          final maxKm = job.isPartsOrder
-              ? AppConstants.maxPartsMatchKm
-              : AppConstants.maxMatchKm;
-          return t.km <= maxKm;
-        })
-        .where((t) {
-          if (t.isWorkshop) return true;
-          final needed = job.vehicleTypeId;
-          if (needed == null || needed.isEmpty) return true;
-          if (t.vehicleTypeIds.isEmpty) return true;
-          return t.vehicleTypeIds.contains(needed);
-        })
-        .toList();
+    // تحويل مستندات Firestore إلى DispatchCandidate (كائن نقي قابل للاختبار).
+    final allCandidates = techs.docs.map((d) {
+      final data = d.data();
+      final geo = data['geo'] as GeoPoint?;
+      final km = geo == null
+          ? 0.0 // بلا موقع: لا نستبعد ورش القطع بسبب المسافة
+          : haversineKm(
+              job.approxLocation.latitude,
+              job.approxLocation.longitude,
+              geo.latitude,
+              geo.longitude,
+            );
+      final role = data['role'] as String? ?? '';
+      final defaultName = switch (role) {
+        'workshop' => 'ورشة',
+        'oilWorkshop' => 'ورشة زيوت',
+        'paintShop' => 'ورشة دهان',
+        _ => 'فني',
+      };
+      return DispatchCandidate(
+        id: d.id,
+        online: data['isOnline'] == true,
+        km: km,
+        token: data['fcmToken'] as String?,
+        name: data['name'] as String? ?? defaultName,
+        rating: (data['ratingAvg'] as num?)?.toDouble() ?? 5,
+        verified: data['verified'] == true ||
+            data['verificationStatus'] == 'approved',
+        wallet: (data['walletBalance'] as num?)?.toDouble() ?? 0,
+        serviceIds: List<String>.from(data['serviceIds'] as List? ?? const []),
+        vehicleTypeIds:
+            List<String>.from(data['vehicleTypeIds'] as List? ?? const []),
+        isWorkshop: role == 'workshop' || role == 'paintShop',
+        oilWorkshopTier: data['oilWorkshopTier'] as String? ?? '',
+        specialtyId: data['specialtyId'] as String? ?? '',
+        specialtyIds: _specialtyIdsOf(data),
+        specialtyAr: data['specialtyAr'] as String? ?? '',
+      );
+    }).toList();
 
-    // قطع الغيار: تطابق اختصاص صارم فقط (بدون توسيع لكل الورش).
-    var ranked = candidates.where((t) {
-      if (job.isPartsOrder && job.specialtyId.isNotEmpty) {
-        return t.specialtyIds.contains(job.specialtyId);
-      }
-      return true;
-    }).toList()
-      ..sort((a, b) => a.km.compareTo(b.km));
+    // فلترة + ترتيب بالمسافة + تحديد العدد عبر دالة نقية.
+    final ranked = filterAndRankCandidates(
+      all: allCandidates,
+      filter: DispatchFilter(
+        isPartsOrder: job.isPartsOrder,
+        isOilOrder: job.isOilOrder,
+        isPaintOrder: job.isPaintOrder,
+        isEmergency: job.isEmergency,
+        serviceId: job.serviceId,
+        vehicleTypeId: job.vehicleTypeId,
+        specialtyId: job.specialtyId,
+        minWallet: minWallet,
+        usedProviderIds: used,
+      ),
+    );
 
     final take = job.isPartsOrder
         ? ranked.length
@@ -404,7 +421,7 @@ class JobRepository {
     GeoPoint? towPickupExact = job.exactLocation;
     if (job.isTowOrder && towPickupExact == null) {
       final locSnap =
-          await _db.collection('jobLocations').doc(jobId).get();
+          await _db.collection(Cols.jobLocations).doc(jobId).get();
       towPickupExact = locSnap.data()?['exact'] as GeoPoint?;
     }
     final batch = _db.batch();
@@ -556,7 +573,7 @@ class JobRepository {
       if (jobId == null) return true;
       await closeSiblingOffers(jobId, offerId);
       try {
-        final loc = await _db.collection('jobLocations').doc(jobId).get();
+        final loc = await _db.collection(Cols.jobLocations).doc(jobId).get();
         final exact = loc.data()?['exact'] as GeoPoint?;
         if (exact != null) {
           await _jobs.doc(jobId).update({'exactLocation': exact});
@@ -668,7 +685,7 @@ class JobRepository {
     GeoPoint? exact;
     var deliveryAddress = '';
     if (directAssign) {
-      final loc = await _db.collection('jobLocations').doc(jobId).get();
+      final loc = await _db.collection(Cols.jobLocations).doc(jobId).get();
       final data = loc.data();
       exact = data?['exact'] as GeoPoint?;
       deliveryAddress = (data?['label'] as String? ?? '').trim();
@@ -900,7 +917,7 @@ class JobRepository {
   }
 
   Future<void> customerAcceptQuote(String jobId) async {
-    final loc = await _db.collection('jobLocations').doc(jobId).get();
+    final loc = await _db.collection(Cols.jobLocations).doc(jobId).get();
     final exact = loc.data()?['exact'] as GeoPoint?;
     await _jobs.doc(jobId).update({
       'status': JobStatus.enRoute.name,
@@ -993,16 +1010,48 @@ class JobRepository {
     final snap = await _jobs.doc(jobId).get();
     if (!snap.exists) return;
     final job = Job.fromDoc(snap);
-    // غسيل / سطحة: بعد الوصول مباشرة للعمل واستلام المبلغ — بلا سعر نهائي/ضمان.
-    if (job.isWashOrder || job.isTowOrder) {
-      await _jobs.doc(jobId).update({
-        'status': JobStatus.inProgress.name,
-        if (job.finalPrice == null && job.initialPrice != null)
-          'finalPrice': job.initialPrice,
-      });
-      return;
+    // #region agent log
+    _agentJobLog(
+      hypothesisId: 'H1',
+      location: 'job_repository.dart:markArrived',
+      message: 'markArrived start',
+      data: {
+        'jobId': jobId,
+        'status': job.status.name,
+        'techId': job.technicianId,
+      },
+    );
+    // #endregion
+    try {
+      // غسيل / سطحة: بعد الوصول مباشرة للعمل واستلام المبلغ — بلا سعر نهائي/ضمان.
+      if (job.isWashOrder || job.isTowOrder) {
+        await _jobs.doc(jobId).update({
+          'status': JobStatus.inProgress.name,
+          if (job.finalPrice == null && job.initialPrice != null)
+            'finalPrice': job.initialPrice,
+        });
+      } else {
+        await _jobs.doc(jobId).update({'status': JobStatus.arrived.name});
+      }
+      // #region agent log
+      _agentJobLog(
+        hypothesisId: 'H1',
+        location: 'job_repository.dart:markArrived',
+        message: 'markArrived ok',
+        data: {'jobId': jobId},
+      );
+      // #endregion
+    } on FirebaseException catch (e) {
+      // #region agent log
+      _agentJobLog(
+        hypothesisId: 'H1',
+        location: 'job_repository.dart:markArrived',
+        message: 'markArrived denied/fail',
+        data: {'jobId': jobId, 'code': e.code, 'msg': e.message},
+      );
+      // #endregion
+      rethrow;
     }
-    await _jobs.doc(jobId).update({'status': JobStatus.arrived.name});
   }
 
   /// ورشة قطع الغيار: تأكيد تجهيز/إرسال القطعة للعميل.
@@ -1113,11 +1162,24 @@ class JobRepository {
     required double receivedAmount,
     required bool warrantyEnabled,
   }) async {
+    // #region agent log
+    _agentJobLog(
+      hypothesisId: 'H2',
+      location: 'job_repository.dart:completeJob',
+      message: 'completeJob start',
+      data: {
+        'jobId': jobId,
+        'receivedAmount': receivedAmount,
+        'warrantyEnabled': warrantyEnabled,
+      },
+    );
+    // #endregion
     final jobRef = _jobs.doc(jobId);
     final entryRef = _db.collection(Cols.walletEntries).doc('commission_$jobId');
     var customerId = '';
     var useWallet = false;
     var bill = 0.0;
+    try {
     await _db.runTransaction((tx) async {
       final jobSnap = await tx.get(jobRef);
       if (!jobSnap.exists) return;
@@ -1171,7 +1233,17 @@ class JobRepository {
       });
     });
     await expireOpenOffers(jobId);
-    if (customerId.isEmpty || (!useWallet && receivedAmount <= bill)) return;
+    if (customerId.isEmpty || (!useWallet && receivedAmount <= bill)) {
+      // #region agent log
+      _agentJobLog(
+        hypothesisId: 'H2',
+        location: 'job_repository.dart:completeJob',
+        message: 'completeJob ok (no customer settle)',
+        data: {'jobId': jobId, 'bill': bill},
+      );
+      // #endregion
+      return;
+    }
     await _settleCustomerChange(
       jobId: jobId,
       customerId: customerId,
@@ -1179,6 +1251,25 @@ class JobRepository {
       receivedAmount: receivedAmount,
       useWallet: useWallet,
     );
+    // #region agent log
+    _agentJobLog(
+      hypothesisId: 'H2',
+      location: 'job_repository.dart:completeJob',
+      message: 'completeJob ok (with settle)',
+      data: {'jobId': jobId, 'bill': bill},
+    );
+    // #endregion
+    } on FirebaseException catch (e) {
+      // #region agent log
+      _agentJobLog(
+        hypothesisId: 'H2',
+        location: 'job_repository.dart:completeJob',
+        message: 'completeJob denied/fail',
+        data: {'jobId': jobId, 'code': e.code, 'msg': e.message},
+      );
+      // #endregion
+      rethrow;
+    }
   }
 
   Future<void> _settleCustomerChange({

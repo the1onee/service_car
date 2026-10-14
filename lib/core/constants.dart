@@ -16,6 +16,10 @@ class AppConstants {
   static const approxPrecision = 100.0; // ~1km
   static const commissionRate = 0.10;
   static const minWalletBalance = 10000.0;
+  /// أقصى عدد مستندات مزودين تُجلب من Firestore في استعلام واحد.
+  static const maxProvidersPerQuery = 200;
+  /// أقصى عدد مرشحين نهائيين يُرسلون للعميل في جولة واحدة.
+  static const maxCandidatesPerDispatch = 50;
   static const minServiceAmount = 3000.0;
 
   /// مبلغ الخدمة: 3000 على الأقل، ومن مضاعفات 1000 (ينتهي بـ 000).

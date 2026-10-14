@@ -4,7 +4,12 @@ import 'package:flutter_map/flutter_map.dart';
 
 /// بلاطات OSM مع كاش قرص عبر [CachedNetworkImageProvider].
 class CachedOsmTileProvider extends TileProvider {
-  CachedOsmTileProvider({super.headers});
+  CachedOsmTileProvider({Map<String, String>? headers})
+      : super(
+          headers: headers != null
+              ? Map<String, String>.from(headers)
+              : <String, String>{},
+        );
 
   @override
   ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {

@@ -6,6 +6,8 @@ class Cols {
   static const oilTypes = 'oilTypes';
   static const jobs = 'jobs';
   static const jobOffers = 'jobOffers';
+  /// موقع دقيق منفصل عن مستند الطلب (يُكشف للفني بعد التعيين).
+  static const jobLocations = 'jobLocations';
   static const appSettings = 'appSettings';
   static const cities = 'cities';
   static const serviceAreas = 'serviceAreas';

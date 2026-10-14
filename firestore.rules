@@ -184,6 +184,11 @@ service cloud.firestore {
       function customerWalletSettle() {
         let jobId = request.resource.data.walletJobId;
         let job = getAfter(/databases/$(database)/documents/jobs/$(jobId)).data;
+        let bill = job.finalPrice is number && job.finalPrice > 0
+          ? job.finalPrice
+          : (job.initialPrice is number && job.initialPrice > 0
+              ? job.initialPrice
+              : 0);
         return (isTechnicianRole() || isOilWorkshopRole())
           && resource.data.role == 'customer'
           && jobId is string
@@ -193,6 +198,13 @@ service cloud.firestore {
           && job.customerId == uid
           && job.technicianId == request.auth.uid
           && job.status == 'completed'
+          && job.walletApplied is number
+          && job.changeAmount is number
+          && job.walletApplied >= 0
+          && job.changeAmount >= 0
+          && job.walletApplied <= bill + 0.05
+          && job.receivedAmount is number
+          && job.changeAmount <= job.receivedAmount + 0.05
           && request.resource.data.walletBalance
               == resource.data.walletBalance - job.walletApplied + job.changeAmount;
       }
@@ -215,7 +227,12 @@ service cloud.firestore {
     }
 
     match /jobLocations/{jobId} {
-      allow read: if isOwner(resource.data.customerId) || adminCanRead('orders');
+      // العميل أو الفني المعيّن على الطلب (بعد القبول يحتاج الموقع الدقيق).
+      allow read: if isOwner(resource.data.customerId)
+        || adminCanRead('orders')
+        || (signedIn()
+          && get(/databases/$(database)/documents/jobs/$(jobId)).data.technicianId
+              == request.auth.uid);
       allow update: if isOwner(resource.data.customerId) || adminCanWrite('orders');
       allow create: if isOwner(request.resource.data.customerId) || adminCanWrite('orders');
       allow delete: if adminCanWrite('orders');
@@ -237,22 +254,77 @@ service cloud.firestore {
           && resource.data.status in ['dispatching', 'offerPending', 'comparing', 'noTechnician']
           && resource.data.technicianId == null;
       }
-      // قبول طارئ: المزود يعيّن نفسه فقط على طلب مفتوح، وحقول محدودة.
+      function jobDiffKeys() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+
+      // قبول طارئ: المزود يعيّن نفسه على طلب مفتوح بحقول محدودة (مطابق لـ _winEmergencyOffer).
       function claimingOpenJob() {
         return isProviderRole()
           && resource.data.technicianId == null
           && request.resource.data.technicianId == request.auth.uid
           && resource.data.status in ['dispatching', 'offerPending', 'comparing', 'noTechnician']
           && request.resource.data.status in ['quoted', 'enRoute', 'arrived', 'inProgress']
-          && request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['technicianId', 'technicianName', 'initialPrice', 'status']);
+          && jobDiffKeys().hasOnly([
+            'technicianId', 'technicianName', 'initialPrice', 'status',
+            'lastAssignedTechnicianId', 'cancelledBy', 'cancelReason', 'exactLocation'
+          ]);
+      }
+
+      // توزيع / إعادة توزيع بينما الطلب بلا مزود (عميل أو مزود يعيد المحاولة).
+      function openJobLifecycleUpdate() {
+        return resource.data.technicianId == null
+          && request.resource.data.technicianId == null
+          && (isCustomer() || isProviderRole())
+          && request.resource.data.status in [
+            'dispatching', 'offerPending', 'comparing', 'noTechnician'
+          ]
+          && jobDiffKeys().hasOnly([
+            'status', 'offerIds', 'windowSeconds', 'expiresAt', 'dispatchRound'
+          ]);
+      }
+
+      // العميل: إسناد عرض، إلغاء، محفظة، تقييم، إكمال قطع — بلا تغيير هوية الطلب.
+      function customerJobUpdate() {
+        return isCustomer()
+          && !jobDiffKeys().hasAny(['customerId', 'serviceId'])
+          && (resource.data.technicianId == null
+            || !jobDiffKeys().hasAny(['initialPrice'])
+            || request.resource.data.initialPrice == resource.data.get('initialPrice', null))
+          && (!jobDiffKeys().hasAny(['finalPrice'])
+            || !(resource.data.finalPrice is number)
+            || request.resource.data.finalPrice >= resource.data.finalPrice - 0.05)
+          && jobDiffKeys().hasOnly([
+            'status', 'technicianId', 'technicianName', 'lastAssignedTechnicianId',
+            'cancelledBy', 'cancelReason', 'initialPrice', 'finalPrice',
+            'exactLocation', 'deliveryAddress', 'partCondition', 'deliveryType',
+            'vendorNote', 'warranty', 'useWallet', 'walletReserve',
+            'offerIds', 'windowSeconds', 'expiresAt', 'dispatchRound',
+            'ratings', 'receivedAmount', 'commissionAmount', 'commissionRate'
+          ]);
+      }
+
+      // الفني/الورشة المعيّنة: تقدّم الحالة والإكمال — بلا تغيير customerId/commissionRate.
+      function assignedTechJobUpdate() {
+        return isTech()
+          && !jobDiffKeys().hasAny([
+            'customerId', 'serviceId', 'commissionRate', 'useWallet', 'walletReserve'
+          ])
+          && jobDiffKeys().hasOnly([
+            'status', 'finalPrice', 'warranty', 'receivedAmount', 'commissionAmount',
+            'exactLocation', 'technicianId', 'technicianName', 'lastAssignedTechnicianId',
+            'cancelledBy', 'cancelReason', 'walletApplied', 'changeAmount', 'ratings',
+            'deliveryType', 'vendorNote', 'partCondition', 'initialPrice'
+          ]);
       }
 
       allow create: if creatingOwnJob() || adminCanWrite('orders');
       allow read: if isCustomer() || isTech() || isOpenForBidding()
         || adminCanRead('orders') || adminCanRead('ratings') || adminCanRead('reports');
-      // لا يُسمح لأي مزود بتحديث طلب مفتوح بحرية — فقط العميل أو الفني المعيّن أو قبول طارئ ذاتي.
-      allow update: if isCustomer() || isTech() || claimingOpenJob()
+      allow update: if claimingOpenJob()
+        || openJobLifecycleUpdate()
+        || customerJobUpdate()
+        || assignedTechJobUpdate()
         || adminCanWrite('orders');
       allow delete: if adminCanWrite('orders');
     }

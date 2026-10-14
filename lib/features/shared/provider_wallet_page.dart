@@ -1,24 +1,85 @@
-part of 'technician_home.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_snackbar.dart';
+import 'package:barrr/core/constants.dart';
+import 'package:barrr/core/theme.dart';
+import 'package:barrr/features/notifications/notifications_screen.dart';
+import 'package:barrr/features/shared/field_ui.dart';
+import 'package:barrr/models/app_settings.dart';
+import 'package:barrr/models/app_user.dart';
+import 'package:barrr/models/job.dart';
+import 'package:barrr/models/wallet_entry.dart';
+import 'package:barrr/models/wallet_top_up.dart';
+import 'package:barrr/services/wallet_top_up_upload.dart';
 
+/// نوع مزوّد لضبط نصوص المحفظة وسلوك الشحن المطلوب.
+enum ProviderWalletKind { technician, workshop, oilWorkshop }
+
+extension ProviderWalletKindLabels on ProviderWalletKind {
+  String get balanceTitle => switch (this) {
+        ProviderWalletKind.technician => 'رصيد محفظة الفني',
+        ProviderWalletKind.workshop => 'رصيد محفظة الورشة',
+        ProviderWalletKind.oilWorkshop => 'رصيد محفظة ورشة الزيوت',
+      };
+
+  String get readyStatus => switch (this) {
+        ProviderWalletKind.oilWorkshop => 'جاهز لاستقبال طلبات الزيت',
+        _ => 'جاهز لاستقبال الطلبات',
+      };
+
+  String requiredTopUpText(double amount) => switch (this) {
+        ProviderWalletKind.oilWorkshop =>
+          'رصيد مطلوب للشحن: ${formatIqd(amount)} لتفعيل استقبال طلبات الزيت.',
+        _ =>
+          'رصيد مطلوب للشحن: ${formatIqd(amount)} لتفعيل استقبال الطلبات.',
+      };
+
+  String get lockAlertTitle => switch (this) {
+        ProviderWalletKind.oilWorkshop => 'تنبيه إيقاف استقبال طلبات الزيت',
+        ProviderWalletKind.workshop => 'الحساب مقفل بسبب نقص الرصيد',
+        _ => 'تنبيه إيقاف استقبال الطلبات',
+      };
+
+  String lockAlertBody(double minBalance, {double? requiredAmount}) {
+    if (this == ProviderWalletKind.workshop) {
+      if (requiredAmount != null && requiredAmount > 0) {
+        return 'الحد الأدنى ${formatIqd(minBalance)}. الرصيد المطلوب للشحن ${formatIqd(requiredAmount)} حتى تستأنف استقبال طلبات التسعير.';
+      }
+      return 'اشحن المحفظة للوصول إلى الحد الأدنى ${formatIqd(minBalance)} لاستئناف استقبال الطلبات.';
+    }
+    if (this == ProviderWalletKind.oilWorkshop) {
+      return 'إذا انخفض الرصيد عن ${formatIqd(minBalance)} يتوقف استقبال طلبات الزيت الجديدة حتى تعيد الشحن وترفع فاتورة التحويل للموافقة.';
+    }
+    return 'إذا انخفض الرصيد عن ${formatIqd(minBalance)} يتوقف استقبال الطلبات الجديدة حتى تعيد الشحن وترفع فاتورة التحويل للموافقة.';
+  }
+
+  bool get scrollToRechargeOnRequired => this == ProviderWalletKind.workshop;
+}
 enum _LedgerFilter { movements, payouts }
 
-class _WalletPage extends StatefulWidget {
-  const _WalletPage({
+class ProviderWalletPage extends StatefulWidget {
+  const ProviderWalletPage({
+    super.key,
     required this.me,
     required this.onAccount,
+    required this.kind,
     this.city,
   });
 
   final AppUser me;
   final String? city;
   final VoidCallback onAccount;
+  final ProviderWalletKind kind;
 
   @override
-  State<_WalletPage> createState() => _WalletPageState();
+  State<ProviderWalletPage> createState() => _ProviderWalletPageState();
 }
 
-class _WalletPageState extends State<_WalletPage> {
+class _ProviderWalletPageState extends State<ProviderWalletPage> {
   var _filter = _LedgerFilter.movements;
+  final _rechargeKey = GlobalKey();
   Stream<AppSettings>? _settingsStream;
   Stream<List<Job>>? _jobsStream;
   Stream<List<WalletEntry>>? _entriesStream;
@@ -32,151 +93,202 @@ class _WalletPageState extends State<_WalletPage> {
     _entriesStream ??= scope.users.watchWalletEntries(widget.me.id);
   }
 
+  void _scrollToRecharge() {
+    final ctx = _rechargeKey.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOut,
+      alignment: 0.1,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final me = widget.me;
+    final kind = widget.kind;
     return ColoredBox(
       color: AppColors.canvas,
       child: Column(
-      children: [
-        FieldTopBar(
-          city: widget.city,
-          caption: 'المحفظة',
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              NotificationsBellButton(uid: me.id),
-              Material(
-                color: AppColors.slate,
-                shape: const CircleBorder(),
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: widget.onAccount,
-                  child: const SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: Icon(Icons.person, color: Colors.white, size: 18),
+        children: [
+          FieldTopBar(
+            city: widget.city,
+            caption: 'المحفظة',
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                NotificationsBellButton(uid: me.id),
+                if (kind.scrollToRechargeOnRequired) const SizedBox(width: 4),
+                Material(
+                  color: AppColors.slate,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: widget.onAccount,
+                    child: const SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: Icon(Icons.person, color: Colors.white, size: 18),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        Expanded(
-          child: StreamBuilder(
-            stream: _settingsStream,
-            builder: (context, settingsSnap) {
-              final min = settingsSnap.data?.minWalletBalance ??
-                  AppConstants.minWalletBalance;
-              return StreamBuilder<List<Job>>(
-                stream: _jobsStream,
-                builder: (context, jobSnap) {
-                  final jobs = jobSnap.data ?? const <Job>[];
-                  final jobsById = {for (final job in jobs) job.id: job};
-                  return StreamBuilder<List<WalletEntry>>(
-                    stream: _entriesStream,
-                    builder: (context, entrySnap) {
-                      final entries = entrySnap.data ?? const <WalletEntry>[];
-                      final waiting = entrySnap.connectionState ==
-                              ConnectionState.waiting &&
-                          entries.isEmpty;
-                      final shown = entries.where((entry) {
-                        if (_filter == _LedgerFilter.movements) return true;
-                        return entry.type != WalletEntryType.commission;
-                      }).toList();
-                      final locked = me.isWalletLocked(min);
-                      final required = me.requiredTopUp(min);
-                      return ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                        children: [
-                          _BalanceCard(
-                            balance: me.walletBalance,
-                            minBalance: min,
-                            locked: locked,
-                            city: widget.city,
-                          ),
-                          if (required > 0) ...[
-                            const SizedBox(height: 10),
-                            FieldCard(
-                              child: Text(
-                                'رصيد مطلوب للشحن: ${formatIqd(required)} لتفعيل استقبال الطلبات.',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF92400E),
-                                ),
-                              ),
+          Expanded(
+            child: StreamBuilder(
+              stream: _settingsStream,
+              builder: (context, settingsSnap) {
+                final min = settingsSnap.data?.minWalletBalance ??
+                    AppConstants.minWalletBalance;
+                return StreamBuilder<List<Job>>(
+                  stream: _jobsStream,
+                  builder: (context, jobSnap) {
+                    final jobs = jobSnap.data ?? const <Job>[];
+                    final jobsById = {for (final job in jobs) job.id: job};
+                    return StreamBuilder<List<WalletEntry>>(
+                      stream: _entriesStream,
+                      builder: (context, entrySnap) {
+                        final entries = entrySnap.data ?? const <WalletEntry>[];
+                        final waiting = entrySnap.connectionState ==
+                                ConnectionState.waiting &&
+                            entries.isEmpty;
+                        final shown = entries.where((entry) {
+                          if (_filter == _LedgerFilter.movements) return true;
+                          return entry.type != WalletEntryType.commission;
+                        }).toList();
+                        final locked = me.isWalletLocked(min);
+                        final required = me.requiredTopUp(min);
+                        return ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                          children: [
+                            _BalanceCard(
+                              kind: kind,
+                              balance: me.walletBalance,
+                              minBalance: min,
+                              locked: locked,
+                              city: widget.city,
                             ),
-                          ],
-                          const SizedBox(height: 12),
-                          _WalletRechargePanel(technicianId: me.id),
-                          const SizedBox(height: 12),
-                          _MetricRow(jobs: jobs),
-                          const SizedBox(height: 12),
-                          _FilterBar(
-                            filter: _filter,
-                            onChanged: (value) =>
-                                setState(() => _filter = value),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              const Expanded(
-                                child: Text(
-                                  'الحركات الأخيرة',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 18,
+                            if (required > 0) ...[
+                              const SizedBox(height: 10),
+                              if (kind.scrollToRechargeOnRequired)
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 48,
+                                  child: FilledButton.icon(
+                                    onPressed: _scrollToRecharge,
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: AppColors.amberDeep,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    icon: const Icon(
+                                      Icons.payments_outlined,
+                                      size: 20,
+                                    ),
+                                    label: Text(
+                                      'الرصيد المطلوب · ${formatIqd(required)}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              else
+                                FieldCard(
+                                  child: Text(
+                                    kind.requiredTopUpText(required),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF92400E),
+                                    ),
                                   ),
                                 ),
+                            ],
+                            const SizedBox(height: 12),
+                            KeyedSubtree(
+                              key: _rechargeKey,
+                              child: _WalletRechargePanel(
+                                technicianId: me.id,
                               ),
-                              Text(
-                                'تحديث فوري',
-                                style: TextStyle(
-                                  color:
-                                      AppColors.inkSoft.withValues(alpha: 0.9),
-                                  fontSize: 11,
+                            ),
+                            const SizedBox(height: 12),
+                            _MetricRow(jobs: jobs),
+                            const SizedBox(height: 12),
+                            _FilterBar(
+                              filter: _filter,
+                              onChanged: (value) =>
+                                  setState(() => _filter = value),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                const Expanded(
+                                  child: Text(
+                                    'الحركات الأخيرة',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 18,
+                                    ),
+                                  ),
                                 ),
+                                Text(
+                                  'تحديث فوري',
+                                  style: TextStyle(
+                                    color: AppColors.inkSoft
+                                        .withValues(alpha: 0.9),
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            if (waiting)
+                              const Padding(
+                                padding: EdgeInsets.all(24),
+                                child: Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              )
+                            else if (shown.isEmpty)
+                              FieldCard(
+                                child: Text(
+                                  _filter == _LedgerFilter.payouts
+                                      ? 'لا توجد دفعات من الإدارة بعد.'
+                                      : 'لا توجد حركات بعد.',
+                                ),
+                              )
+                            else
+                              for (final entry in shown) ...[
+                                _LedgerRow(
+                                  entry: entry,
+                                  job: entry.jobId == null
+                                      ? null
+                                      : jobsById[entry.jobId],
+                                ),
+                                const SizedBox(height: 8),
+                              ],
+                            if (locked) ...[
+                              const SizedBox(height: 4),
+                              _LowBalanceNote(
+                                kind: kind,
+                                minBalance: min,
+                                requiredAmount: required,
                               ),
                             ],
-                          ),
-                          const SizedBox(height: 8),
-                          if (waiting)
-                            const Padding(
-                              padding: EdgeInsets.all(24),
-                              child: Center(child: CircularProgressIndicator()),
-                            )
-                          else if (shown.isEmpty)
-                            FieldCard(
-                              child: Text(
-                                _filter == _LedgerFilter.payouts
-                                    ? 'لا توجد دفعات من الإدارة بعد.'
-                                    : 'لا توجد حركات بعد.',
-                              ),
-                            )
-                          else
-                            for (final entry in shown) ...[
-                              _LedgerRow(
-                                entry: entry,
-                                job: entry.jobId == null
-                                    ? null
-                                    : jobsById[entry.jobId],
-                              ),
-                              const SizedBox(height: 8),
-                            ],
-                          if (locked) ...[
-                            const SizedBox(height: 4),
-                            _LowBalanceNote(minBalance: min),
                           ],
-                        ],
-                      );
-                    },
-                  );
-                },
-              );
-            },
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
       ),
     );
   }
@@ -184,12 +296,14 @@ class _WalletPageState extends State<_WalletPage> {
 
 class _BalanceCard extends StatelessWidget {
   const _BalanceCard({
+    required this.kind,
     required this.balance,
     required this.minBalance,
     required this.locked,
     this.city,
   });
 
+  final ProviderWalletKind kind;
   final double balance;
   final double minBalance;
   final bool locked;
@@ -221,7 +335,7 @@ class _BalanceCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'رصيد محفظة الفني',
+                            kind.balanceTitle,
                             style: const TextStyle(
                               color: Color(0xFF7C839B),
                               fontSize: 13,
@@ -336,7 +450,7 @@ class _BalanceCard extends StatelessWidget {
                       Text(
                         locked
                             ? 'المحفظة مقفلة — اشحن لاستقبال الطلبات'
-                            : 'جاهز لاستقبال الطلبات',
+                            : kind.readyStatus,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 13,
@@ -1088,9 +1202,15 @@ class _LedgerRow extends StatelessWidget {
 }
 
 class _LowBalanceNote extends StatelessWidget {
-  const _LowBalanceNote({required this.minBalance});
+  const _LowBalanceNote({
+    required this.kind,
+    required this.minBalance,
+    this.requiredAmount = 0,
+  });
 
+  final ProviderWalletKind kind;
   final double minBalance;
+  final double requiredAmount;
 
   @override
   Widget build(BuildContext context) {
@@ -1118,9 +1238,9 @@ class _LowBalanceNote extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'تنبيه إيقاف استقبال الطلبات',
-                  style: TextStyle(
+                Text(
+                  kind.lockAlertTitle,
+                  style: const TextStyle(
                     color: AppColors.danger,
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
@@ -1128,7 +1248,10 @@ class _LowBalanceNote extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'إذا انخفض الرصيد عن ${formatIqd(minBalance)} يتوقف استقبال الطلبات الجديدة حتى تعيد الشحن وترفع فاتورة التحويل للموافقة.',
+                  kind.lockAlertBody(
+                    minBalance,
+                    requiredAmount: requiredAmount,
+                  ),
                   style: const TextStyle(
                     color: Color(0xFF45464D),
                     fontSize: 12,
@@ -1196,4 +1319,5 @@ IconData _jobIcon(String? serviceId) {
       return Icons.build_outlined;
   }
 }
+
 
