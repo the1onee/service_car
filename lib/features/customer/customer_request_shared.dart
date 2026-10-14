@@ -168,6 +168,20 @@ class RequestIconField extends StatelessWidget {
   }
 }
 
+InputDecoration requestInputDecoration({required String hint}) {
+  return InputDecoration(
+    hintText: hint,
+    hintStyle: const TextStyle(color: AppColors.inkSoft, fontSize: 13),
+    filled: true,
+    fillColor: AppColors.recessed,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+  );
+}
+
 Widget requestStepHeader(
   int step,
   String title, {

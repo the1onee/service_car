@@ -6,12 +6,10 @@ import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/cloudinary_config.dart';
 import 'package:barrr/core/strings.dart';
-import 'package:barrr/core/theme.dart' show AppColors, AppTheme;
+import 'package:barrr/core/theme.dart' show AppColors;
 import 'package:barrr/data/service_catalog.dart';
-import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/customer/customer_request_shared.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
-import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/shared/osm_map.dart';
 import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
@@ -112,13 +110,7 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
 
   bool _pointInZone(LatLng p) => requestPointInZone(p, widget.zone);
 
-  String _labelFor(LatLng p) {
-    final coords =
-        '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}';
-    final zoneName = widget.zone?.nameAr ?? '';
-    if (zoneName.isEmpty) return coords;
-    return '$zoneName ($coords)';
-  }
+  String _labelFor(LatLng p) => requestAddressLabel(p, widget.zone);
 
   Future<void> _pickLocation() async {
     final picked = await pickAddressOnMap(
@@ -254,7 +246,8 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
       color: const Color(0xFFF8F9FF),
       child: Column(
         children: [
-          _FormTopBar(
+          RequestFormTopBar(
+            title: 'طلب فني',
             city: city,
             uid: widget.profile.id,
             onBack: widget.onBack,
@@ -286,9 +279,9 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                     return ListView(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                       children: [
-                        _sectionTitle(1, 'نوع الخدمة'),
+                        requestStepHeader(1, 'نوع الخدمة'),
                         const SizedBox(height: 10),
-                        _Card(
+                        RequestFormCard(
                           child: services.isEmpty
                               ? const Text(
                                   'لا توجد خدمات مفعّلة لطلب فني. فعّل الخيار من لوحة الأدمن.',
@@ -298,7 +291,7 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: [
-                                    const _FieldLabel('اختر نوع الخدمة'),
+                                    const RequestFormLabel('اختر نوع الخدمة'),
                                     const SizedBox(height: 8),
                                     DropdownButtonFormField<String>(
                                       // ignore: deprecated_member_use
@@ -307,7 +300,7 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                                           ? _selected!.id
                                           : null,
                                       isExpanded: true,
-                                      decoration: _inputDecoration(
+                                      decoration: requestInputDecoration(
                                         hint: 'نوع الخدمة',
                                       ),
                                       hint: const Text('اختر نوع الخدمة'),
@@ -335,13 +328,13 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                                 ),
                         ),
                         const SizedBox(height: 22),
-                        _sectionTitle(2, 'بيانات المركبة'),
+                        requestStepHeader(2, 'بيانات المركبة'),
                         const SizedBox(height: 10),
-                        _Card(
+                        RequestFormCard(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              const _FieldLabel('نوع المركبة'),
+                              const RequestFormLabel('نوع المركبة'),
                               const SizedBox(height: 8),
                               Wrap(
                                 spacing: 8,
@@ -368,17 +361,17 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                                 ],
                               ),
                               const SizedBox(height: 14),
-                              const _FieldLabel('الشركة المصنعة ونوع الشركة'),
+                              const RequestFormLabel('الشركة المصنعة ونوع الشركة'),
                               const SizedBox(height: 6),
-                              _IconField(
+                              RequestIconField(
                                 controller: _vehicle,
                                 icon: Icons.directions_car_outlined,
                                 hint: 'نوع الشركة',
                               ),
                               const SizedBox(height: 12),
-                              const _FieldLabel('سنة الصنع'),
+                              const RequestFormLabel('سنة الصنع'),
                               const SizedBox(height: 6),
-                              _IconField(
+                              RequestIconField(
                                 controller: _year,
                                 icon: Icons.calendar_today_outlined,
                                 hint: '2021',
@@ -388,9 +381,9 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                           ),
                         ),
                         const SizedBox(height: 22),
-                        _sectionTitle(3, 'وصف العطل والصوت'),
+                        requestStepHeader(3, 'وصف العطل والصوت'),
                         const SizedBox(height: 10),
-                        _Card(
+                        RequestFormCard(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -398,12 +391,12 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                                 controller: _note,
                                 maxLines: 3,
                                 style: const TextStyle(fontSize: 14),
-                                decoration: _inputDecoration(
+                                decoration: requestInputDecoration(
                                   hint: 'وصف مختصر',
                                 ),
                               ),
                               const SizedBox(height: 14),
-                              const _FieldLabel('الصورة'),
+                              const RequestFormLabel('الصورة'),
                               const SizedBox(height: 8),
                               Row(
                                 children: [
@@ -445,9 +438,9 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                           ),
                         ),
                         const SizedBox(height: 22),
-                        _sectionTitle(4, 'الموقع'),
+                        requestStepHeader(4, 'الموقع'),
                         const SizedBox(height: 10),
-                        _Card(
+                        RequestFormCard(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -573,7 +566,7 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                                 ),
                               ),
                               const SizedBox(height: 10),
-                              _IconField(
+                              RequestIconField(
                                 controller: _landmark,
                                 icon: Icons.storefront_outlined,
                                 hint:
@@ -583,9 +576,9 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                           ),
                         ),
                         const SizedBox(height: 22),
-                        _sectionTitle(5, 'الهاتف'),
+                        requestStepHeader(5, 'الهاتف'),
                         const SizedBox(height: 10),
-                        _Card(
+                        RequestFormCard(
                           child: Row(
                             children: [
                               Container(
@@ -688,198 +681,10 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
   }
 }
 
-Widget _sectionTitle(int step, String title,
-    {String? trailing, Widget? trailingWidget}) {
-  return Row(
-    children: [
-      Container(
-        width: 24,
-        height: 24,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AppColors.slate,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          '$step',
-          style: const TextStyle(
-            color: Color(0xFF7C839B),
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: Text(
-          title,
-          style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-            color: AppColors.ink,
-          ),
-        ),
-      ),
-      if (trailingWidget != null)
-        trailingWidget
-      else if (trailing != null)
-        Text(
-          trailing,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: AppColors.amberDeep,
-          ),
-        ),
-    ],
-  );
-}
 
-InputDecoration _inputDecoration({required String hint}) {
-  return InputDecoration(
-    hintText: hint,
-    hintStyle: const TextStyle(color: AppColors.inkSoft, fontSize: 13),
-    filled: true,
-    fillColor: AppColors.recessed,
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide.none,
-    ),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-  );
-}
 
-class _FormTopBar extends StatelessWidget {
-  const _FormTopBar({
-    required this.city,
-    required this.uid,
-    required this.onBack,
-  });
 
-  final String city;
-  final String uid;
-  final VoidCallback onBack;
 
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0xFFF8F9FF).withValues(alpha: 0.92),
-      child: SafeArea(
-        bottom: false,
-        child: SizedBox(
-          height: 60,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: 'رجوع',
-                  onPressed: onBack,
-                  icon: const Icon(Icons.arrow_forward_ios_rounded, size: 18),
-                ),
-                const FieldMark(size: 32),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.recessed,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              city,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.inkSoft,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                NotificationsBellButton(uid: uid),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Card extends StatelessWidget {
-  const _Card({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: AppTheme.cardShadow(),
-      ),
-      child: child,
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-        color: AppColors.inkSoft,
-      ),
-    );
-  }
-}
-
-class _IconField extends StatelessWidget {
-  const _IconField({
-    required this.controller,
-    required this.icon,
-    required this.hint,
-    this.keyboardType,
-  });
-
-  final TextEditingController controller;
-  final IconData icon;
-  final String hint;
-  final TextInputType? keyboardType;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      keyboardType: keyboardType,
-      style: const TextStyle(fontSize: 14),
-      decoration: _inputDecoration(hint: hint).copyWith(
-        prefixIcon: Icon(icon, size: 20, color: AppColors.inkSoft),
-      ),
-    );
-  }
-}
 
 class _AttachTile extends StatelessWidget {
   const _AttachTile({

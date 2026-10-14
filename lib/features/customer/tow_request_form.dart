@@ -8,10 +8,8 @@ import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
 import 'package:barrr/data/service_catalog.dart';
-import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/customer/customer_request_shared.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
-import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/shared/osm_map.dart';
 import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
@@ -94,13 +92,7 @@ class _TowRequestFormState extends State<TowRequestForm> {
 
   bool _pointInZone(LatLng p) => requestPointInZone(p, widget.zone);
 
-  String _labelFor(LatLng p) {
-    final coords =
-        '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}';
-    final zoneName = widget.zone?.nameAr ?? '';
-    if (zoneName.isEmpty) return coords;
-    return '$zoneName ($coords)';
-  }
+  String _labelFor(LatLng p) => requestAddressLabel(p, widget.zone);
 
   Future<void> _pickPickup() async {
     final picked = await pickAddressOnMap(
@@ -233,7 +225,7 @@ class _TowRequestFormState extends State<TowRequestForm> {
       color: const Color(0xFFF8F9FF),
       child: Column(
         children: [
-          _TopBar(city: city, uid: widget.profile.id, onBack: widget.onBack),
+          RequestFormTopBar(title: 'طلب سطحة', city: city, uid: widget.profile.id, onBack: widget.onBack),
           Expanded(
             child: StreamBuilder<List<ServiceItem>>(
               stream: widget.services,
@@ -335,72 +327,6 @@ class _TowRequestFormState extends State<TowRequestForm> {
   }
 }
 
-class _TopBar extends StatelessWidget {
-  const _TopBar({
-    required this.city,
-    required this.uid,
-    required this.onBack,
-  });
-
-  final String city;
-  final String uid;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0xFFF8F9FF).withValues(alpha: 0.92),
-      child: SafeArea(
-        bottom: false,
-        child: SizedBox(
-          height: 60,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: onBack,
-                  icon: const Icon(Icons.arrow_forward_ios_rounded, size: 18),
-                ),
-                const FieldMark(size: 32),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.recessed,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              city,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.inkSoft,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                NotificationsBellButton(uid: uid),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _RouteCard extends StatelessWidget {
   const _RouteCard({

@@ -42,9 +42,9 @@ class AppColors {
 }
 
 class AppTheme {
-  /// متحكم وضع الثيم (داكن / فاتح / حسب النظام) — مفعل افتراضياً على الوضع الداكن.
+  /// متحكم وضع الثيم (داكن / فاتح / حسب النظام) — مفعل افتراضياً على الوضع الفاتح.
   static final ValueNotifier<ThemeMode> themeModeNotifier =
-      ValueNotifier<ThemeMode>(ThemeMode.dark);
+      ValueNotifier<ThemeMode>(ThemeMode.light);
 
   /// التبديل السريع بين الوضع الداكن والنهاري.
   static void toggleTheme() {
