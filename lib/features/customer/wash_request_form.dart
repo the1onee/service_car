@@ -4,15 +4,13 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/app_snackbar.dart';
-import 'package:barrr/core/geo.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
 import 'package:barrr/data/service_catalog.dart';
-import 'package:barrr/features/notifications/notifications_screen.dart';
-import 'package:barrr/features/shared/address_map_picker.dart';
-import 'package:barrr/features/shared/field_ui.dart';
+import 'package:barrr/features/customer/customer_request_shared.dart';
 import 'package:barrr/features/shared/osm_map.dart';
+import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/service_item.dart';
@@ -129,26 +127,6 @@ class _WashRequestFormState extends State<WashRequestForm> {
     });
   }
 
-  bool _pointInZone(LatLng p) {
-    final z = widget.zone;
-    if (z == null) return true;
-    return isWithinRadiusKm(
-      pointLat: p.latitude,
-      pointLng: p.longitude,
-      centerLat: z.centerLat,
-      centerLng: z.centerLng,
-      radiusKm: z.radiusKm,
-    );
-  }
-
-  String _labelFor(LatLng p) {
-    final coords =
-        '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}';
-    final zoneName = widget.zone?.nameAr ?? '';
-    if (zoneName.isEmpty) return coords;
-    return '$zoneName ($coords)';
-  }
-
   Future<void> _pickLocation() async {
     final picked = await pickAddressOnMap(
       context,
@@ -158,9 +136,10 @@ class _WashRequestFormState extends State<WashRequestForm> {
     if (picked == null || !mounted) return;
     setState(() {
       _pin = picked.latLng;
-      _addressLabel =
-          picked.label.isNotEmpty ? picked.label : _labelFor(picked.latLng);
-      _inZone = _pointInZone(picked.latLng);
+      _addressLabel = picked.label.isNotEmpty
+          ? picked.label
+          : requestAddressLabel(picked.latLng, widget.zone);
+      _inZone = requestPointInZone(picked.latLng, widget.zone);
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
@@ -275,7 +254,7 @@ class _WashRequestFormState extends State<WashRequestForm> {
       color: const Color(0xFFF8F9FF),
       child: Column(
         children: [
-          _TopBar(city: city, uid: widget.profile.id, onBack: widget.onBack),
+          RequestFormTopBar(title: 'طلب غسيل', city: city, uid: widget.profile.id, onBack: widget.onBack),
           Expanded(
             child: StreamBuilder<List<ServiceItem>>(
               stream: widget.services,
@@ -297,13 +276,13 @@ class _WashRequestFormState extends State<WashRequestForm> {
                     return ListView(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
                       children: [
-                        _Card(
+                        RequestFormCard(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              _stepHeader(1, 'المركبة'),
+                              requestStepHeader(1, 'المركبة'),
                               const SizedBox(height: 10),
-                              const _Label('نوع المركبة'),
+                              const RequestFormLabel('نوع المركبة'),
                               const SizedBox(height: 8),
                               Wrap(
                                 spacing: 8,
@@ -337,9 +316,9 @@ class _WashRequestFormState extends State<WashRequestForm> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.stretch,
                                       children: [
-                                        const _Label('الشركة ونوع الشركة'),
+                                        const RequestFormLabel('الشركة ونوع الشركة'),
                                         const SizedBox(height: 6),
-                                        _IconField(
+                                        RequestIconField(
                                           controller: _vehicle,
                                           icon: Icons.directions_car_outlined,
                                           hint: 'تويوتا كامري',
@@ -353,9 +332,9 @@ class _WashRequestFormState extends State<WashRequestForm> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.stretch,
                                       children: [
-                                        const _Label('سنة الصنع'),
+                                        const RequestFormLabel('سنة الصنع'),
                                         const SizedBox(height: 6),
-                                        _IconField(
+                                        RequestIconField(
                                           controller: _year,
                                           icon: Icons.calendar_today_outlined,
                                           hint: '2022',
@@ -370,11 +349,11 @@ class _WashRequestFormState extends State<WashRequestForm> {
                           ),
                         ),
                         const SizedBox(height: 18),
-                        _Card(
+                        RequestFormCard(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              _stepHeader(2, 'باقة الغسيل'),
+                              requestStepHeader(2, 'باقة الغسيل'),
                               const SizedBox(height: 10),
                               Wrap(
                                 spacing: 8,
@@ -407,7 +386,7 @@ class _WashRequestFormState extends State<WashRequestForm> {
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              const _Label('ملاحظة اختيارية'),
+                              const RequestFormLabel('ملاحظة اختيارية'),
                               const SizedBox(height: 6),
                               TextField(
                                 controller: _note,
@@ -432,13 +411,13 @@ class _WashRequestFormState extends State<WashRequestForm> {
                           ),
                         ),
                         const SizedBox(height: 18),
-                        _Card(
+                        RequestFormCard(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Row(
                                 children: [
-                                  Expanded(child: _stepHeader(3, 'الموقع')),
+                                  Expanded(child: requestStepHeader(3, 'الموقع')),
                                   TextButton.icon(
                                     onPressed: _pickLocation,
                                     icon: const Icon(Icons.edit_location_alt,
@@ -532,9 +511,9 @@ class _WashRequestFormState extends State<WashRequestForm> {
                                 ),
                               ),
                               const SizedBox(height: 10),
-                              const _Label('علامة دالة'),
+                              const RequestFormLabel('علامة دالة'),
                               const SizedBox(height: 6),
-                              _IconField(
+                              RequestIconField(
                                 controller: _landmark,
                                 icon: Icons.pin_drop_outlined,
                                 hint: 'بجانب المسجد / بوابة المجمع…',
@@ -543,11 +522,11 @@ class _WashRequestFormState extends State<WashRequestForm> {
                           ),
                         ),
                         const SizedBox(height: 18),
-                        _Card(
+                        RequestFormCard(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              _stepHeader(4, 'الهاتف'),
+                              requestStepHeader(4, 'الهاتف'),
                               const SizedBox(height: 10),
                               TextField(
                                 controller: _phone,
@@ -627,169 +606,4 @@ class _WashRequestFormState extends State<WashRequestForm> {
     );
   }
 
-  Widget _stepHeader(int step, String title) {
-    return Row(
-      children: [
-        Container(
-          width: 26,
-          height: 26,
-          alignment: Alignment.center,
-          decoration: const BoxDecoration(
-            color: AppColors.slate,
-            shape: BoxShape.circle,
-          ),
-          child: Text(
-            '$step',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TopBar extends StatelessWidget {
-  const _TopBar({
-    required this.city,
-    required this.uid,
-    required this.onBack,
-  });
-
-  final String city;
-  final String uid;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0xFFF8F9FF).withValues(alpha: 0.92),
-      child: SafeArea(
-        bottom: false,
-        child: SizedBox(
-          height: 60,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: onBack,
-                  icon: const Icon(Icons.arrow_forward_ios_rounded, size: 18),
-                ),
-                const FieldMark(size: 32),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'طلب غسيل',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                        ),
-                      ),
-                      Text(
-                        city,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.inkSoft,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                NotificationsBellButton(uid: uid),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Card extends StatelessWidget {
-  const _Card({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppTheme.cardShadow(),
-      ),
-      child: child,
-    );
-  }
-}
-
-class _Label extends StatelessWidget {
-  const _Label(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-        color: AppColors.inkSoft,
-      ),
-    );
-  }
-}
-
-class _IconField extends StatelessWidget {
-  const _IconField({
-    required this.controller,
-    required this.icon,
-    required this.hint,
-    this.keyboardType,
-  });
-
-  final TextEditingController controller;
-  final IconData icon;
-  final String hint;
-  final TextInputType? keyboardType;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      keyboardType: keyboardType,
-      style: const TextStyle(fontSize: 14),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: AppColors.inkSoft, fontSize: 12),
-        filled: true,
-        fillColor: AppColors.recessed,
-        prefixIcon: Icon(icon, size: 18, color: AppColors.inkSoft),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      ),
-    );
-  }
 }

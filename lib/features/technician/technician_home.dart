@@ -1,23 +1,15 @@
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
-import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
-import 'package:barrr/features/shared/account_shared.dart';
+import 'package:barrr/features/shared/provider_account_view.dart';
 import 'package:barrr/features/shared/provider_wallet_page.dart';
-import 'package:barrr/data/service_catalog.dart';
-import 'package:barrr/features/auth/add_phone_screen.dart';
-import 'package:barrr/features/legal/privacy_view_screen.dart';
-import 'package:barrr/features/legal/terms_view_screen.dart';
-import 'package:barrr/features/support/support_screen.dart';
 import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/jobs/orders_screen.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
@@ -29,8 +21,6 @@ import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/models/job_offer.dart';
-import 'package:barrr/models/service_item.dart';
-import 'package:barrr/models/vehicle_type.dart';
 import 'package:barrr/services/fcm_service.dart';
 import 'package:barrr/services/geo_write_throttle.dart';
 
@@ -486,7 +476,7 @@ class _TechnicianMapTab extends StatelessWidget {
                       Positioned.fill(
                         child: OfferOverlay(
                           offers: liveOffers,
-                          technicianName: me.name,
+                          providerName: me.name,
                           onSoftDismiss: onSoftDismissOffer,
                           onConsumed: onConsumedOffer,
                         ),

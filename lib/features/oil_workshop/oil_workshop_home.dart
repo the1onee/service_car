@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -11,16 +9,13 @@ import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/shared/account_shared.dart';
+import 'package:barrr/features/shared/provider_account_view.dart';
 import 'package:barrr/features/shared/provider_wallet_page.dart';
-import 'package:barrr/features/auth/add_phone_screen.dart';
-import 'package:barrr/features/legal/privacy_view_screen.dart';
-import 'package:barrr/features/legal/terms_view_screen.dart';
-import 'package:barrr/features/support/support_screen.dart';
 import 'package:barrr/features/jobs/orders_screen.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
-import 'package:barrr/features/oil_workshop/oil_offer_overlay.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/shared/osm_map.dart';
+import 'package:barrr/features/technician/offer_overlay.dart';
 import 'package:barrr/features/technician/tech_job_panel.dart';
 import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
@@ -32,6 +27,8 @@ import 'package:barrr/services/geo_write_throttle.dart';
 part 'oil_workshop_account.part.dart';
 
 /// لوحة ورشة الزيوت: استقبال العروض ودورة الزيارة المنزلية.
+///
+/// طابور العروض يشارك [OfferOverlay] مع الفني (مثل [PaintShopHome] مع [TechnicianHome]).
 class OilWorkshopHome extends StatefulWidget {
   const OilWorkshopHome({super.key, required this.profile});
 
@@ -434,9 +431,9 @@ class _OilMapTab extends StatelessWidget {
                 ),
                 if (showOfferQueue && liveOffers.isNotEmpty)
                   Positioned.fill(
-                    child: OilOfferOverlay(
+                    child: OfferOverlay(
                       offers: liveOffers,
-                      workshopName: me.name,
+                      providerName: me.name,
                       onSoftDismiss: onSoftDismissOffer,
                       onConsumed: onConsumedOffer,
                     ),

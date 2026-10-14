@@ -14,18 +14,18 @@ import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/technician/tech_job_details.dart';
 import 'package:barrr/models/job_offer.dart';
 
-/// طابور عروض واردة: تمرير بين الطلبات + سحب لإبعاد مؤقت.
+/// طابور عروض واردة لمزوّد الخدمة (فني / ورشة زيوت / …): تمرير + سحب لإبعاد مؤقت.
 class OfferOverlay extends StatefulWidget {
   const OfferOverlay({
     super.key,
     required this.offers,
-    required this.technicianName,
+    required this.providerName,
     required this.onSoftDismiss,
     required this.onConsumed,
   });
 
   final List<JobOffer> offers;
-  final String technicianName;
+  final String providerName;
   /// إبعاد مؤقت (سحب) بدون رفض نهائي.
   final ValueChanged<String> onSoftDismiss;
   /// بعد تقديم سعر / رفض / فقدان العرض.
@@ -77,9 +77,15 @@ class _OfferOverlayState extends State<OfferOverlay> {
           children: [
             const SizedBox(height: 8),
             Text(
-              offers.length == 1
-                  ? 'طلب وارد'
-                  : 'طلبات واردة — مرّر للاختيار أو اسحب للإبعاد',
+              () {
+                final allOil = offers.every((o) => o.hasOilDetails);
+                if (offers.length == 1) {
+                  return allOil ? 'طلب زيت وارد' : 'طلب وارد';
+                }
+                return allOil
+                    ? 'طلبات زيت — مرّر أو اسحب للإبعاد'
+                    : 'طلبات واردة — مرّر للاختيار أو اسحب للإبعاد';
+              }(),
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
@@ -119,7 +125,7 @@ class _OfferOverlayState extends State<OfferOverlay> {
                       offer: offer,
                       index: i,
                       total: offers.length,
-                      technicianName: widget.technicianName,
+                      providerName: widget.providerName,
                       onConsumed: () => widget.onConsumed(offer.id),
                     ),
                   );
@@ -162,14 +168,14 @@ class _OfferCard extends StatefulWidget {
     required this.offer,
     required this.index,
     required this.total,
-    required this.technicianName,
+    required this.providerName,
     required this.onConsumed,
   });
 
   final JobOffer offer;
   final int index;
   final int total;
-  final String technicianName;
+  final String providerName;
   final VoidCallback onConsumed;
 
   @override
@@ -238,7 +244,7 @@ class _OfferCardState extends State<_OfferCard> {
     final ok = await AppScope.of(context).dispatch.acceptOffer(
           offerId: widget.offer.id,
           technicianId: widget.offer.technicianId,
-          technicianName: widget.technicianName,
+          technicianName: widget.providerName,
           initialPrice: parsed,
         );
     if (!mounted) return;
@@ -252,6 +258,12 @@ class _OfferCardState extends State<_OfferCard> {
       widget.onConsumed();
       return;
     }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('تم إرسال عرضك للعميل'),
+        duration: Duration(seconds: 3),
+      ),
+    );
     AppSoundService.playOfferPenguin();
     widget.onConsumed();
   }
@@ -282,19 +294,39 @@ class _OfferCardState extends State<_OfferCard> {
                       AppSvgIcons.offerIcon(isWorkshop: oil, size: 28),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text(
-                          tow
-                              ? 'طلب سطحة'
-                              : wash
-                                  ? 'طلب غسيل'
-                                  : (oil
-                                      ? 'طلب تبديل زيت'
-                                      : 'طلب خدمة جديد'),
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
+                        child: oil
+                            ? Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'طلب تبديل زيت جديد',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.amberDeep,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    offer.oilDisplayTitle,
+                                    style: const TextStyle(
+                                      color: AppColors.amberDeep,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Text(
+                                tow
+                                    ? 'طلب سطحة'
+                                    : wash
+                                        ? 'طلب غسيل'
+                                        : 'طلب خدمة جديد',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
                       ),
                       if (widget.total > 1)
                         Padding(
@@ -370,9 +402,14 @@ class _OfferCardState extends State<_OfferCard> {
                     onPressed: _busy ? null : _accept,
                     style: FilledButton.styleFrom(
                       minimumSize: const Size(0, 48),
-                      backgroundColor: AppColors.slate,
+                      backgroundColor:
+                          oil ? AppColors.amberDeep : AppColors.slate,
                     ),
-                    child: Text(_busy ? 'جارٍ الإرسال…' : 'تقديم عرض السعر'),
+                    child: Text(
+                      _busy
+                          ? 'جارٍ الإرسال…'
+                          : (oil ? 'إرسال العرض' : 'تقديم عرض السعر'),
+                    ),
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton(
@@ -386,6 +423,10 @@ class _OfferCardState extends State<_OfferCard> {
                           },
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(0, 44),
+                      foregroundColor: oil ? AppColors.danger : null,
+                      side: oil
+                          ? const BorderSide(color: AppColors.danger)
+                          : null,
                     ),
                     child: const Text(AppStrings.reject),
                   ),

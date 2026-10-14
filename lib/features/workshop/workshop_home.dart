@@ -1,21 +1,14 @@
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
-
 import 'package:flutter/material.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/constants.dart';
-import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/shared/account_shared.dart';
+import 'package:barrr/features/shared/provider_account_view.dart';
 import 'package:barrr/features/shared/provider_wallet_page.dart';
-import 'package:barrr/features/auth/add_phone_screen.dart';
-import 'package:barrr/features/legal/privacy_view_screen.dart';
-import 'package:barrr/features/legal/terms_view_screen.dart';
-import 'package:barrr/features/support/support_screen.dart';
 import 'package:barrr/features/jobs/orders_screen.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/app_network_or_data_image.dart';

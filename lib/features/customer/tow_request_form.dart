@@ -4,12 +4,12 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/app_snackbar.dart';
-import 'package:barrr/core/geo.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
+import 'package:barrr/features/customer/customer_request_shared.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/shared/osm_map.dart';
@@ -92,17 +92,7 @@ class _TowRequestFormState extends State<TowRequestForm> {
     });
   }
 
-  bool _pointInZone(LatLng p) {
-    final z = widget.zone;
-    if (z == null) return true;
-    return isWithinRadiusKm(
-      pointLat: p.latitude,
-      pointLng: p.longitude,
-      centerLat: z.centerLat,
-      centerLng: z.centerLng,
-      radiusKm: z.radiusKm,
-    );
-  }
+  bool _pointInZone(LatLng p) => requestPointInZone(p, widget.zone);
 
   String _labelFor(LatLng p) {
     final coords =
