@@ -273,46 +273,12 @@ class _TowRequestFormState extends State<TowRequestForm> {
                               setState(() => _phoneEditing = !_phoneEditing),
                         ),
                         const SizedBox(height: 14),
-                        SizedBox(
-                          height: 54,
-                          child: FilledButton(
-                            onPressed: _submitting || vehicles.isEmpty
-                                ? null
-                                : () => _submit(towService),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.slate,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            child: _submitting
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.4,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.bolt, color: AppColors.amber),
-                                      SizedBox(width: 8),
-                                      Flexible(
-                                        child: Text(
-                                          'إرسال الطلب لأقرب سطحة متاحة',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                          ),
+                        RequestSubmitButton(
+                          submitting: _submitting,
+                          enabled: vehicles.isNotEmpty,
+                          label: 'إرسال الطلب لأقرب سطحة متاحة',
+                          icon: Icons.bolt,
+                          onPressed: () => _submit(towService),
                         ),
                       ],
                     );

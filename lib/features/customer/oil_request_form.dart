@@ -10,7 +10,6 @@ import 'package:barrr/core/user_error.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/customer/customer_request_shared.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
-import 'package:barrr/features/shared/osm_map.dart';
 import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/oil_type.dart';
@@ -561,108 +560,17 @@ class _OilRequestFormState extends State<OilRequestForm> {
                           ),
                         ),
                         const SizedBox(height: 18),
-                        RequestFormCard(
-                          child: Column(
+                        RequestLocationMapCard(
+                          mapController: _map,
+                          pin: _pin,
+                          zone: widget.zone,
+                          inZone: _inZone,
+                          addressLabel: _addressLabel,
+                          onEditPin: _pickLocation,
+                          step: 3,
+                          footer: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: requestStepHeader(3, 'الموقع'),
-                                  ),
-                                  TextButton.icon(
-                                    onPressed: _pickLocation,
-                                    icon: const Icon(Icons.edit_location_alt,
-                                        size: 16),
-                                    label: const Text('تعديل الدبوس'),
-                                    style: TextButton.styleFrom(
-                                      foregroundColor: AppColors.amberDeep,
-                                      textStyle: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(14),
-                                child: SizedBox(
-                                  height: 140,
-                                  child: Stack(
-                                    children: [
-                                      OsmMap(
-                                        mapController: _map,
-                                        center: _pin,
-                                        zoom: 14,
-                                        showMyLocation: false,
-                                        interactive: false,
-                                        circles: [
-                                          if (widget.zone != null)
-                                            coverageCircle(
-                                              centerLat: widget.zone!.centerLat,
-                                              centerLng: widget.zone!.centerLng,
-                                              radiusKm: widget.zone!.radiusKm,
-                                            ),
-                                        ],
-                                      ),
-                                      const IgnorePointer(
-                                        child: Center(
-                                          child: Icon(
-                                            Icons.location_on,
-                                            color: AppColors.amberDeep,
-                                            size: 38,
-                                          ),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        left: 0,
-                                        right: 0,
-                                        bottom: 0,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(10),
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              begin: Alignment.topCenter,
-                                              end: Alignment.bottomCenter,
-                                              colors: [
-                                                Colors.transparent,
-                                                AppColors.slate
-                                                    .withValues(alpha: 0.85),
-                                              ],
-                                            ),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              const Icon(Icons.location_on,
-                                                  color: AppColors.amber,
-                                                  size: 18),
-                                              const SizedBox(width: 6),
-                                              Expanded(
-                                                child: Text(
-                                                  _inZone
-                                                      ? _addressLabel
-                                                      : 'خارج التغطية',
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 10),
                               const RequestFormLabel('علامة دالة'),
                               const SizedBox(height: 6),
                               RequestIconField(
@@ -704,49 +612,12 @@ class _OilRequestFormState extends State<OilRequestForm> {
                           ),
                         ),
                         const SizedBox(height: 18),
-                        SizedBox(
-                          height: 54,
-                          child: FilledButton(
-                            onPressed: _submitting ||
-                                    vehicles.isEmpty ||
-                                    oils.isEmpty
-                                ? null
-                                : () => _submit(oilService),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.slate,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            child: _submitting
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.4,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.oil_barrel,
-                                          color: AppColors.amber),
-                                      SizedBox(width: 8),
-                                      Flexible(
-                                        child: Text(
-                                          'إرسال الطلب لأقرب فني زيوت',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                          ),
+                        RequestSubmitButton(
+                          submitting: _submitting,
+                          enabled: vehicles.isNotEmpty && oils.isNotEmpty,
+                          label: 'إرسال الطلب لأقرب فني زيوت',
+                          icon: Icons.oil_barrel,
+                          onPressed: () => _submit(oilService),
                         ),
                       ],
                     );

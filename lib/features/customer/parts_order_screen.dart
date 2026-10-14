@@ -6,6 +6,7 @@ import 'package:barrr/core/cloudinary_config.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
+import 'package:barrr/features/customer/customer_request_shared.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/features/shared/field_ui.dart';
@@ -387,7 +388,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                             ],
                           ),
                           const Divider(height: 20),
-                          const _Label('اختصاص السيارة'),
+                          const RequestFormLabel('اختصاص السيارة'),
                           if (_loadingSpecialties)
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 12),
@@ -461,7 +462,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                               ),
                             ),
                           const SizedBox(height: 12),
-                          const _Label('المركبة'),
+                          const RequestFormLabel('المركبة'),
                           TextFormField(
                             controller: _vehicle,
                             textInputAction: TextInputAction.next,
@@ -473,7 +474,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                                 : null,
                           ),
                           const SizedBox(height: 12),
-                          const _Label('سنة الصنع'),
+                          const RequestFormLabel('سنة الصنع'),
                           TextFormField(
                             controller: _carYear,
                             keyboardType: TextInputType.number,
@@ -481,7 +482,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                             decoration: _fieldDeco(hint: 'مثال: 2021'),
                           ),
                           const SizedBox(height: 12),
-                          const _Label('القطعة'),
+                          const RequestFormLabel('القطعة'),
                           TextFormField(
                             controller: _partDetails,
                             textInputAction: TextInputAction.next,
@@ -493,7 +494,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                                 : null,
                           ),
                           const SizedBox(height: 12),
-                          const _Label('حالة القطعة'),
+                          const RequestFormLabel('حالة القطعة'),
                           const SizedBox(height: 8),
                           _PartConditionPicker(
                             value: _partCondition,
@@ -501,7 +502,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                                 setState(() => _partCondition = value),
                           ),
                           const SizedBox(height: 12),
-                          const _Label('الصورة'),
+                          const RequestFormLabel('الصورة'),
                           if (_partImageUrl != null) ...[
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -586,7 +587,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                               ),
                             ),
                           const SizedBox(height: 12),
-                          const _Label('العنوان'),
+                          const RequestFormLabel('العنوان'),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -651,7 +652,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                               ),
                             ),
                           const SizedBox(height: 12),
-                          const _Label('الهاتف'),
+                          const RequestFormLabel('الهاتف'),
                           TextFormField(
                             controller: _phone,
                             keyboardType: TextInputType.phone,
@@ -798,27 +799,6 @@ class _PartConditionPicker extends StatelessWidget {
           if (option != _options.last) const SizedBox(height: 8),
         ],
       ],
-    );
-  }
-}
-
-class _Label extends StatelessWidget {
-  const _Label(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: AppColors.ink,
-        ),
-      ),
     );
   }
 }

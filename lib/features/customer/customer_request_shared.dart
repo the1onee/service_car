@@ -255,6 +255,7 @@ class RequestLocationMapCard extends StatelessWidget {
     required this.onEditPin,
     this.step = 3,
     this.title = 'الموقع',
+    this.footer,
   });
 
   final MapController mapController;
@@ -265,6 +266,7 @@ class RequestLocationMapCard extends StatelessWidget {
   final VoidCallback onEditPin;
   final int step;
   final String title;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -364,6 +366,10 @@ class RequestLocationMapCard extends StatelessWidget {
               ),
             ),
           ),
+          if (footer != null) ...[
+            const SizedBox(height: 10),
+            footer!,
+          ],
         ],
       ),
     );
@@ -377,12 +383,16 @@ class RequestSubmitButton extends StatelessWidget {
     required this.enabled,
     required this.label,
     required this.onPressed,
+    this.icon = Icons.send_rounded,
+    this.iconColor = AppColors.amber,
   });
 
   final bool submitting;
   final bool enabled;
   final String label;
   final VoidCallback onPressed;
+  final IconData icon;
+  final Color iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -409,13 +419,16 @@ class RequestSubmitButton extends StatelessWidget {
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.send_rounded, size: 18),
+                  Icon(icon, color: iconColor),
                   const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
+                  Flexible(
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ],

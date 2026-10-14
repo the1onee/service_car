@@ -10,7 +10,6 @@ import 'package:barrr/core/theme.dart' show AppColors;
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/features/customer/customer_request_shared.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
-import 'package:barrr/features/shared/osm_map.dart';
 import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/service_item.dart';
@@ -438,141 +437,18 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                           ),
                         ),
                         const SizedBox(height: 22),
-                        requestStepHeader(4, 'الموقع'),
-                        const SizedBox(height: 10),
-                        RequestFormCard(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: SizedBox(
-                                  height: 148,
-                                  child: Stack(
-                                    children: [
-                                      OsmMap(
-                                        mapController: _map,
-                                        center: _pin,
-                                        zoom: 14,
-                                        showMyLocation: false,
-                                        interactive: false,
-                                        circles: [
-                                          if (widget.zone != null)
-                                            coverageCircle(
-                                              centerLat: widget.zone!.centerLat,
-                                              centerLng: widget.zone!.centerLng,
-                                              radiusKm: widget.zone!.radiusKm,
-                                            ),
-                                        ],
-                                      ),
-                                      const IgnorePointer(
-                                        child: Center(
-                                          child: Icon(
-                                            Icons.location_on,
-                                            color: AppColors.amberDeep,
-                                            size: 40,
-                                          ),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        bottom: 8,
-                                        left: 8,
-                                        child: Material(
-                                          color: Colors.white
-                                              .withValues(alpha: 0.95),
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                          child: InkWell(
-                                            onTap: _pickLocation,
-                                            borderRadius:
-                                                BorderRadius.circular(10),
-                                            child: const Padding(
-                                              padding: EdgeInsets.symmetric(
-                                                  horizontal: 10, vertical: 7),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(Icons.tune,
-                                                      size: 16,
-                                                      color:
-                                                          AppColors.amberDeep),
-                                                  SizedBox(width: 4),
-                                                  Text(
-                                                    'تعديل الدبوس',
-                                                    style: TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: AppColors.recessed,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.pin_drop_outlined,
-                                      color: _inZone
-                                          ? AppColors.amberDeep
-                                          : AppColors.danger,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            _inZone
-                                                ? (widget.zone?.nameAr ??
-                                                    'موقع الطلب')
-                                                : 'خارج التغطية',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 13,
-                                              color: _inZone
-                                                  ? AppColors.ink
-                                                  : AppColors.danger,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            _addressLabel,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              color: AppColors.inkSoft,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              RequestIconField(
-                                controller: _landmark,
-                                icon: Icons.storefront_outlined,
-                                hint:
-                                    'علامة دالة',
-                              ),
-                            ],
+                        RequestLocationMapCard(
+                          mapController: _map,
+                          pin: _pin,
+                          zone: widget.zone,
+                          inZone: _inZone,
+                          addressLabel: _addressLabel,
+                          onEditPin: _pickLocation,
+                          step: 4,
+                          footer: RequestIconField(
+                            controller: _landmark,
+                            icon: Icons.storefront_outlined,
+                            hint: 'علامة دالة',
                           ),
                         ),
                         const SizedBox(height: 22),
@@ -625,48 +501,13 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                           ),
                         ),
                         const SizedBox(height: 22),
-                        SizedBox(
-                          height: 54,
-                          child: FilledButton(
-                            onPressed: _submitting ||
-                                    services.isEmpty ||
-                                    vehicles.isEmpty
-                                ? null
-                                : _submit,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.slate,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            child: _submitting
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.4,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.bolt, color: AppColors.amber),
-                                      SizedBox(width: 8),
-                                      Flexible(
-                                        child: Text(
-                                          'إرسال الطلب للفنيين القريبين',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                          ),
+                        RequestSubmitButton(
+                          submitting: _submitting,
+                          enabled:
+                              services.isNotEmpty && vehicles.isNotEmpty,
+                          label: 'إرسال الطلب للفنيين القريبين',
+                          icon: Icons.bolt,
+                          onPressed: _submit,
                         ),
                       ],
                     );
