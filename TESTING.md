@@ -43,7 +43,7 @@ flowchart TB
 |--------|--------|
 | L0–L1 | مغطاة محلياً (Flutter + Vitest + node:test) |
 | L2 | Express mocks + rules smoke؛ emulator في CI (يتطلب Java) |
-| L3–L4 | عقود هاتف/API + [`.github/workflows/test.yml`](../.github/workflows/test.yml) |
+| L3–L4 | عقود هاتف/API + [`.github/workflows/test.yml`](.github/workflows/test.yml) |
 
 ---
 
@@ -139,7 +139,7 @@ flowchart LR
 | `../barrr-admin/server/job_notify.test.js` | رسائل انتقال حالة الطلب |
 | `../barrr-admin/src/lib/*.test.ts` | Vitest Admin |
 | `rules-test/` | قواعد Firestore |
-| `../.github/workflows/test.yml` | CI |
+| [`.github/workflows/test.yml`](.github/workflows/test.yml) | CI (Flutter + rules؛ الأدمن في `barrr-admin/.github`) |
 
 ### فجوات اختيارية لاحقة
 
