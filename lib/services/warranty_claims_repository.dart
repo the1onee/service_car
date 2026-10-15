@@ -42,15 +42,19 @@ class WarrantyClaimsRepository {
     });
   }
 
-  Stream<WarrantyClaim?> watchOpenForJob(String jobId) {
+  /// يجب تقييد الاستعلام بـ [customerId] أو [providerId] ليتوافق مع قواعد القراءة.
+  Stream<WarrantyClaim?> watchOpenForJob({
+    required String jobId,
+    required String customerId,
+  }) {
     return _col
-        .where('jobId', isEqualTo: jobId)
-        .limit(10)
+        .where('customerId', isEqualTo: customerId)
+        .limit(60)
         .snapshots()
         .map((snap) {
-      final rows = snap.docs.map(WarrantyClaim.fromDoc).toList();
-      for (final c in rows) {
-        if (c.isOpen) return c;
+      for (final doc in snap.docs) {
+        final c = WarrantyClaim.fromDoc(doc);
+        if (c.jobId == jobId && c.isOpen) return c;
       }
       return null;
     });
@@ -88,10 +92,13 @@ class WarrantyClaimsRepository {
       throw StateError('لا يوجد مقدم خدمة مرتبط بهذا الضمان.');
     }
 
+    // الاستعلام بـ jobId وحده يُرفض (permission-denied)؛ القواعد تتطلب customerId.
     final existingSnap =
-        await _col.where('jobId', isEqualTo: job.id).limit(10).get();
+        await _col.where('customerId', isEqualTo: customerId).limit(60).get();
     final hasOpen = existingSnap.docs.any((d) {
-      final s = WarrantyClaim.statusFromFirestore(d.data()['status'] as String?);
+      final data = d.data();
+      if ((data['jobId'] as String?)?.trim() != job.id) return false;
+      final s = WarrantyClaim.statusFromFirestore(data['status'] as String?);
       return claimStatusIsActive(s);
     });
     if (hasOpen) {

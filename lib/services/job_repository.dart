@@ -987,20 +987,17 @@ class JobRepository {
     }
   }
 
-  /// ورشة قطع الغيار: تأكيد تجهيز/إرسال القطعة مع صورة ما يُشحن.
+  /// ورشة قطع الغيار: تأكيد تجهيز/إرسال القطعة (الصورة اختيارية).
   Future<void> markPartsShipped(
     String jobId, {
-    required String shippedPartImageUrl,
+    String shippedPartImageUrl = '',
   }) async {
     final url = shippedPartImageUrl.trim();
-    if (url.isEmpty) {
-      throw StateError('أرفق صورة القطعة قبل تأكيد الإرسال');
-    }
     // إن بقي الطلب على quoted من CF القديمة، رقِّه أولاً.
     await promotePartsQuotedToEnRoute(jobId);
     await _jobs.doc(jobId).update({
       'status': JobStatus.inProgress.name,
-      'shippedPartImageUrl': url,
+      if (url.isNotEmpty) 'shippedPartImageUrl': url,
     });
   }
 

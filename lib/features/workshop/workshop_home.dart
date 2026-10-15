@@ -132,14 +132,46 @@ class _WorkshopHomeState extends State<WorkshopHome> {
   }
 
   Future<void> _markShipped(Job job) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text(
+                'إرسال القطعة',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text('الصورة اختيارية'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('إرسال مع صورة'),
+              onTap: () => Navigator.pop(ctx, 'with_photo'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.send_outlined),
+              title: const Text('إرسال بدون صورة'),
+              onTap: () => Navigator.pop(ctx, 'without'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+
     try {
-      final url = await CloudinaryUpload().pickAndUpload(
-        folder: CloudinaryConfig.folderParts,
-        tags: const ['parts_shipped'],
-        imageQuality: 55,
-        maxWidth: 1280,
-      );
-      if (!mounted) return;
+      var url = '';
+      if (choice == 'with_photo') {
+        url = await CloudinaryUpload().pickAndUpload(
+          folder: CloudinaryConfig.folderParts,
+          tags: const ['parts_shipped'],
+          imageQuality: 55,
+          maxWidth: 1280,
+        );
+        if (!mounted) return;
+      }
       await AppScope.of(context).jobs.markPartsShipped(
             job.id,
             shippedPartImageUrl: url,
@@ -1050,7 +1082,7 @@ class _AcceptedJobCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text('إرسال القطعة (مع صورة)'),
+                child: const Text('إرسال القطعة'),
               ),
             ),
           ],

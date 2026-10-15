@@ -314,7 +314,8 @@ service cloud.firestore {
             'status', 'finalPrice', 'warranty', 'receivedAmount', 'commissionAmount',
             'exactLocation', 'technicianId', 'technicianName', 'lastAssignedTechnicianId',
             'cancelledBy', 'cancelReason', 'walletApplied', 'changeAmount', 'ratings',
-            'deliveryType', 'vendorNote', 'partCondition', 'initialPrice'
+            'deliveryType', 'vendorNote', 'partCondition', 'initialPrice',
+            'shippedPartImageUrl'
           ]);
       }
 

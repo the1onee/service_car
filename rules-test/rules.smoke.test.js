@@ -65,6 +65,10 @@ describe('firestore.rules smoke', () => {
     assert.match(rules, /assignedTechJobUpdate[\s\S]*commissionRate/);
   });
 
+  it('assignedTechJobUpdate allows shippedPartImageUrl for parts shipping', () => {
+    assert.match(rules, /assignedTechJobUpdate[\s\S]*shippedPartImageUrl/);
+  });
+
   it('assigned tech can read jobLocations', () => {
     assert.match(
       rules,
