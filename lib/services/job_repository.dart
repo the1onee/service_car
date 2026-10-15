@@ -1082,10 +1082,16 @@ class JobRepository {
     required String jobId,
     required double finalPrice,
     required Warranty warranty,
-  }) {
+  }) async {
     final amountError = AppConstants.serviceAmountError(finalPrice);
     if (amountError != null) throw StateError(amountError);
-    return _jobs.doc(jobId).update({
+    final snap = await _jobs.doc(jobId).get();
+    if (!snap.exists) throw StateError('الطلب غير موجود');
+    final job = Job.fromDoc(snap);
+    final reductionError =
+        AppConstants.priceReductionError(finalPrice, job.initialPrice);
+    if (reductionError != null) throw StateError(reductionError);
+    await _jobs.doc(jobId).update({
       'finalPrice': finalPrice,
       'warranty': warranty.toMap(),
       'status': JobStatus.finalQuote.name,
@@ -1116,6 +1122,34 @@ class JobRepository {
       customerId = job['customerId'] as String? ?? '';
       useWallet = job['useWallet'] == true;
       bill = _billOf(job, receivedAmount);
+      final cashDue = () {
+        final reserve = useWallet
+            ? ((job['walletReserve'] as num?)?.toDouble() ?? 0)
+            : 0.0;
+        final due = bill - reserve;
+        return due < 0 ? 0.0 : due;
+      }();
+      if (!(receivedAmount == 0 && cashDue <= 0)) {
+        final amountError = AppConstants.serviceAmountError(receivedAmount);
+        if (amountError != null) throw StateError(amountError);
+        final baseline = (job['initialPrice'] as num?)?.toDouble() ??
+            ((job['finalPrice'] as num?)?.toDouble());
+        final minAllowed =
+            AppConstants.minAllowedPriceFromBaseline(baseline);
+        if (minAllowed != null) {
+          if (useWallet && cashDue + 0.01 < minAllowed) {
+            if (receivedAmount + 0.01 < cashDue) {
+              throw StateError(
+                'المبلغ المستلم أقل من المطلوب نقداً (${cashDue.toStringAsFixed(0)})',
+              );
+            }
+          } else {
+            final reductionError =
+                AppConstants.priceReductionError(receivedAmount, baseline);
+            if (reductionError != null) throw StateError(reductionError);
+          }
+        }
+      }
       final entrySnap = await tx.get(entryRef);
       final techRef = _db.collection(Cols.users).doc(techId);
       final techSnap = await tx.get(techRef);

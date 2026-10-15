@@ -21,6 +21,8 @@ class AppConstants {
   /// أقصى عدد مرشحين نهائيين يُرسلون للعميل في جولة واحدة.
   static const maxCandidatesPerDispatch = 50;
   static const minServiceAmount = 3000.0;
+  /// أقصى تخفيض مسموح عن العرض المبدئي (20%).
+  static const maxPriceReductionRatio = 0.20;
 
   /// مبلغ الخدمة: 3000 على الأقل، ومن مضاعفات 1000 (ينتهي بـ 000).
   static String? serviceAmountError(num? value) {
@@ -32,6 +34,27 @@ class AppConstants {
         rounded < minServiceAmount ||
         rounded % 1000 != 0) {
       return 'أقل مبلغ 3000 ويجب أن ينتهي بـ 000';
+    }
+    return null;
+  }
+
+  /// أدنى مبلغ مسموح بعد تخفيض حتى 20% من السعر المرجعي.
+  /// يُقرَّب لأعلى إلى مضاعف 1000، مع احترام [minServiceAmount].
+  static double? minAllowedPriceFromBaseline(num? baseline) {
+    if (baseline == null || baseline <= 0) return null;
+    final raw = baseline.toDouble() * (1 - maxPriceReductionRatio);
+    final ceilThousand = (raw / 1000).ceil() * 1000.0;
+    if (ceilThousand < minServiceAmount) return minServiceAmount;
+    return ceilThousand;
+  }
+
+  /// خطأ إن كان [newPrice] أقل من الحد المسموح نسبةً إلى [baseline].
+  static String? priceReductionError(num? newPrice, num? baseline) {
+    final minAllowed = minAllowedPriceFromBaseline(baseline);
+    if (minAllowed == null || newPrice == null) return null;
+    if (newPrice + 0.01 < minAllowed) {
+      return 'لا يمكن تخفيض السعر أكثر من 20% من العرض المبدئي '
+          '(الحد الأدنى ${minAllowed.toStringAsFixed(0)})';
     }
     return null;
   }

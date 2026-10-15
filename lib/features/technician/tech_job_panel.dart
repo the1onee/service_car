@@ -292,14 +292,18 @@ class _TechJobPanelState extends State<TechJobPanel> {
         if (job.isWashOrder || job.isTowOrder || job.isOilOrder) {
           return _cashCompleteActions(context, job, jobs);
         }
+        final minFinal = AppConstants.minAllowedPriceFromBaseline(job.initialPrice);
+        final finalHelper = minFinal != null
+            ? 'لا يقل عن ${minFinal.toStringAsFixed(0)} (حد تخفيض 20%) وينتهي بـ 000'
+            : 'الحد الأدنى 3000 وينتهي بـ 000';
         return [
           TextField(
             controller: _finalPrice,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: AppStrings.finalPrice,
-              hintText: '5000',
-              helperText: 'الحد الأدنى 3000 وينتهي بـ 000',
+              hintText: minFinal?.toStringAsFixed(0) ?? '5000',
+              helperText: finalHelper,
             ),
           ),
           const SizedBox(height: 8),
@@ -316,11 +320,17 @@ class _TechJobPanelState extends State<TechJobPanel> {
             onPressed: () {
               final parsed = _parseMoney(_finalPrice.text);
               final amountError = AppConstants.serviceAmountError(parsed);
-              if (amountError != null || parsed == null) {
+              final reductionError =
+                  AppConstants.priceReductionError(parsed, job.initialPrice);
+              if (amountError != null ||
+                  reductionError != null ||
+                  parsed == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      amountError ?? 'أدخل مبلغاً ينتهي بـ 000، والحد الأدنى 3000',
+                      amountError ??
+                          reductionError ??
+                          'أدخل مبلغاً ينتهي بـ 000، والحد الأدنى 3000',
                     ),
                   ),
                 );
@@ -377,6 +387,13 @@ class _TechJobPanelState extends State<TechJobPanel> {
     JobRepository jobs,
   ) {
     final due = job.cashDue > 0 ? job.cashDue : job.billAmount;
+    final priceBaseline = job.initialPrice ?? job.billAmount;
+    final minRecv = AppConstants.minAllowedPriceFromBaseline(
+      priceBaseline > 0 ? priceBaseline : null,
+    );
+    final recvHelper = minRecv != null
+        ? 'لا يقل عن ${minRecv.toStringAsFixed(0)} (حد تخفيض 20%) وينتهي بـ 000'
+        : 'الحد الأدنى 3000 وينتهي بـ 000';
     return [
       Text(
         job.isOilOrder
@@ -397,10 +414,10 @@ class _TechJobPanelState extends State<TechJobPanel> {
         controller: _received,
         keyboardType: const TextInputType.numberWithOptions(decimal: false),
         textDirection: TextDirection.ltr,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           labelText: AppStrings.receivedAmount,
-          hintText: '25000',
-          helperText: 'الحد الأدنى 3000 وينتهي بـ 000',
+          hintText: minRecv?.toStringAsFixed(0) ?? '25000',
+          helperText: recvHelper,
         ),
       ),
       const SizedBox(height: 12),
@@ -414,11 +431,17 @@ class _TechJobPanelState extends State<TechJobPanel> {
                 final amountError = (p == 0 && dueNow <= 0)
                     ? null
                     : AppConstants.serviceAmountError(p);
-                if (amountError != null || p == null) {
+                final reductionError = (p == null || (p == 0 && dueNow <= 0))
+                    ? null
+                    : _receivedReductionError(p, job, dueNow);
+                if (amountError != null ||
+                    reductionError != null ||
+                    p == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
                         amountError ??
+                            reductionError ??
                             'أدخل مبلغاً ينتهي بـ 000، والحد الأدنى 3000',
                       ),
                     ),
@@ -462,6 +485,21 @@ class _TechJobPanelState extends State<TechJobPanel> {
       ),
     ];
   }
+}
+
+/// عند استخدام المحفظة قد يكون المطلوب نقداً أقل من حد 20% — عندها نسمح بالمطلوب فقط.
+String? _receivedReductionError(double received, Job job, double cashDue) {
+  final baseline = job.initialPrice ??
+      (job.billAmount > 0 ? job.billAmount : null);
+  final minAllowed = AppConstants.minAllowedPriceFromBaseline(baseline);
+  if (minAllowed == null) return null;
+  if (job.useWallet && cashDue + 0.01 < minAllowed) {
+    if (received + 0.01 < cashDue) {
+      return 'المبلغ المستلم أقل من المطلوب نقداً (${cashDue.toStringAsFixed(0)})';
+    }
+    return null;
+  }
+  return AppConstants.priceReductionError(received, baseline);
 }
 
 String _readableError(Object e) => userFacingError(e);

@@ -75,6 +75,30 @@ void main() {
     });
   });
 
+  group('priceReductionError', () {
+    test('100000 baseline allows down to 80000 only', () {
+      expect(AppConstants.minAllowedPriceFromBaseline(100000), 80000);
+      expect(AppConstants.priceReductionError(80000, 100000), isNull);
+      expect(AppConstants.priceReductionError(100000, 100000), isNull);
+      expect(AppConstants.priceReductionError(120000, 100000), isNull);
+      expect(AppConstants.priceReductionError(10000, 100000), isNotNull);
+      expect(AppConstants.priceReductionError(79000, 100000), isNotNull);
+    });
+
+    test('5000 baseline allows down to 4000', () {
+      expect(AppConstants.minAllowedPriceFromBaseline(5000), 4000);
+      expect(AppConstants.priceReductionError(4000, 5000), isNull);
+      expect(AppConstants.priceReductionError(3000, 5000), isNotNull);
+    });
+
+    test('ceil to nearest 1000 and respect minServiceAmount', () {
+      expect(AppConstants.minAllowedPriceFromBaseline(105000), 84000);
+      expect(AppConstants.minAllowedPriceFromBaseline(3000), 3000);
+      expect(AppConstants.minAllowedPriceFromBaseline(null), isNull);
+      expect(AppConstants.priceReductionError(3000, null), isNull);
+    });
+  });
+
   group('AppUser wallet gates', () {
     test('technician needs approval and min wallet to receive jobs', () {
       expect(

@@ -304,12 +304,56 @@ service cloud.firestore {
           ]);
       }
 
+      // أدنى سعر مسموح بعد تخفيض حتى 20% من العرض المبدئي.
+      function minAllowedFromInitial() {
+        return resource.data.initialPrice is number
+          && resource.data.initialPrice > 0
+          ? resource.data.initialPrice * 0.8
+          : 0;
+      }
+
+      function priceBaseline() {
+        return resource.data.finalPrice is number && resource.data.finalPrice > 0
+          ? resource.data.finalPrice
+          : (resource.data.initialPrice is number && resource.data.initialPrice > 0
+              ? resource.data.initialPrice
+              : 0);
+      }
+
+      // لا يُخفض السعر النهائي أو المبلغ المستلم أكثر من 20% عن المرجع.
+      // استثناء: عند المحفظة يُسمح بالمطلوب نقداً إن كان أقل من حد 20%.
+      function respectsPriceReductionCap() {
+        let minFromInitial = minAllowedFromInitial();
+        let baseline = priceBaseline();
+        let minFromBaseline = baseline > 0 ? baseline * 0.8 : 0;
+        let reserve = resource.data.useWallet == true
+          && resource.data.walletReserve is number
+          ? resource.data.walletReserve
+          : 0;
+        let cashDue = baseline - reserve;
+        let cashDueClamped = cashDue < 0 ? 0 : cashDue;
+        let finalOk = !jobDiffKeys().hasAny(['finalPrice'])
+          || !(request.resource.data.finalPrice is number)
+          || minFromInitial <= 0
+          || request.resource.data.finalPrice >= minFromInitial - 0.05;
+        let receivedOk = !jobDiffKeys().hasAny(['receivedAmount'])
+          || !(request.resource.data.receivedAmount is number)
+          || request.resource.data.receivedAmount <= 0.05
+          || minFromBaseline <= 0
+          || request.resource.data.receivedAmount >= minFromBaseline - 0.05
+          || (resource.data.useWallet == true
+            && cashDueClamped < minFromBaseline
+            && request.resource.data.receivedAmount >= cashDueClamped - 0.05);
+        return finalOk && receivedOk;
+      }
+
       // الفني/الورشة المعيّنة: تقدّم الحالة والإكمال — بلا تغيير customerId/commissionRate.
       function assignedTechJobUpdate() {
         return isTech()
           && !jobDiffKeys().hasAny([
             'customerId', 'serviceId', 'commissionRate', 'useWallet', 'walletReserve'
           ])
+          && respectsPriceReductionCap()
           && jobDiffKeys().hasOnly([
             'status', 'finalPrice', 'warranty', 'receivedAmount', 'commissionAmount',
             'exactLocation', 'technicianId', 'technicianName', 'lastAssignedTechnicianId',
