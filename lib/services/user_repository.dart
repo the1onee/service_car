@@ -84,6 +84,14 @@ class UserRepository {
     return _userRef(uid).set({'fcmToken': token}, SetOptions(merge: true));
   }
 
+  /// عند تسجيل الخروج: إيقاف الاستقبال ومسح توكن الدفع حتى لا تصل طلبات/إشعارات.
+  Future<void> clearPushSession(String uid) {
+    return _userRef(uid).set({
+      'isOnline': false,
+      'fcmToken': FieldValue.delete(),
+    }, SetOptions(merge: true));
+  }
+
   Future<OnlineResult> setOnline(String uid, bool online) async {
     if (!online) {
       await _userRef(uid).set({'isOnline': false}, SetOptions(merge: true));

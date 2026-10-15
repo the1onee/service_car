@@ -115,6 +115,14 @@ void main() {
         isFalse,
       );
       expect(
+        _job(
+          id: '3p',
+          status: JobStatus.inProgress,
+          serviceId: 'parts',
+        ).customerCanCancel,
+        isTrue,
+      );
+      expect(
         _job(id: '4', status: JobStatus.completed).customerCanCancel,
         isFalse,
       );

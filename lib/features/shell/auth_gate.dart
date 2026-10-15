@@ -4,6 +4,7 @@ import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/auth/auth_screen.dart';
 import 'package:barrr/features/legal/terms_accept_screen.dart';
+import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/shell/role_home.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/services/user_repository.dart';
@@ -145,7 +146,7 @@ class _MissingProfile extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               FilledButton(
-                onPressed: () => AppScope.of(context).auth.signOut(),
+                onPressed: () => signOutFrom(context),
                 child: const Text(AppStrings.logout),
               ),
             ],

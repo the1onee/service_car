@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:barrr/core/app_brand.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
@@ -193,15 +194,26 @@ class FieldMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(size * 0.28);
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         color: AppColors.slate,
-        borderRadius: BorderRadius.circular(size * 0.28),
+        borderRadius: radius,
       ),
-      child: Icon(Icons.car_repair_rounded,
-          color: AppColors.amber, size: size * 0.55),
+      clipBehavior: Clip.antiAlias,
+      child: Image.asset(
+        AppBrand.logoAsset,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Icon(
+          Icons.car_repair_rounded,
+          color: AppColors.amber,
+          size: size * 0.55,
+        ),
+      ),
     );
   }
 }
@@ -493,8 +505,15 @@ class AccountHeader extends StatelessWidget {
   }
 }
 
-Future<void> signOutFrom(BuildContext context) {
-  return AppScope.of(context).auth.signOut();
+Future<void> signOutFrom(BuildContext context) async {
+  final scope = AppScope.of(context);
+  final uid = scope.auth.currentUid;
+  if (uid != null && uid.isNotEmpty) {
+    try {
+      await scope.users.clearPushSession(uid);
+    } catch (_) {}
+  }
+  await scope.auth.signOut();
 }
 
 Future<void> openCustomerInMaps(double lat, double lng) async {

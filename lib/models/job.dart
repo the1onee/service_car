@@ -81,6 +81,7 @@ class Job {
     this.partCondition = '',
     this.partNote = '',
     this.partImageUrl = '',
+    this.shippedPartImageUrl = '',
     this.carMake = '',
     this.carModel = '',
     this.carYear = '',
@@ -140,6 +141,8 @@ class Job {
   final String partCondition;
   final String partNote;
   final String partImageUrl;
+  /// صورة القطعة التي تشحنها الورشة بعد القبول (ليست صورة مرجع الزبون).
+  final String shippedPartImageUrl;
   final String carMake;
   final String carModel;
   final String carYear;
@@ -223,7 +226,10 @@ class Job {
       JobStatus.arrived,
       JobStatus.finalQuote,
     };
-    return open.contains(status);
+    if (open.contains(status)) return true;
+    // قطع غيار: الإلغاء متاح بعد الشحن (مع صورة القطعة) حتى تأكيد الاستلام.
+    if (isPartsOrder && status == JobStatus.inProgress) return true;
+    return false;
   }
 
   bool get technicianCanWithdraw {
@@ -360,6 +366,7 @@ class Job {
       partCondition: d['partCondition'] as String? ?? '',
       partNote: d['partNote'] as String? ?? '',
       partImageUrl: d['partImageUrl'] as String? ?? '',
+      shippedPartImageUrl: d['shippedPartImageUrl'] as String? ?? '',
       carMake: d['carMake'] as String? ?? '',
       carModel: d['carModel'] as String? ?? '',
       carYear: d['carYear'] as String? ?? '',

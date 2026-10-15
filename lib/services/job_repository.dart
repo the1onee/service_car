@@ -975,8 +975,8 @@ class JobRepository {
     final snap = await _jobs.doc(jobId).get();
     if (!snap.exists) return;
     final job = Job.fromDoc(snap);
-    // غسيل / سطحة: بعد الوصول مباشرة للعمل واستلام المبلغ — بلا سعر نهائي/ضمان.
-    if (job.isWashOrder || job.isTowOrder) {
+    // غسيل / سطحة / زيت: بعد الوصول مباشرة للعمل واستلام المبلغ — بلا سعر نهائي/ضمان.
+    if (job.isWashOrder || job.isTowOrder || job.isOilOrder) {
       await _jobs.doc(jobId).update({
         'status': JobStatus.inProgress.name,
         if (job.finalPrice == null && job.initialPrice != null)
@@ -987,11 +987,21 @@ class JobRepository {
     }
   }
 
-  /// ورشة قطع الغيار: تأكيد تجهيز/إرسال القطعة للعميل.
-  Future<void> markPartsShipped(String jobId) async {
+  /// ورشة قطع الغيار: تأكيد تجهيز/إرسال القطعة مع صورة ما يُشحن.
+  Future<void> markPartsShipped(
+    String jobId, {
+    required String shippedPartImageUrl,
+  }) async {
+    final url = shippedPartImageUrl.trim();
+    if (url.isEmpty) {
+      throw StateError('أرفق صورة القطعة قبل تأكيد الإرسال');
+    }
     // إن بقي الطلب على quoted من CF القديمة، رقِّه أولاً.
     await promotePartsQuotedToEnRoute(jobId);
-    await _jobs.doc(jobId).update({'status': JobStatus.inProgress.name});
+    await _jobs.doc(jobId).update({
+      'status': JobStatus.inProgress.name,
+      'shippedPartImageUrl': url,
+    });
   }
 
   /// ترحيل طلبات القطع العالقة على quoted بعد قبول العميل → enRoute.

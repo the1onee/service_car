@@ -75,6 +75,9 @@ List<DispatchCandidate> filterAndRankCandidates({
       : AppConstants.maxMatchKm;
 
   final filtered = all.where((t) {
+    // 0. يجب أن يكون متصلاً (متاحاً) — لا طلبات لمن سجّل خروجاً أو أوقف الاستقبال
+    if (!t.online) return false;
+
     // 1. يجب أن يكون معتمداً
     if (!t.verified) return false;
 

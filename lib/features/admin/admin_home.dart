@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/models/app_user.dart';
 
 class AdminHome extends StatelessWidget {
@@ -15,7 +16,7 @@ class AdminHome extends StatelessWidget {
         title: const Text('لوحة التوثيق'),
         actions: [
           IconButton(
-            onPressed: () => AppScope.of(context).auth.signOut(),
+            onPressed: () => signOutFrom(context),
             icon: const Icon(Icons.logout),
           ),
         ],

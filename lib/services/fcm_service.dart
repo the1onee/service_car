@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/firebase_options.dart';
 import 'package:barrr/services/user_repository.dart';
 
@@ -87,19 +88,14 @@ class FcmService {
 
     final messenger = messengerKey?.currentState;
     if (messenger == null) return;
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(text),
-          duration: const Duration(seconds: 6),
-          behavior: SnackBarBehavior.floating,
-          action: SnackBarAction(
-            label: 'عرض',
-            onPressed: () => _onOpened(message),
-          ),
-        ),
-      );
+    AppSnackBar.showOnMessenger(
+      messenger,
+      text,
+      action: SnackBarAction(
+        label: 'عرض',
+        onPressed: () => _onOpened(message),
+      ),
+    );
   }
 
   void _onOpened(RemoteMessage message) {

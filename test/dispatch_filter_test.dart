@@ -82,6 +82,14 @@ void main() {
       expect(result, isEmpty);
     });
 
+    test('excludes offline candidates', () {
+      final result = filterAndRankCandidates(
+        all: [_candidate(online: false)],
+        filter: _filter(),
+      );
+      expect(result, isEmpty);
+    });
+
     test('excludes candidates with low wallet (non-parts, non-workshop)', () {
       final result = filterAndRankCandidates(
         all: [_candidate(wallet: 500, isWorkshop: false)],

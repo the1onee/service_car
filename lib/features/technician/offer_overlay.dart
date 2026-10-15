@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/app_sound.dart';
 import 'package:barrr/core/app_svg_icons.dart';
 import 'package:barrr/core/constants.dart';
@@ -14,7 +15,10 @@ import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/technician/tech_job_details.dart';
 import 'package:barrr/models/job_offer.dart';
 
-/// طابور عروض واردة لمزوّد الخدمة (فني / ورشة زيوت / …): تمرير + سحب لإبعاد مؤقت.
+/// طابور عروض واردة لمزوّد الخدمة (فني / ورشة زيوت / …).
+///
+/// التمرير الأفقي عبر [PageView] فقط؛ الإبعاد المؤقت بزر صريح لتجنب
+/// تضارب الإيماءات مع [Dismissible].
 class OfferOverlay extends StatefulWidget {
   const OfferOverlay({
     super.key,
@@ -26,8 +30,10 @@ class OfferOverlay extends StatefulWidget {
 
   final List<JobOffer> offers;
   final String providerName;
-  /// إبعاد مؤقت (سحب) بدون رفض نهائي.
+
+  /// إبعاد مؤقت (زر صريح) بدون رفض نهائي.
   final ValueChanged<String> onSoftDismiss;
+
   /// بعد تقديم سعر / رفض / فقدان العرض.
   final ValueChanged<String> onConsumed;
 
@@ -37,6 +43,7 @@ class OfferOverlay extends StatefulWidget {
 
 class _OfferOverlayState extends State<OfferOverlay> {
   late final PageController _page;
+  var _currentPage = 0;
 
   @override
   void initState() {
@@ -53,23 +60,63 @@ class _OfferOverlayState extends State<OfferOverlay> {
   @override
   void didUpdateWidget(covariant OfferOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.offers.isEmpty) return;
-    if (_page.hasClients && _page.page != null) {
-      final idx = _page.page!.round().clamp(0, widget.offers.length - 1);
-      if (idx != _page.page!.round()) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_page.hasClients) {
-            _page.jumpToPage(idx);
-          }
-        });
-      }
+    if (widget.offers.isEmpty) {
+      _currentPage = 0;
+      return;
     }
+
+    final maxIdx = widget.offers.length - 1;
+    final fromController = _page.hasClients && _page.page != null
+        ? _page.page!.round()
+        : _currentPage;
+    final safeIdx = fromController.clamp(0, maxIdx);
+
+    if (safeIdx != _currentPage) {
+      _currentPage = safeIdx;
+    }
+
+    if (_page.hasClients &&
+        (_page.page == null || _page.page!.round() != safeIdx)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_page.hasClients) return;
+        final again = safeIdx.clamp(0, widget.offers.length - 1);
+        if (_page.page?.round() != again) {
+          _page.jumpToPage(again);
+        }
+        if (_currentPage != again) {
+          setState(() => _currentPage = again);
+        }
+      });
+    }
+  }
+
+  void _goTo(int index) {
+    if (index < 0 || index >= widget.offers.length) return;
+    _page.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  String _headerLabel(List<JobOffer> offers) {
+    final allOil = offers.every((o) => o.hasOilDetails);
+    if (offers.length == 1) {
+      return allOil ? 'طلب زيت وارد' : 'طلب وارد';
+    }
+    return allOil
+        ? 'طلبات زيت — مرّر أو استخدم الأسهم'
+        : 'طلبات واردة — مرّر أو استخدم الأسهم';
   }
 
   @override
   Widget build(BuildContext context) {
     final offers = widget.offers;
     if (offers.isEmpty) return const SizedBox.shrink();
+
+    final page = _currentPage.clamp(0, offers.length - 1);
+    final multi = offers.length > 1;
+
     return Material(
       color: Colors.black54,
       child: SafeArea(
@@ -77,61 +124,79 @@ class _OfferOverlayState extends State<OfferOverlay> {
           children: [
             const SizedBox(height: 8),
             Text(
-              () {
-                final allOil = offers.every((o) => o.hasOilDetails);
-                if (offers.length == 1) {
-                  return allOil ? 'طلب زيت وارد' : 'طلب وارد';
-                }
-                return allOil
-                    ? 'طلبات زيت — مرّر أو اسحب للإبعاد'
-                    : 'طلبات واردة — مرّر للاختيار أو اسحب للإبعاد';
-              }(),
+              _headerLabel(offers),
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
                 fontSize: 13,
               ),
             ),
-            if (offers.length > 1)
+            if (multi)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  '${offers.length} طلبات',
+                  'طلب ${page + 1} من ${offers.length}',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.85),
+                    color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 12,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             Expanded(
-              child: PageView.builder(
-                controller: _page,
-                itemCount: offers.length,
-                itemBuilder: (context, i) {
-                  final offer = offers[i];
-                  return Dismissible(
-                    key: ValueKey(offer.id),
-                    direction: DismissDirection.horizontal,
-                    onDismissed: (_) => widget.onSoftDismiss(offer.id),
-                    background: const _SwipeHint(
-                      alignment: Alignment.centerRight,
-                      label: 'إبعاد',
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  PageView.builder(
+                    controller: _page,
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: offers.length,
+                    onPageChanged: (i) => setState(() => _currentPage = i),
+                    itemBuilder: (context, i) {
+                      final offer = offers[i];
+                      return _OfferCard(
+                        key: ValueKey(offer.id),
+                        offer: offer,
+                        index: i,
+                        total: offers.length,
+                        providerName: widget.providerName,
+                        onSoftDismiss: () => widget.onSoftDismiss(offer.id),
+                        onConsumed: () => widget.onConsumed(offer.id),
+                      );
+                    },
+                  ),
+                  if (multi) ...[
+                    PositionedDirectional(
+                      start: 4,
+                      child: _NavArrow(
+                        icon: Icons.chevron_left_rounded,
+                        enabled: page > 0,
+                        onTap: () => _goTo(page - 1),
+                        tooltip: 'الطلب السابق',
+                      ),
                     ),
-                    secondaryBackground: const _SwipeHint(
-                      alignment: Alignment.centerLeft,
-                      label: 'إبعاد',
+                    PositionedDirectional(
+                      end: 4,
+                      child: _NavArrow(
+                        icon: Icons.chevron_right_rounded,
+                        enabled: page < offers.length - 1,
+                        onTap: () => _goTo(page + 1),
+                        tooltip: 'الطلب التالي',
+                      ),
                     ),
-                    child: _OfferCard(
-                      offer: offer,
-                      index: i,
-                      total: offers.length,
-                      providerName: widget.providerName,
-                      onConsumed: () => widget.onConsumed(offer.id),
-                    ),
-                  );
-                },
+                  ],
+                ],
               ),
             ),
+            if (multi)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: _PageDots(
+                  count: offers.length,
+                  index: page,
+                  onDotTap: _goTo,
+                ),
+              ),
           ],
         ),
       ),
@@ -139,36 +204,82 @@ class _OfferOverlayState extends State<OfferOverlay> {
   }
 }
 
-class _SwipeHint extends StatelessWidget {
-  const _SwipeHint({required this.alignment, required this.label});
+class _NavArrow extends StatelessWidget {
+  const _NavArrow({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+    required this.tooltip,
+  });
 
-  final Alignment alignment;
-  final String label;
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+  final String tooltip;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.slate.withValues(alpha: 0.35),
-      alignment: alignment,
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w800,
-          fontSize: 16,
-        ),
+    return Material(
+      color: Colors.black.withValues(alpha: enabled ? 0.45 : 0.2),
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: IconButton(
+        tooltip: tooltip,
+        onPressed: enabled ? onTap : null,
+        icon: Icon(icon, color: Colors.white.withValues(alpha: enabled ? 1 : 0.35)),
+        visualDensity: VisualDensity.compact,
       ),
+    );
+  }
+}
+
+class _PageDots extends StatelessWidget {
+  const _PageDots({
+    required this.count,
+    required this.index,
+    required this.onDotTap,
+  });
+
+  final int count;
+  final int index;
+  final ValueChanged<int> onDotTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(count, (i) {
+        final active = i == index;
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 3),
+          child: GestureDetector(
+            onTap: () => onDotTap(i),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: active ? 18 : 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: active
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        );
+      }),
     );
   }
 }
 
 class _OfferCard extends StatefulWidget {
   const _OfferCard({
+    super.key,
     required this.offer,
     required this.index,
     required this.total,
     required this.providerName,
+    required this.onSoftDismiss,
     required this.onConsumed,
   });
 
@@ -176,6 +287,7 @@ class _OfferCard extends StatefulWidget {
   final int index;
   final int total;
   final String providerName;
+  final VoidCallback onSoftDismiss;
   final VoidCallback onConsumed;
 
   @override
@@ -258,12 +370,7 @@ class _OfferCardState extends State<_OfferCard> {
       widget.onConsumed();
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('تم إرسال عرضك للعميل'),
-        duration: Duration(seconds: 3),
-      ),
-    );
+    AppSnackBar.showSuccess(context, 'تم إرسال عرضك للعميل');
     AppSoundService.playOfferPenguin();
     widget.onConsumed();
   }
@@ -330,7 +437,7 @@ class _OfferCardState extends State<_OfferCard> {
                       ),
                       if (widget.total > 1)
                         Padding(
-                          padding: const EdgeInsetsDirectional.only(end: 8),
+                          padding: const EdgeInsetsDirectional.only(end: 4),
                           child: StatusPill(
                             label: '${widget.index + 1}/${widget.total}',
                             color: AppColors.inkSoft,
@@ -356,6 +463,17 @@ class _OfferCardState extends State<_OfferCard> {
                           color: AppColors.emeraldDeep,
                           background: AppColors.emeraldTint,
                         ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        tooltip: 'إبعاد مؤقت',
+                        onPressed: _busy ? null : widget.onSoftDismiss,
+                        icon: const Icon(Icons.close_rounded),
+                        visualDensity: VisualDensity.compact,
+                        style: IconButton.styleFrom(
+                          foregroundColor: AppColors.inkSoft,
+                          backgroundColor: AppColors.recessed,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),

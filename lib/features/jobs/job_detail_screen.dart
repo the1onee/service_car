@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/app_snackbar.dart';
+import 'package:barrr/core/cloudinary_config.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
@@ -10,11 +11,13 @@ import 'package:barrr/features/customer/wash_job_details.dart';
 import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/jobs/rating_sheet.dart';
 import 'package:barrr/features/oil_workshop/oil_job_details.dart';
+import 'package:barrr/features/shared/app_network_or_data_image.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/warranty/warranty_claim_screen.dart';
 import 'package:barrr/features/warranty/warranty_form.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
+import 'package:barrr/services/cloudinary_upload.dart';
 
 void openJobDetail(BuildContext context, Job job, AppUser profile) {
   Navigator.of(context).push(
@@ -417,13 +420,38 @@ class _BodyState extends State<_Body> {
               ],
             ),
           ),
+          if (parts && job.shippedPartImageUrl.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            FieldCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'صورة القطعة المُرسلة',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      height: 180,
+                      width: double.infinity,
+                      child: AppNetworkOrDataImage(
+                        source: job.shippedPartImageUrl,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (canShip) ...[
             const SizedBox(height: 16),
             SizedBox(
               height: 48,
               child: FilledButton(
                 onPressed: () => _shipParts(context),
-                child: const Text('تأكيد تجهيز وإرسال القطعة'),
+                child: const Text('إرسال القطعة (مع صورة)'),
               ),
             ),
           ],
@@ -525,11 +553,25 @@ class _BodyState extends State<_Body> {
 
   Future<void> _shipParts(BuildContext context) async {
     try {
-      await AppScope.of(context).jobs.markPartsShipped(job.id);
+      final url = await CloudinaryUpload().pickAndUpload(
+        folder: CloudinaryConfig.folderParts,
+        tags: const ['parts_shipped'],
+        imageQuality: 55,
+        maxWidth: 1280,
+      );
       if (!context.mounted) return;
-      AppSnackBar.showSuccess(context, 'تم تأكيد تجهيز/إرسال القطعة للعميل.');
+      await AppScope.of(context).jobs.markPartsShipped(
+            job.id,
+            shippedPartImageUrl: url,
+          );
+      if (!context.mounted) return;
+      AppSnackBar.showSuccess(
+        context,
+        'تم إرسال القطعة — العميل يراها في الطريق.',
+      );
     } catch (e) {
       if (!context.mounted) return;
+      if (e.toString().contains('cancelled')) return;
       AppSnackBar.showError(
         context,
         userFacingError(e, prefix: 'تعذّر تأكيد الإرسال.'),

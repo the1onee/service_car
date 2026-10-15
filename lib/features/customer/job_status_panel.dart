@@ -11,6 +11,7 @@ import 'package:barrr/features/customer/tow_job_details.dart';
 import 'package:barrr/features/customer/wash_job_details.dart';
 import 'package:barrr/features/jobs/rating_sheet.dart';
 import 'package:barrr/features/oil_workshop/oil_job_details.dart';
+import 'package:barrr/features/shared/app_network_or_data_image.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/warranty/warranty_form.dart';
 import 'package:barrr/models/app_user.dart';
@@ -207,6 +208,7 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
         return 'الفني وصل — جاري الفحص';
       case JobStatus.finalQuote:
         if (parts) return 'القطعة في الطريق إليك';
+        if (oil) return 'جاري تبديل الزيت';
         if (wash) return 'جاري الغسيل';
         if (tow) return 'جاري النقل';
         return 'السعر النهائي بانتظار موافقتك';
@@ -444,10 +446,16 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
         if (job.isPartsOrder) {
           return _partsReceive(context, jobs);
         }
-        // غسيل / سطحة: لا موافقة على سعر نهائي.
-        if (job.isWashOrder || job.isTowOrder) {
+        // غسيل / سطحة / زيت: لا موافقة على سعر نهائي.
+        if (job.isWashOrder || job.isTowOrder || job.isOilOrder) {
           return [
-            _liveCard(job.isTowOrder ? 'جاري النقل' : 'جاري الغسيل'),
+            _liveCard(
+              job.isOilOrder
+                  ? 'جاري تبديل الزيت'
+                  : job.isTowOrder
+                      ? 'جاري النقل'
+                      : 'جاري الغسيل',
+            ),
             const SizedBox(height: 10),
             _techLine(),
             const SizedBox(height: 8),
@@ -506,7 +514,7 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
                         ? 'جاري النقل'
                         : 'العمل جارٍ',
           ),
-          if (job.isWashOrder || job.isTowOrder) ...[
+          if (job.isWashOrder || job.isTowOrder || job.isOilOrder) ...[
             const SizedBox(height: 10),
             _techLine(),
             const SizedBox(height: 8),
@@ -666,6 +674,31 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
         StatusPill(
           label: warrantyLabel(job.warranty),
           icon: Icons.verified_user_outlined,
+        ),
+      ],
+      if (job.shippedPartImageUrl.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        FieldCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'صورة القطعة المُرسلة',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  height: 180,
+                  width: double.infinity,
+                  child: AppNetworkOrDataImage(
+                    source: job.shippedPartImageUrl,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
       const SizedBox(height: 16),

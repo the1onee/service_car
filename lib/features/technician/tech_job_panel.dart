@@ -211,11 +211,12 @@ class _TechJobPanelState extends State<TechJobPanel> {
         if (tow) return 'سطحة في الطريق للتحميل';
         return 'توجه إلى العميل';
       case JobStatus.arrived:
-        if (oil) return 'وصلت للموقع — حدّد السعر النهائي';
+        if (oil) return 'وصلت — أكمل تبديل الزيت واستلم المبلغ';
         if (wash) return 'وصلت — جاري الغسيل';
         if (tow) return 'وصلت للتحميل — جاري النقل';
         return 'افحص السيارة وحدد السعر النهائي';
       case JobStatus.finalQuote:
+        if (oil) return 'أكمل تبديل الزيت ثم أكّد استلام المبلغ';
         if (wash) return 'أكمل الغسيل ثم أكّد استلام المبلغ';
         if (tow) return 'أكمل النقل ثم أكّد استلام المبلغ';
         return 'بانتظار موافقة العميل على السعر النهائي';
@@ -287,8 +288,8 @@ class _TechJobPanelState extends State<TechJobPanel> {
           ),
         ];
       case JobStatus.arrived:
-        // غسيل / سطحة: بلا سعر نهائي/ضمان — فقط استلام المبلغ.
-        if (job.isWashOrder || job.isTowOrder) {
+        // غسيل / سطحة / زيت: بلا سعر نهائي/ضمان — فقط استلام المبلغ.
+        if (job.isWashOrder || job.isTowOrder || job.isOilOrder) {
           return _cashCompleteActions(context, job, jobs);
         }
         return [
@@ -337,15 +338,11 @@ class _TechJobPanelState extends State<TechJobPanel> {
                 ),
               );
             },
-            child: Text(
-              job.isOilOrder
-                  ? 'إرسال السعر النهائي لتبديل الزيت'
-                  : 'إرسال السعر النهائي',
-            ),
+            child: const Text('إرسال السعر النهائي'),
           ),
         ];
       case JobStatus.finalQuote:
-        if (job.isWashOrder || job.isTowOrder) {
+        if (job.isWashOrder || job.isTowOrder || job.isOilOrder) {
           return _cashCompleteActions(context, job, jobs);
         }
         return const [SizedBox.shrink()];
@@ -433,7 +430,9 @@ class _TechJobPanelState extends State<TechJobPanel> {
                   await jobs.completeJob(
                     jobId: job.id,
                     receivedAmount: p,
-                    warrantyEnabled: (job.isWashOrder || job.isTowOrder)
+                    warrantyEnabled: (job.isWashOrder ||
+                            job.isTowOrder ||
+                            job.isOilOrder)
                         ? false
                         : job.warranty.enabled,
                   );

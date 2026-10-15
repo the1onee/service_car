@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/app_snackbar.dart';
+import 'package:barrr/core/cloudinary_config.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
@@ -18,6 +19,7 @@ import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/models/job_offer.dart';
+import 'package:barrr/services/cloudinary_upload.dart';
 import 'package:barrr/services/fcm_service.dart';
 
 part 'workshop_account.part.dart';
@@ -127,9 +129,28 @@ class _WorkshopHomeState extends State<WorkshopHome> {
   }
 
   Future<void> _markShipped(Job job) async {
-    await AppScope.of(context).jobs.markPartsShipped(job.id);
-    if (!mounted) return;
-    AppSnackBar.showSuccess(context, 'تم تأكيد تجهيز/إرسال القطعة للعميل.');
+    try {
+      final url = await CloudinaryUpload().pickAndUpload(
+        folder: CloudinaryConfig.folderParts,
+        tags: const ['parts_shipped'],
+        imageQuality: 55,
+        maxWidth: 1280,
+      );
+      if (!mounted) return;
+      await AppScope.of(context).jobs.markPartsShipped(
+            job.id,
+            shippedPartImageUrl: url,
+          );
+      if (!mounted) return;
+      AppSnackBar.showSuccess(context, 'تم إرسال القطعة — العميل يراها في الطريق.');
+    } catch (e) {
+      if (!mounted) return;
+      if (e.toString().contains('cancelled')) return;
+      AppSnackBar.showError(
+        context,
+        userFacingError(e, prefix: 'تعذّر إرسال القطعة.'),
+      );
+    }
   }
 
   Future<void> _cancelJob(Job job) async {
@@ -928,12 +949,41 @@ class _AcceptedJobCard extends StatelessWidget {
           DeliveryAddressBlock(job: job),
           if (job.partImageUrl.isNotEmpty) ...[
             const SizedBox(height: 8),
+            const Text(
+              'مرجع الزبون',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.inkSoft,
+              ),
+            ),
+            const SizedBox(height: 4),
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: SizedBox(
                 height: 120,
                 width: double.infinity,
                 child: AppNetworkOrDataImage(source: job.partImageUrl),
+              ),
+            ),
+          ],
+          if (job.shippedPartImageUrl.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'صورة الشحن',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.inkSoft,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                height: 120,
+                width: double.infinity,
+                child: AppNetworkOrDataImage(source: job.shippedPartImageUrl),
               ),
             ),
           ],
@@ -950,14 +1000,14 @@ class _AcceptedJobCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text('تأكيد تجهيز وإرسال القطعة'),
+                child: const Text('إرسال القطعة (مع صورة)'),
               ),
             ),
           ],
           if (waitingReceive) ...[
             const SizedBox(height: 12),
             Text(
-              'بانتظار تأكيد استلام العميل',
+              'أُرسلت — بانتظار تأكيد استلام العميل',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,

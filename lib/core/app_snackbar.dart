@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:barrr/core/theme.dart';
 
-/// مكوّن موحد لعرض رسائل SnackBar في التطبيق.
+/// مكوّن موحد لعرض رسائل SnackBar في التطبيق (أعلى الشاشة، 5 ثوانٍ).
 ///
-/// يوفّر ثلاث طرق:
-/// - [showError]: لعرض رسالة خطأ (أحمر).
-/// - [showSuccess]: لعرض رسالة نجاح (أخضر).
-/// - [showInfo]: لعرض رسالة معلومات (سليت).
+/// يوفّر:
+/// - [showError] / [showSuccess] / [showInfo] عبر [BuildContext]
+/// - [showOnMessenger] عند توفر [ScaffoldMessengerState] فقط (مثل FCM)
 class AppSnackBar {
   AppSnackBar._();
+
+  static const _duration = Duration(seconds: 5);
+  static const _approxHeight = 72.0;
 
   // ─── خطأ ────────────────────────────────────────────────────
   static void showError(
@@ -17,7 +19,8 @@ class AppSnackBar {
     SnackBarAction? action,
   }) {
     _show(
-      context,
+      ScaffoldMessenger.of(context),
+      context: context,
       message: message,
       icon: Icons.error_outline_rounded,
       backgroundColor: AppColors.danger,
@@ -33,7 +36,8 @@ class AppSnackBar {
     SnackBarAction? action,
   }) {
     _show(
-      context,
+      ScaffoldMessenger.of(context),
+      context: context,
       message: message,
       icon: Icons.check_circle_outline_rounded,
       backgroundColor: AppColors.emerald,
@@ -49,7 +53,8 @@ class AppSnackBar {
     SnackBarAction? action,
   }) {
     _show(
-      context,
+      ScaffoldMessenger.of(context),
+      context: context,
       message: message,
       icon: Icons.info_outline_rounded,
       backgroundColor: AppColors.slate,
@@ -58,16 +63,44 @@ class AppSnackBar {
     );
   }
 
+  /// لعرض تنبيه من [ScaffoldMessengerState] بدون [BuildContext] مباشر (FCM).
+  static void showOnMessenger(
+    ScaffoldMessengerState messenger,
+    String message, {
+    SnackBarAction? action,
+    IconData icon = Icons.info_outline_rounded,
+    Color backgroundColor = AppColors.slate,
+    Color textColor = Colors.white,
+  }) {
+    _show(
+      messenger,
+      context: messenger.context,
+      message: message,
+      icon: icon,
+      backgroundColor: backgroundColor,
+      textColor: textColor,
+      action: action,
+    );
+  }
+
+  static EdgeInsets _topMargin(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final top = media.padding.top + 8;
+    final bottom = (media.size.height - top - _approxHeight).clamp(0.0, double.infinity);
+    return EdgeInsets.fromLTRB(16, 0, 16, bottom);
+  }
+
   // ─── المحرك الداخلي ─────────────────────────────────────────
   static void _show(
-    BuildContext context, {
+    ScaffoldMessengerState messenger, {
+    required BuildContext context,
     required String message,
     required IconData icon,
     required Color backgroundColor,
     required Color textColor,
     SnackBarAction? action,
   }) {
-    ScaffoldMessenger.of(context)
+    messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
@@ -76,8 +109,8 @@ class AppSnackBar {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 4),
+          margin: _topMargin(context),
+          duration: _duration,
           action: action,
           content: Row(
             children: [

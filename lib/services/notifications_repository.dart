@@ -8,6 +8,9 @@ class NotificationsRepository {
 
   final FirebaseFirestore _db;
 
+  static const systemTtl = Duration(hours: 24);
+  static const _closedJobStatuses = {'completed', 'rated', 'cancelled'};
+
   CollectionReference<Map<String, dynamic>> get _col =>
       _db.collection(Cols.notifications);
 
@@ -16,19 +19,66 @@ class NotificationsRepository {
         .where('userId', isEqualTo: uid)
         .limit(80)
         .snapshots()
-        .map((snap) {
+        .asyncMap((snap) async {
       final list = snap.docs.map(AppNotification.fromDoc).toList()
         ..sort((a, b) {
           final at = a.createdAt?.millisecondsSinceEpoch ?? 0;
           final bt = b.createdAt?.millisecondsSinceEpoch ?? 0;
           return bt.compareTo(at);
         });
-      return list;
+      return _filterVisible(list);
     });
   }
 
   Stream<int> watchUnreadCount(String uid) {
     return watchForUser(uid).map((list) => list.where((n) => !n.read).length);
+  }
+
+  Future<List<AppNotification>> _filterVisible(
+    List<AppNotification> list,
+  ) async {
+    final now = DateTime.now();
+    final jobIds = <String>{};
+    for (final n in list) {
+      final id = n.jobId?.trim() ?? '';
+      if (id.isNotEmpty) jobIds.add(id);
+    }
+
+    final closedJobs = await _closedJobIds(jobIds);
+
+    return list.where((n) {
+      final created = n.createdAt;
+      final withinTtl =
+          created != null && now.difference(created) <= systemTtl;
+      final jobId = n.jobId?.trim() ?? '';
+      if (jobId.isNotEmpty) {
+        // طلب مفتوح: يظهر. طلب منتهٍ: يبقى حتى 24 ساعة فقط (مثل إشعار الإكمال).
+        if (closedJobs.contains(jobId)) return withinTtl;
+        return true;
+      }
+      // نظامية / بلا طلب: صلاحية 24 ساعة.
+      return withinTtl;
+    }).toList(growable: false);
+  }
+
+  Future<Set<String>> _closedJobIds(Set<String> jobIds) async {
+    if (jobIds.isEmpty) return {};
+    final closed = <String>{};
+    final ids = jobIds.toList();
+    for (var i = 0; i < ids.length; i += 10) {
+      final chunk = ids.sublist(i, i + 10 > ids.length ? ids.length : i + 10);
+      final snap = await _db
+          .collection(Cols.jobs)
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      for (final doc in snap.docs) {
+        final status = doc.data()['status'] as String? ?? '';
+        if (_closedJobStatuses.contains(status)) {
+          closed.add(doc.id);
+        }
+      }
+    }
+    return closed;
   }
 
   Future<void> markRead(String id) {
