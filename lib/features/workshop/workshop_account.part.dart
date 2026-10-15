@@ -24,6 +24,19 @@ class _AccountPage extends StatelessWidget {
       onOpenWallet: onOpenWallet,
       midMenuTiles: [
         AccountTile(
+          icon: Icons.verified_user_outlined,
+          title: 'الضمان',
+          subtitle: 'مطالبات استبدال القطع من العملاء',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ProviderWarrantyClaimsScreen(profile: me),
+              ),
+            );
+          },
+        ),
+        const Divider(height: 1),
+        AccountTile(
           icon: Icons.category_outlined,
           title: 'التخصص',
           subtitle:

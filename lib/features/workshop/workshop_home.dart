@@ -14,13 +14,16 @@ import 'package:barrr/features/jobs/orders_screen.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/app_network_or_data_image.dart';
 import 'package:barrr/features/shared/field_ui.dart';
+import 'package:barrr/features/warranty/provider_warranty_claims_screen.dart';
 import 'package:barrr/features/workshop/workshop_quote_sheet.dart';
 import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/models/job_offer.dart';
+import 'package:barrr/models/warranty_claim.dart';
 import 'package:barrr/services/cloudinary_upload.dart';
 import 'package:barrr/services/fcm_service.dart';
+import 'package:barrr/services/warranty_claims_repository.dart';
 
 part 'workshop_account.part.dart';
 
@@ -450,6 +453,53 @@ class _WorkshopHomeState extends State<WorkshopHome> {
                     onPay: () => _onTab(2),
                   ),
                 ],
+                StreamBuilder<List<WarrantyClaim>>(
+                  stream: WarrantyClaimsRepository()
+                      .watchOpenForProvider(profile.id),
+                  builder: (context, claimsSnap) {
+                    final open = claimsSnap.data ?? const <WarrantyClaim>[];
+                    if (open.isEmpty) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Material(
+                        color: const Color(0xFFFFF4D6),
+                        borderRadius: BorderRadius.circular(14),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => ProviderWarrantyClaimsScreen(
+                                  profile: profile,
+                                ),
+                              ),
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.verified_user_outlined),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    open.length == 1
+                                        ? 'مطالبة ضمان بانتظار ردك خلال 24 ساعة'
+                                        : '${open.length} مطالبات ضمان بانتظار ردك',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                const Icon(Icons.chevron_left),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
                 const SizedBox(height: 14),
                 _SegmentBar(
                   filter: _filter,

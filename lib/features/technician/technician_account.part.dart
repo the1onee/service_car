@@ -27,6 +27,19 @@ class _AccountPage extends StatelessWidget {
       onOpenOrders: onOpenOrders,
       onOpenWallet: onOpenWallet,
       midMenuTiles: [
+        AccountTile(
+          icon: Icons.verified_user_outlined,
+          title: 'الضمان',
+          subtitle: 'مطالبات العملاء — توجّه للفحص والحل',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ProviderWarrantyClaimsScreen(profile: me),
+              ),
+            );
+          },
+        ),
+        const Divider(height: 1),
         ProviderServicesTile(me: me),
         const Divider(height: 1),
         ProviderVehiclesTile(me: me),

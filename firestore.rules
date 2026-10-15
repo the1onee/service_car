@@ -429,12 +429,57 @@ service cloud.firestore {
       allow update, delete: if adminCanWrite('warranties');
     }
     match /warrantyClaims/{id} {
-      allow read: if isOwner(resource.data.customerId)
-        || isOwner(resource.data.technicianId)
+      function claimProviderId() {
+        return resource.data.keys().hasAny(['providerId'])
+          && resource.data.providerId is string
+          && resource.data.providerId.size() > 0
+          ? resource.data.providerId
+          : resource.data.technicianId;
+      }
+      function claimProviderIdAfter() {
+        return request.resource.data.keys().hasAny(['providerId'])
+          && request.resource.data.providerId is string
+          && request.resource.data.providerId.size() > 0
+          ? request.resource.data.providerId
+          : request.resource.data.technicianId;
+      }
+      function isClaimCustomer() {
+        return isOwner(resource.data.customerId);
+      }
+      function isClaimProvider() {
+        return signedIn() && request.auth.uid == claimProviderId();
+      }
+      function providerClaimUpdateKeys() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly([
+            'status', 'providerNote', 'otherIssue', 'otherIssueNote',
+            'replacementImageUrl', 'resolution', 'acknowledgedAt',
+            'resolvedAt', 'updatedAt', 'notifyEvent'
+          ]);
+      }
+      function validProviderStatus() {
+        return request.resource.data.status in [
+          'acknowledged', 'in_progress', 'resolved', 'overdue'
+        ];
+      }
+      allow read: if isClaimCustomer()
+        || isClaimProvider()
         || adminCanRead('warranties');
       allow create: if isOwner(request.resource.data.customerId)
+        && request.resource.data.jobId is string
+        && request.resource.data.providerId is string
+        && request.resource.data.providerId.size() > 0
+        && request.resource.data.status == 'open'
+        && request.resource.data.providerKind in ['workshop', 'technician']
         || adminCanWrite('warranties');
-      allow update, delete: if adminCanWrite('warranties');
+      allow update: if adminCanWrite('warranties')
+        || (isClaimProvider()
+          && providerClaimUpdateKeys()
+          && validProviderStatus()
+          && claimProviderIdAfter() == claimProviderId()
+          && request.resource.data.customerId == resource.data.customerId
+          && request.resource.data.jobId == resource.data.jobId);
+      allow delete: if adminCanWrite('warranties');
     }
 
     // المحاسبة: كل طرف يرى حركاته فقط. الكتابة عبر Admin SDK أو صلاحية payments.

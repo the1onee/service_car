@@ -13,6 +13,7 @@ import 'package:barrr/features/jobs/rating_sheet.dart';
 import 'package:barrr/features/oil_workshop/oil_job_details.dart';
 import 'package:barrr/features/shared/app_network_or_data_image.dart';
 import 'package:barrr/features/shared/field_ui.dart';
+import 'package:barrr/features/warranty/warranty_claim_logic.dart';
 import 'package:barrr/features/warranty/warranty_claim_screen.dart';
 import 'package:barrr/features/warranty/warranty_form.dart';
 import 'package:barrr/models/app_user.dart';
@@ -686,7 +687,7 @@ class _WarrantyCard extends StatelessWidget {
             warrantyRemainingLabel(job.warranty),
             style: const TextStyle(color: AppColors.inkSoft, fontSize: 12),
           ),
-          if (customer && active) ...[
+          if (customer && active && canOpenWarrantyClaim(job)) ...[
             const SizedBox(height: 12),
             FilledButton(
               onPressed: () {

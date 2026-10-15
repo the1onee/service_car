@@ -15,6 +15,8 @@ class Cols {
   static const walletTopUps = 'walletTopUps';
   static const notifications = 'notifications';
   static const supportTickets = 'supportTickets';
+  /// مطالبات الضمان المرتبطة بطلب مكتمل (ليست طلبًا جديدًا).
+  static const warrantyClaims = 'warrantyClaims';
   /// فهرس أرقام الهاتف: phoneRegistry/{9647…} → { uid }
   static const phoneRegistry = 'phoneRegistry';
 }

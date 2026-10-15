@@ -8,6 +8,7 @@ import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
+import 'package:barrr/features/shared/account_shared.dart';
 import 'package:barrr/features/shared/provider_account_view.dart';
 import 'package:barrr/features/shared/provider_wallet_page.dart';
 import 'package:barrr/features/jobs/job_present.dart';
@@ -17,12 +18,15 @@ import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/shared/osm_map.dart';
 import 'package:barrr/features/technician/offer_overlay.dart';
 import 'package:barrr/features/technician/tech_job_panel.dart';
+import 'package:barrr/features/warranty/provider_warranty_claims_screen.dart';
 import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
 import 'package:barrr/models/job_offer.dart';
+import 'package:barrr/models/warranty_claim.dart';
 import 'package:barrr/services/fcm_service.dart';
 import 'package:barrr/services/geo_write_throttle.dart';
+import 'package:barrr/services/warranty_claims_repository.dart';
 
 
 part 'technician_account.part.dart';
@@ -285,6 +289,47 @@ class _TechnicianHomeState extends State<TechnicianHome>
                   ),
                 ),
               ),
+            StreamBuilder<List<WarrantyClaim>>(
+              stream:
+                  WarrantyClaimsRepository().watchOpenForProvider(me.id),
+              builder: (context, claimsSnap) {
+                final open = claimsSnap.data ?? const <WarrantyClaim>[];
+                if (open.isEmpty) return const SizedBox.shrink();
+                return Material(
+                  color: const Color(0xFFE8F5E9),
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              ProviderWarrantyClaimsScreen(profile: me),
+                        ),
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.verified_user_outlined),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              open.length == 1
+                                  ? 'ضمان — توجّه للعميل لفحص المشكلة'
+                                  : '${open.length} مطالبات ضمان — توجّه للعملاء',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const Icon(Icons.chevron_left),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
             Expanded(
               child: OrdersScreen(
                 stream: recentJobsStream,
@@ -403,28 +448,87 @@ class _TechnicianMapTab extends StatelessWidget {
                               top: 0,
                               left: 0,
                               right: 0,
-                              child: FieldTopBar(
-                                city: zone?.nameAr,
-                                caption: 'الفني',
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    StatusPill(
-                                      label: ready
-                                          ? 'جاهز للطلبات'
-                                          : (me.isApproved
-                                              ? 'رصيد غير كافٍ'
-                                              : 'بانتظار التوثيق'),
-                                      color: ready
-                                          ? AppColors.emeraldDeep
-                                          : AppColors.inkSoft,
-                                      background: ready
-                                          ? AppColors.emeraldTint
-                                          : AppColors.recessed,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  FieldTopBar(
+                                    city: zone?.nameAr,
+                                    caption: 'الفني',
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        StatusPill(
+                                          label: ready
+                                              ? 'جاهز للطلبات'
+                                              : (me.isApproved
+                                                  ? 'رصيد غير كافٍ'
+                                                  : 'بانتظار التوثيق'),
+                                          color: ready
+                                              ? AppColors.emeraldDeep
+                                              : AppColors.inkSoft,
+                                          background: ready
+                                              ? AppColors.emeraldTint
+                                              : AppColors.recessed,
+                                        ),
+                                        NotificationsBellButton(uid: me.id),
+                                      ],
                                     ),
-                                    NotificationsBellButton(uid: me.id),
-                                  ],
-                                ),
+                                  ),
+                                  StreamBuilder<List<WarrantyClaim>>(
+                                    stream: WarrantyClaimsRepository()
+                                        .watchOpenForProvider(me.id),
+                                    builder: (context, claimsSnap) {
+                                      final open = claimsSnap.data ??
+                                          const <WarrantyClaim>[];
+                                      if (open.isEmpty) {
+                                        return const SizedBox.shrink();
+                                      }
+                                      return Material(
+                                        color: const Color(0xFFE8F5E9),
+                                        child: InkWell(
+                                          onTap: () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute<void>(
+                                                builder: (_) =>
+                                                    ProviderWarrantyClaimsScreen(
+                                                  profile: me,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          child: Padding(
+                                            padding: const EdgeInsets.fromLTRB(
+                                              16,
+                                              10,
+                                              16,
+                                              10,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                const Icon(
+                                                  Icons.verified_user_outlined,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Text(
+                                                    open.length == 1
+                                                        ? 'ضمان — توجّه للعميل لفحص المشكلة'
+                                                        : '${open.length} مطالبات ضمان — توجّه للعملاء',
+                                                    style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const Icon(Icons.chevron_left),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
                               ),
                             ),
                             if (job != null)
