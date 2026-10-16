@@ -64,20 +64,16 @@ class NotificationsRepository {
   Future<Set<String>> _closedJobIds(Set<String> jobIds) async {
     if (jobIds.isEmpty) return {};
     final closed = <String>{};
-    final ids = jobIds.toList();
-    for (var i = 0; i < ids.length; i += 10) {
-      final chunk = ids.sublist(i, i + 10 > ids.length ? ids.length : i + 10);
-      final snap = await _db
-          .collection(Cols.jobs)
-          .where(FieldPath.documentId, whereIn: chunk)
-          .get();
-      for (final doc in snap.docs) {
-        final status = doc.data()['status'] as String? ?? '';
-        if (_closedJobStatuses.contains(status)) {
-          closed.add(doc.id);
-        }
-      }
-    }
+    // قراءة كل طلب على حدة. استعلام whereIn على المعرّف ترفضه القواعد
+    // لأنها لا تضمن أن كل النتائج تخص المستخدم، فيفشل تحميل الإشعارات.
+    await Future.wait(jobIds.map((id) async {
+      try {
+        final doc = await _db.collection(Cols.jobs).doc(id).get();
+        if (!doc.exists) return;
+        final status = doc.data()?['status'] as String? ?? '';
+        if (_closedJobStatuses.contains(status)) closed.add(id);
+      } catch (_) {}
+    }));
     return closed;
   }
 
