@@ -18,7 +18,7 @@ val hasReleaseKeystore =
     }
 
 android {
-    namespace = "com.barrr.barrr"
+    namespace = "com.albatariq.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -28,7 +28,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.barrr.barrr"
+        applicationId = "com.albatariq.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

@@ -7,17 +7,25 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:500429219707:android:ea9ef8f0500be088cdffde",
+        "mobilesdk_app_id": "1:500429219707:android:a0114f5317c107a0cdffde",
         "android_client_info": {
-          "package_name": "com.barrr.barrr"
+          "package_name": "com.albatariq.app"
         }
       },
       "oauth_client": [
         {
-          "client_id": "500429219707-ir374ctufsefjlti4kocq4qj373pdlf7.apps.googleusercontent.com",
+          "client_id": "500429219707-015o1btla9pck3euja1oeg320s26nr3u.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.barrr.barrr",
+            "package_name": "com.albatariq.app",
+            "certificate_hash": "6cdd4da7cb96a8a1ffff043778a501b0214ee26b"
+          }
+        },
+        {
+          "client_id": "500429219707-3en4cv6e275mch5of10vrknl1bjf2fpm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.albatariq.app",
             "certificate_hash": "76ffc008ff0e3dc20551a29a3c21b61cf7d34a22"
           }
         },

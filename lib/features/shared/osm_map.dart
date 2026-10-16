@@ -92,10 +92,10 @@ class _OsmMapState extends State<OsmMap> {
           children: [
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.barrr.barrr',
+              userAgentPackageName: 'com.albatariq.app',
               tileProvider: CachedOsmTileProvider(
                 headers: {
-                  'User-Agent': 'barrr/1.0 (com.barrr.barrr)',
+                  'User-Agent': 'albatariq/1.0 (com.albatariq.app)',
                 },
               ),
             ),

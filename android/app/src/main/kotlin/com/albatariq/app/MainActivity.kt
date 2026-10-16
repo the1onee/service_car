@@ -1,4 +1,4 @@
-package com.barrr.barrr
+package com.albatariq.app
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
