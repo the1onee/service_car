@@ -321,18 +321,15 @@ class _TechJobPanelState extends State<TechJobPanel> {
         if (job.isWashOrder || job.isTowOrder || job.isOilOrder) {
           return _cashCompleteActions(context, job, jobs);
         }
-        final minFinal = AppConstants.minAllowedPriceFromBaseline(job.initialPrice);
-        final finalHelper = minFinal != null
-            ? 'لا يقل عن ${minFinal.toStringAsFixed(0)} (حد تخفيض 20%) وينتهي بـ 000'
-            : 'الحد الأدنى 3000 وينتهي بـ 000';
         return [
           TextField(
             controller: _finalPrice,
             keyboardType: TextInputType.number,
-            decoration: InputDecoration(
+            inputFormatters: const [IqdThousandsFormatter()],
+            decoration: const InputDecoration(
               labelText: AppStrings.finalPrice,
-              hintText: minFinal?.toStringAsFixed(0) ?? '5000',
-              helperText: finalHelper,
+              hintText: '5,000',
+              helperText: 'الحد الأدنى 3,000 وينتهي بـ 000',
             ),
           ),
           const SizedBox(height: 8),
@@ -416,13 +413,6 @@ class _TechJobPanelState extends State<TechJobPanel> {
     JobRepository jobs,
   ) {
     final due = job.cashDue > 0 ? job.cashDue : job.billAmount;
-    final priceBaseline = job.initialPrice ?? job.billAmount;
-    final minRecv = AppConstants.minAllowedPriceFromBaseline(
-      priceBaseline > 0 ? priceBaseline : null,
-    );
-    final recvHelper = minRecv != null
-        ? 'لا يقل عن ${minRecv.toStringAsFixed(0)} (حد تخفيض 20%) وينتهي بـ 000'
-        : 'الحد الأدنى 3000 وينتهي بـ 000';
     return [
       Text(
         job.isOilOrder
@@ -443,10 +433,11 @@ class _TechJobPanelState extends State<TechJobPanel> {
         controller: _received,
         keyboardType: const TextInputType.numberWithOptions(decimal: false),
         textDirection: TextDirection.ltr,
-        decoration: InputDecoration(
+        inputFormatters: const [IqdThousandsFormatter()],
+        decoration: const InputDecoration(
           labelText: AppStrings.receivedAmount,
-          hintText: minRecv?.toStringAsFixed(0) ?? '25000',
-          helperText: recvHelper,
+          hintText: '25,000',
+          helperText: 'الحد الأدنى 3,000 وينتهي بـ 000',
         ),
       ),
       const SizedBox(height: 12),
@@ -573,16 +564,26 @@ class ProviderVisitDock extends StatelessWidget {
             .where((job) => job.id != activeJob?.id)
             .toList();
         final canStart = !jobBlocksIncomingOffers(activeJob);
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (queued.isNotEmpty)
-              _ProviderQueueStrip(jobs: queued, canStart: canStart),
-            if (activeJob != null)
-              panelBuilder(activeJob!)
-            else if (queued.isEmpty)
-              idlePanel,
-          ],
+        final maxDock = MediaQuery.sizeOf(context).height * 0.62;
+        return ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxDock),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (queued.isNotEmpty)
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: _ProviderQueueStrip(jobs: queued, canStart: canStart),
+                ),
+              if (activeJob != null)
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: panelBuilder(activeJob!),
+                )
+              else if (queued.isEmpty)
+                idlePanel,
+            ],
+          ),
         );
       },
     );

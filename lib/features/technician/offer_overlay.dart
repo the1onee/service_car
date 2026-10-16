@@ -381,18 +381,29 @@ class _OfferCardState extends State<_OfferCard> {
     final tow = offer.hasTowDetails;
     final wash = !tow && offer.hasWashDetails;
     final oil = !tow && !wash && offer.hasOilDetails;
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 640),
-        child: Card(
-          margin: const EdgeInsets.all(20),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-            child: SingleChildScrollView(
-              child: Column(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : MediaQuery.sizeOf(context).height * 0.72;
+        final cardHeight = (available - 16).clamp(0.0, available);
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Align(
+            alignment: Alignment.center,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 420,
+                maxHeight: cardHeight,
+              ),
+              child: Card(
+                margin: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                  child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -500,10 +511,11 @@ class _OfferCardState extends State<_OfferCard> {
                   TextField(
                     controller: _price,
                     keyboardType: TextInputType.number,
+                    inputFormatters: const [IqdThousandsFormatter()],
                     decoration: const InputDecoration(
                       labelText: AppStrings.initialPrice,
-                      hintText: '5000',
-                      helperText: 'الحد الأدنى 3000 وينتهي بـ 000',
+                      hintText: '5,000',
+                      helperText: 'الحد الأدنى 3,000 وينتهي بـ 000',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -549,11 +561,13 @@ class _OfferCardState extends State<_OfferCard> {
                     child: const Text(AppStrings.reject),
                   ),
                 ],
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

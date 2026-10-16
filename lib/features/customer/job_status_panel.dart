@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
@@ -425,7 +426,11 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
           _priceLine('السعر المبدئي', job.initialPrice),
           const SizedBox(height: 16),
           FilledButton(
-            onPressed: () => jobs.customerAcceptQuote(job.id),
+            onPressed: () => _accept(
+              context,
+              () => jobs.customerAcceptQuote(job.id),
+              'تعذّر قبول الطلب.',
+            ),
             child: Text(
               job.isOilOrder || job.isWashOrder || job.isTowOrder
                   ? 'قبول الطلب وبدء التوجه'
@@ -522,7 +527,11 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
           ],
           const SizedBox(height: 14),
           FilledButton(
-            onPressed: () => jobs.customerAcceptFinal(job.id),
+            onPressed: () => _accept(
+              context,
+              () => jobs.customerAcceptFinal(job.id),
+              'تعذّر قبول السعر.',
+            ),
             child: const Text('قبول السعر'),
           ),
           ..._walletSwitch(context),
@@ -751,6 +760,19 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
         child: const Text('استلام الطلب'),
       ),
     ];
+  }
+
+  Future<void> _accept(
+    BuildContext context,
+    Future<void> Function() action,
+    String prefix,
+  ) async {
+    try {
+      await action();
+    } catch (e) {
+      if (!context.mounted) return;
+      AppSnackBar.showError(context, userFacingError(e, prefix: prefix));
+    }
   }
 
   Widget _techLine() {

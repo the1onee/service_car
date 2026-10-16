@@ -702,6 +702,7 @@ class _WalletRechargePanelState extends State<_WalletRechargePanel> {
                   TextField(
                     controller: _amountCtrl,
                     keyboardType: TextInputType.number,
+                    inputFormatters: const [IqdThousandsFormatter()],
                     decoration: const InputDecoration(
                       labelText: 'المبلغ الذي حوّلته (د.ع)',
                       filled: true,

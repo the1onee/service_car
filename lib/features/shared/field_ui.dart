@@ -309,18 +309,59 @@ class SectionLabel extends StatelessWidget {
   }
 }
 
-String formatIqd(num value, {bool signed = false, bool withUnit = true}) {
-  final rounded = value.round();
-  final neg = rounded < 0;
-  final digits = rounded.abs().toString();
+String groupThousandsDigits(String digits) {
   final buf = StringBuffer();
   for (var i = 0; i < digits.length; i++) {
     if (i > 0 && (digits.length - i) % 3 == 0) buf.write(',');
     buf.write(digits[i]);
   }
+  return buf.toString();
+}
+
+String latinMoneyDigits(String raw) {
+  var s = raw;
+  const arabic = '٠١٢٣٤٥٦٧٨٩';
+  const latin = '0123456789';
+  for (var i = 0; i < arabic.length; i++) {
+    s = s.replaceAll(arabic[i], latin[i]);
+  }
+  return s.replaceAll(RegExp(r'[^0-9]'), '');
+}
+
+/// يدرج فاصلة كل ثلاثة أرقام أثناء الكتابة ويبقي المؤشر على الرقم نفسه.
+class IqdThousandsFormatter extends TextInputFormatter {
+  const IqdThousandsFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = latinMoneyDigits(newValue.text);
+    if (digits.isEmpty) return const TextEditingValue(text: '');
+    final formatted = groupThousandsDigits(digits);
+    final end = newValue.selection.end.clamp(0, newValue.text.length);
+    final digitsBefore = latinMoneyDigits(newValue.text.substring(0, end)).length;
+    var pos = 0;
+    var seen = 0;
+    while (pos < formatted.length && seen < digitsBefore) {
+      if (formatted[pos] != ',') seen++;
+      pos++;
+    }
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: pos),
+    );
+  }
+}
+
+String formatIqd(num value, {bool signed = false, bool withUnit = true}) {
+  final rounded = value.round();
+  final neg = rounded < 0;
+  final digits = groupThousandsDigits(rounded.abs().toString());
   final sign =
       !signed ? (neg ? '-' : '') : (neg ? '-' : (rounded > 0 ? '+' : ''));
-  return withUnit ? '$sign$buf د.ع' : '$sign$buf';
+  return withUnit ? '$sign$digits د.ع' : '$sign$digits';
 }
 
 String formatWhen(DateTime? date) {

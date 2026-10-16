@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/app_sound.dart';
 import 'package:barrr/core/app_svg_icons.dart';
+import 'package:barrr/core/user_error.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/shared/field_ui.dart';
@@ -125,12 +127,26 @@ class QuoteCompareList extends StatelessWidget {
                       if (selectable) ...[
                         const SizedBox(height: 10),
                         FilledButton(
-                          onPressed: () {
+                          onPressed: () async {
                             AppSoundService.playAcceptClient();
-                            AppScope.of(context).dispatch.selectOffer(
-                                  jobId: job.id,
-                                  offer: q,
+                            try {
+                              final ok = await AppScope.of(context)
+                                  .dispatch
+                                  .selectOffer(jobId: job.id, offer: q);
+                              if (!context.mounted) return;
+                              if (!ok) {
+                                AppSnackBar.showError(
+                                  context,
+                                  'تعذّر قبول الطلب. حاول مرة أخرى.',
                                 );
+                              }
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              AppSnackBar.showError(
+                                context,
+                                userFacingError(e, prefix: 'تعذّر قبول الطلب.'),
+                              );
+                            }
                           },
                           child: Text(pickLabel),
                         ),

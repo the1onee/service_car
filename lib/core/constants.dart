@@ -53,8 +53,7 @@ class AppConstants {
     final minAllowed = minAllowedPriceFromBaseline(baseline);
     if (minAllowed == null || newPrice == null) return null;
     if (newPrice + 0.01 < minAllowed) {
-      return 'لا يمكن تخفيض السعر أكثر من 20% من العرض المبدئي '
-          '(الحد الأدنى ${minAllowed.toStringAsFixed(0)})';
+      return 'المبلغ المدخل غير مقبول';
     }
     return null;
   }

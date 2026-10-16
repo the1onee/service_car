@@ -134,13 +134,6 @@ class JobRepository {
     JobStatus.inProgress,
   };
 
-  bool _isExecutingName(String? status) {
-    return status == JobStatus.enRoute.name ||
-        status == JobStatus.arrived.name ||
-        status == JobStatus.finalQuote.name ||
-        status == JobStatus.inProgress.name;
-  }
-
   /// طلب العميل النشط — بلا مكتمل حتى لا يعود الطلب بعد إنهائه.
   Job? _firstActiveForCustomer(QuerySnapshot<Map<String, dynamic>> snap) {
     for (final d in snap.docs) {
@@ -696,7 +689,8 @@ class JobRepository {
     return _db.collection(Cols.providerSlots).doc(providerId);
   }
 
-  /// داخل معاملة، وبعد قراءة القفل: enRoute إن كان المزوّد فارغاً، وإلا انتظار.
+  /// داخل معاملة، وبعد قراءة القفل فقط: enRoute إن كان فارغاً أو لهذا الطلب، وإلا انتظار.
+  /// لا يُقرأ طلب عميل آخر؛ حالة القفل تُحدَّث عند الإنهاء والإلغاء والانسحاب.
   Future<JobStatus> _visitChoice(
     Transaction tx, {
     required String providerId,
@@ -705,11 +699,21 @@ class JobRepository {
     final slotSnap = await tx.get(_slotRef(providerId));
     final currentId = (slotSnap.data()?['activeJobId'] as String?)?.trim() ?? '';
     if (currentId.isEmpty || currentId == jobId) return JobStatus.enRoute;
-    final activeSnap = await tx.get(_jobs.doc(currentId));
-    if (_isExecutingName(activeSnap.data()?['status'] as String?)) {
-      return JobStatus.providerQueued;
-    }
-    return JobStatus.enRoute;
+    return JobStatus.providerQueued;
+  }
+
+  void _releaseSlotIfHeld(
+    Transaction tx,
+    DocumentSnapshot<Map<String, dynamic>> slotSnap,
+    DocumentReference<Map<String, dynamic>> slotRef,
+    String jobId,
+  ) {
+    final currentId = (slotSnap.data()?['activeJobId'] as String?)?.trim() ?? '';
+    if (currentId != jobId) return;
+    tx.set(slotRef, {
+      'activeJobId': '',
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   Future<bool> _commitQueuedVisit({
@@ -1094,7 +1098,18 @@ class JobRepository {
         )
         .toList()
       ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    if (executing.isEmpty) return;
+    if (executing.isEmpty) {
+      try {
+        final slot = await _slotRef(providerId).get();
+        final current = (slot.data()?['activeJobId'] as String?)?.trim() ?? '';
+        if (current.isEmpty) return;
+        await _slotRef(providerId).set({
+          'activeJobId': '',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
+      return;
+    }
     final keep = executing.first;
     for (final extra in executing.skip(1)) {
       try {
@@ -1124,7 +1139,7 @@ class JobRepository {
     }
     await expireOpenOffers(jobId);
     final prevTech = job.technicianId;
-    await _jobs.doc(jobId).update({
+    final fields = <String, dynamic>{
       'status': JobStatus.cancelled.name,
       'technicianId': null,
       'technicianName': null,
@@ -1132,6 +1147,23 @@ class JobRepository {
         'lastAssignedTechnicianId': prevTech,
       'cancelledBy': 'customer',
       'cancelReason': reason.trim(),
+    };
+    final providerId = (prevTech ?? '').trim();
+    if (!job.usesProviderQueue || providerId.isEmpty) {
+      await _jobs.doc(jobId).update(fields);
+      return;
+    }
+    final slotRef = _slotRef(providerId);
+    final jobRef = _jobs.doc(jobId);
+    await _db.runTransaction((tx) async {
+      final jobSnap = await tx.get(jobRef);
+      if (!jobSnap.exists) return;
+      if (!Job.fromDoc(jobSnap).customerCanCancel) {
+        throw StateError('لا يمكن إلغاء الطلب بعد بدء العمل');
+      }
+      final slotSnap = await tx.get(slotRef);
+      tx.update(jobRef, fields);
+      _releaseSlotIfHeld(tx, slotSnap, slotRef, jobId);
     });
   }
 
@@ -1144,7 +1176,7 @@ class JobRepository {
     }
     await expireOpenOffers(jobId);
     final prevTech = job.technicianId;
-    await _jobs.doc(jobId).update({
+    final fields = <String, dynamic>{
       'status': JobStatus.dispatching.name,
       'technicianId': null,
       'technicianName': null,
@@ -1153,6 +1185,23 @@ class JobRepository {
       'cancelledBy': 'technician',
       'cancelReason': reason.trim(),
       'exactLocation': null,
+    };
+    final providerId = (prevTech ?? '').trim();
+    if (!job.usesProviderQueue || providerId.isEmpty) {
+      await _jobs.doc(jobId).update(fields);
+      return;
+    }
+    final slotRef = _slotRef(providerId);
+    final jobRef = _jobs.doc(jobId);
+    await _db.runTransaction((tx) async {
+      final jobSnap = await tx.get(jobRef);
+      if (!jobSnap.exists) return;
+      if (!Job.fromDoc(jobSnap).technicianCanWithdraw) {
+        throw StateError('لا يمكن الانسحاب بعد بدء العمل');
+      }
+      final slotSnap = await tx.get(slotRef);
+      tx.update(jobRef, fields);
+      _releaseSlotIfHeld(tx, slotSnap, slotRef, jobId);
     });
   }
 
@@ -1340,6 +1389,8 @@ class JobRepository {
       final job = jobSnap.data()!;
       final techId = job['technicianId'] as String?;
       if (techId == null) return;
+      final slotRef = _slotRef(techId);
+      final slotSnap = await tx.get(slotRef);
       customerId = job['customerId'] as String? ?? '';
       useWallet = job['useWallet'] == true;
       bill = _billOf(job, receivedAmount);
@@ -1388,6 +1439,7 @@ class JobRepository {
             'status': JobStatus.completed.name,
           });
         }
+        _releaseSlotIfHeld(tx, slotSnap, slotRef, jobId);
         return;
       }
       final wallet = (techSnap.data()?['walletBalance'] as num?)?.toDouble() ?? 0;
@@ -1413,6 +1465,7 @@ class JobRepository {
       tx.update(techRef, {
         'walletBalance': next,
       });
+      _releaseSlotIfHeld(tx, slotSnap, slotRef, jobId);
     });
     await expireOpenOffers(jobId);
     if (customerId.isEmpty || (!useWallet && receivedAmount <= bill)) {

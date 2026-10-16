@@ -383,9 +383,8 @@ service cloud.firestore {
         return request.resource.data.keys().hasOnly(['activeJobId', 'updatedAt'])
           && request.resource.data.activeJobId is string;
       }
-      allow read: if signedIn() && (
-        request.auth.uid == providerId || adminCanRead('orders')
-      );
+      // العميل يقرأ القفل داخل معاملة القبول حتى لو كان الطلب النشط لعميل آخر.
+      allow read: if signedIn();
       allow create, update: if slotKeysOk() && (
         (request.auth.uid == providerId && (
           request.resource.data.activeJobId.size() == 0
@@ -395,6 +394,15 @@ service cloud.firestore {
           request.resource.data.activeJobId.size() > 0
           && nextJob().customerId == request.auth.uid
           && nextJob().technicianId == providerId
+        )
+        // العميل يفرّغ القفل عند إلغاء طلبه فقط، دون قراءة طلب غيره.
+        || (
+          request.resource.data.activeJobId.size() == 0
+          && resource != null
+          && resource.data.activeJobId is string
+          && resource.data.activeJobId.size() > 0
+          && get(/databases/$(database)/documents/jobs/$(resource.data.activeJobId)).data.customerId
+              == request.auth.uid
         )
       );
       allow delete: if adminCanWrite('orders');

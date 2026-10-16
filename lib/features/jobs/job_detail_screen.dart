@@ -371,8 +371,19 @@ class _BodyState extends State<_Body> {
                   ),
                   const SizedBox(height: 12),
                   FilledButton(
-                    onPressed: () =>
-                        AppScope.of(context).jobs.customerAcceptQuote(job.id),
+                    onPressed: () async {
+                      try {
+                        await AppScope.of(context)
+                            .jobs
+                            .customerAcceptQuote(job.id);
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        AppSnackBar.showError(
+                          context,
+                          userFacingError(e, prefix: 'تعذّر قبول الطلب.'),
+                        );
+                      }
+                    },
                     child: const Text('قبول الطلب وبدء التوجه'),
                   ),
                 ],

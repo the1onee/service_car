@@ -644,15 +644,15 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
                                 TextField(
                                   controller: _price,
                                   keyboardType: TextInputType.number,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
+                                  inputFormatters: const [
+                                    IqdThousandsFormatter(),
                                   ],
                                   style: const TextStyle(
                                     fontSize: 22,
                                     fontWeight: FontWeight.w800,
                                   ),
                                   decoration: InputDecoration(
-                                    hintText: '145000',
+                                    hintText: '145,000',
                                     filled: true,
                                     fillColor: AppColors.petrolTint,
                                     border: OutlineInputBorder(
@@ -665,7 +665,7 @@ class _WorkshopQuoteSheetState extends State<WorkshopQuoteSheet> {
                                       fontWeight: FontWeight.w800,
                                     ),
                                     helperText:
-                                        'الحد الأدنى 3000 وينتهي بـ 000',
+                                        'الحد الأدنى 3,000 وينتهي بـ 000',
                                   ),
                                   onChanged: (_) => setState(() {}),
                                 ),
