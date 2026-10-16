@@ -82,6 +82,31 @@ void main() {
       );
     });
 
+    test('provider queue excludes parts workshops only', () {
+      expect(
+        _job(id: 'p', status: JobStatus.enRoute, serviceId: 'parts')
+            .usesProviderQueue,
+        isFalse,
+      );
+      expect(
+        _job(
+          id: 'w',
+          status: JobStatus.enRoute,
+          serviceId: 'x',
+          providerKind: 'workshop',
+        ).usesProviderQueue,
+        isFalse,
+      );
+      for (final id in ['battery', 'oil', 'wash', 'towing', 'paint']) {
+        expect(
+          _job(id: id, status: JobStatus.providerQueued, serviceId: id)
+              .usesProviderQueue,
+          isTrue,
+          reason: id,
+        );
+      }
+    });
+
     test('open-ended dispatch for non-emergency parts/oil/tech', () {
       expect(
         _job(id: 'a', status: JobStatus.dispatching, serviceId: 'parts')
@@ -111,6 +136,10 @@ void main() {
         isTrue,
       );
       expect(
+        _job(id: '2q', status: JobStatus.providerQueued).customerCanCancel,
+        isTrue,
+      );
+      expect(
         _job(id: '3', status: JobStatus.inProgress).customerCanCancel,
         isFalse,
       );
@@ -134,6 +163,10 @@ void main() {
         isTrue,
       );
       expect(
+        _job(id: '1q', status: JobStatus.providerQueued).technicianCanWithdraw,
+        isTrue,
+      );
+      expect(
         _job(id: '2', status: JobStatus.arrived).technicianCanWithdraw,
         isTrue,
       );
@@ -154,6 +187,10 @@ void main() {
       );
       expect(
         _job(id: '2', status: JobStatus.enRoute).locationRevealed,
+        isTrue,
+      );
+      expect(
+        _job(id: '2q', status: JobStatus.providerQueued).locationRevealed,
         isTrue,
       );
       expect(
@@ -225,6 +262,7 @@ void main() {
         JobStatus.offerPending,
         JobStatus.comparing,
         JobStatus.quoted,
+        JobStatus.providerQueued,
         JobStatus.enRoute,
         JobStatus.arrived,
         JobStatus.finalQuote,

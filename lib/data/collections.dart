@@ -19,4 +19,6 @@ class Cols {
   static const warrantyClaims = 'warrantyClaims';
   /// فهرس أرقام الهاتف: phoneRegistry/{9647…} → { uid }
   static const phoneRegistry = 'phoneRegistry';
+  /// قفل زيارة المزوّد: providerSlots/{providerId} → { activeJobId }
+  static const providerSlots = 'providerSlots';
 }

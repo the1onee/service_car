@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/customer/tow_job_details.dart';
 import 'package:barrr/features/customer/wash_job_details.dart';
+import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/jobs/rating_sheet.dart';
 import 'package:barrr/features/oil_workshop/oil_job_details.dart';
 import 'package:barrr/features/shared/field_ui.dart';
@@ -205,6 +207,8 @@ class _TechJobPanelState extends State<TechJobPanel> {
         return oil || wash || tow
             ? 'تم قبول عرضك — انتظر موافقة العميل'
             : 'تم قبولك — انتظر موافقة العميل';
+      case JobStatus.providerQueued:
+        return 'طلب بانتظار بدء التنفيذ';
       case JobStatus.enRoute:
         if (oil) return 'ورشة الزيوت في الطريق';
         if (wash) return 'مغسل في الطريق';
@@ -249,6 +253,20 @@ class _TechJobPanelState extends State<TechJobPanel> {
     return items;
   }
 
+  Future<void> _startQueued(BuildContext context, Job job) async {
+    setState(() => _busy = true);
+    try {
+      await AppScope.of(context).jobs.startQueuedJob(job.id);
+      if (!context.mounted) return;
+      AppSnackBar.showSuccess(context, 'بدأت هذا الطلب');
+    } catch (e) {
+      if (!context.mounted) return;
+      AppSnackBar.showError(context, userFacingError(e, prefix: 'تعذّر بدء الطلب.'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _withdraw(BuildContext context, Job job) async {
     final reason = await _askReason(
       context,
@@ -274,6 +292,17 @@ class _TechJobPanelState extends State<TechJobPanel> {
   List<Widget> _statusActions(BuildContext context, Job job) {
     final jobs = AppScope.of(context).jobs;
     switch (job.status) {
+      case JobStatus.providerQueued:
+        return [
+          const Text(
+            'العميل بانتظارك. ابدأ هذا الطلب عندما تنهي الطلب الجاري.',
+          ),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: _busy ? null : () => _startQueued(context, job),
+            child: Text(_busy ? 'جارٍ البدء…' : 'ابدأ هذا الطلب'),
+          ),
+        ];
       case JobStatus.enRoute:
         return [
           FilledButton(
@@ -518,6 +547,119 @@ double? _parseMoney(String raw) {
       .replaceAll('٫', '.');
   if (s.isEmpty) return null;
   return double.tryParse(s);
+}
+
+/// الطلب الجاري أسفل الخريطة، وفوقه الطلبات التي قبلها العملاء وبانتظار البدء.
+class ProviderVisitDock extends StatelessWidget {
+  const ProviderVisitDock({
+    super.key,
+    required this.providerId,
+    required this.activeJob,
+    required this.panelBuilder,
+    required this.idlePanel,
+  });
+
+  final String providerId;
+  final Job? activeJob;
+  final Widget Function(Job job) panelBuilder;
+  final Widget idlePanel;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Job>>(
+      stream: AppScope.of(context).jobs.watchProviderQueue(providerId),
+      builder: (context, snap) {
+        final queued = (snap.data ?? const <Job>[])
+            .where((job) => job.id != activeJob?.id)
+            .toList();
+        final canStart = !jobBlocksIncomingOffers(activeJob);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (queued.isNotEmpty)
+              _ProviderQueueStrip(jobs: queued, canStart: canStart),
+            if (activeJob != null)
+              panelBuilder(activeJob!)
+            else if (queued.isEmpty)
+              idlePanel,
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ProviderQueueStrip extends StatelessWidget {
+  const _ProviderQueueStrip({required this.jobs, required this.canStart});
+
+  final List<Job> jobs;
+  final bool canStart;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: Material(
+        color: AppColors.amberTint,
+        elevation: 8,
+        borderRadius: BorderRadius.circular(16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 168),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+            children: [
+              Text(
+                jobs.length == 1
+                    ? 'طلب بانتظار بدء التنفيذ'
+                    : '${jobs.length} طلبات بانتظار بدء التنفيذ',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                canStart
+                    ? 'اختر الطلب الذي ستبدأه. العميل الآخر يبقى بانتظارك.'
+                    : 'بعد إنهاء الطلب الحالي يظهر الطلب المنتظر ويمكنك بدءه.',
+                style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
+              ),
+              for (final job in jobs) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        job.serviceTitle ?? job.serviceId,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    if (canStart)
+                      FilledButton(
+                        onPressed: () async {
+                          try {
+                            await AppScope.of(context).jobs.startQueuedJob(job.id);
+                            if (!context.mounted) return;
+                            AppSnackBar.showSuccess(context, 'بدأت هذا الطلب');
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            AppSnackBar.showError(
+                              context,
+                              userFacingError(e, prefix: 'تعذّر بدء الطلب.'),
+                            );
+                          }
+                        },
+                        child: const Text('ابدأ'),
+                      ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 Future<String?> _askReason(BuildContext context, String title, String label) {

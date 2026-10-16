@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:barrr/core/theme.dart';
 
-/// مكوّن موحد لعرض رسائل SnackBar في التطبيق (أعلى الشاشة، 5 ثوانٍ).
+/// مكوّن موحد لعرض رسائل SnackBar في التطبيق (تحت شريط الحالة بقليل، 5 ثوانٍ).
 ///
 /// يوفّر:
 /// - [showError] / [showSuccess] / [showInfo] عبر [BuildContext]
@@ -10,7 +10,8 @@ class AppSnackBar {
   AppSnackBar._();
 
   static const _duration = Duration(seconds: 5);
-  static const _approxHeight = 72.0;
+  static const _dropBelowSafe = 64.0;
+  static const _reservedHeight = 120.0;
 
   // ─── خطأ ────────────────────────────────────────────────────
   static void showError(
@@ -85,8 +86,9 @@ class AppSnackBar {
 
   static EdgeInsets _topMargin(BuildContext context) {
     final media = MediaQuery.of(context);
-    final top = media.padding.top + 8;
-    final bottom = (media.size.height - top - _approxHeight).clamp(0.0, double.infinity);
+    final top = media.padding.top + _dropBelowSafe;
+    final bottom =
+        (media.size.height - top - _reservedHeight).clamp(0.0, double.infinity);
     return EdgeInsets.fromLTRB(16, 0, 16, bottom);
   }
 

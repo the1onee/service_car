@@ -159,12 +159,14 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
           s == JobStatus.inProgress;
     }
     if (job.isWashOrder || job.isTowOrder) {
-      return s == JobStatus.quoted ||
+      return s == JobStatus.providerQueued ||
+          s == JobStatus.quoted ||
           s == JobStatus.enRoute ||
           s == JobStatus.arrived ||
           s == JobStatus.inProgress;
     }
-    return s == JobStatus.quoted ||
+    return s == JobStatus.providerQueued ||
+        s == JobStatus.quoted ||
         s == JobStatus.enRoute ||
         s == JobStatus.arrived ||
         s == JobStatus.finalQuote ||
@@ -188,6 +190,11 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
         if (wash) return 'بانتظار عروض الغسيل';
         if (tow) return 'بانتظار عروض السطحة';
         return AppStrings.compareQuotes;
+      case JobStatus.providerQueued:
+        if (oil) return 'ورشة الزيوت مشغولة بطلب آخر';
+        if (wash) return 'المغسل مشغول بطلب آخر';
+        if (tow) return 'السطحة مشغولة بطلب آخر';
+        return 'الفني مشغول بطلب آخر';
       case JobStatus.quoted:
         if (parts) return 'الورشة تجهّز طلبك';
         if (oil) return 'ورشة الزيوت قبلت الطلب';
@@ -387,6 +394,26 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
         }
         return [
           QuoteCompareList(job: job, selectable: true),
+        ];
+      case JobStatus.providerQueued:
+        final who = job.isOilOrder
+            ? 'ورشة الزيوت'
+            : job.isWashOrder
+                ? 'المغسل'
+                : job.isTowOrder
+                    ? 'السطحة'
+                    : 'الفني';
+        return [
+          _liveCard('$who ينهي طلباً آخر الآن، ثم يتجه إليك مباشرة'),
+          const SizedBox(height: 10),
+          const Text(
+            'يمكنك الاتصال أو إرسال موقعك، أو إلغاء الطلب، أو الانتظار.',
+            style: TextStyle(color: AppColors.inkSoft, height: 1.45),
+          ),
+          const SizedBox(height: 10),
+          _techLine(),
+          const SizedBox(height: 8),
+          _priceLine('السعر المبدئي', job.initialPrice),
         ];
       case JobStatus.quoted:
         if (job.isPartsOrder) {
@@ -735,7 +762,7 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
                 : job.isWashOrder
                     ? 'مغسل'
                     : 'فني');
-    return FieldCard(
+    final card = FieldCard(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       child: Row(
         children: [
@@ -749,6 +776,15 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
           ),
         ],
       ),
+    );
+    if (job.isPartsOrder || !job.locationRevealed) return card;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        card,
+        const SizedBox(height: 8),
+        ProviderContactBlock(job: job, framed: true),
+      ],
     );
   }
 
@@ -810,7 +846,7 @@ class _Steps extends StatelessWidget {
                 ? const ['القبول', 'في الطريق', 'النقل']
                 : const ['القبول', 'في الطريق', 'الفحص', 'العمل'];
     final active = switch (status) {
-      JobStatus.quoted => 0,
+      JobStatus.providerQueued || JobStatus.quoted => 0,
       JobStatus.enRoute => 1,
       JobStatus.arrived => simple ? 2 : 2,
       JobStatus.finalQuote => simple ? 2 : 2,

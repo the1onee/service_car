@@ -8,6 +8,8 @@ enum JobStatus {
   offerPending,
   comparing,
   quoted,
+  /// العميل قبل المزوّد، والمزوّد مشغول بطلب آخر ولم يبدأ هذا الطلب بعد.
+  providerQueued,
   cancelled,
   noTechnician,
   enRoute,
@@ -209,6 +211,9 @@ class Job {
   bool get isTechnicianJob =>
       !isPartsOrder && !isOilOrder && !isPaintOrder;
 
+  /// طابور المزوّد المشغول. ورش قطع الغيار تبقى على مسارها المباشر.
+  bool get usesProviderQueue => !isPartsOrder;
+
   /// عروض بلا نافذة زمنية. الطوارئ (فتح سيارة / وقود) أول قبول يفوز؛ السطحة عروض يختارها العميل.
   bool get isOpenEndedDispatch =>
       !isEmergency && (isPartsOrder || isOilOrder || isTechnicianJob);
@@ -221,6 +226,7 @@ class Job {
       JobStatus.offerPending,
       JobStatus.comparing,
       JobStatus.quoted,
+      JobStatus.providerQueued,
       JobStatus.noTechnician,
       JobStatus.enRoute,
       JobStatus.arrived,
@@ -235,6 +241,7 @@ class Job {
   bool get technicianCanWithdraw {
     const open = {
       JobStatus.quoted,
+      JobStatus.providerQueued,
       JobStatus.enRoute,
       JobStatus.arrived,
       JobStatus.finalQuote,
@@ -258,6 +265,7 @@ class Job {
 
   bool get locationRevealed {
     const revealed = {
+      JobStatus.providerQueued,
       JobStatus.enRoute,
       JobStatus.arrived,
       JobStatus.finalQuote,

@@ -132,6 +132,7 @@ class _OilWorkshopHomeState extends State<OilWorkshopHome>
     _zone = zone;
     _startTracking();
     unawaited(scope.users.ensureProviderReady(widget.profile.id));
+    unawaited(scope.jobs.normalizeProviderQueue(widget.profile.id));
     unawaited(
       scope.jobs.redispatchWaitingJobs(providerRole: 'oilWorkshop'),
     );
@@ -387,16 +388,16 @@ class _OilMapTab extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (job != null)
-                          Align(
-                            alignment: Alignment.bottomCenter,
-                            child: TechJobPanel(job: job, me: me),
-                          )
-                        else
-                          Align(
-                            alignment: Alignment.bottomCenter,
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        Align(
+                          alignment: Alignment.bottomCenter,
+                          child: ProviderVisitDock(
+                            providerId: profileId,
+                            activeJob: job,
+                            panelBuilder: (active) =>
+                                TechJobPanel(job: active, me: me),
+                            idlePanel: Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 0, 16, 12),
                               child: FieldCard(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -425,6 +426,7 @@ class _OilMapTab extends StatelessWidget {
                               ),
                             ),
                           ),
+                        ),
                       ],
                     );
                   },

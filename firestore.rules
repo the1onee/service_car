@@ -264,7 +264,7 @@ service cloud.firestore {
           && resource.data.technicianId == null
           && request.resource.data.technicianId == request.auth.uid
           && resource.data.status in ['dispatching', 'offerPending', 'comparing', 'noTechnician']
-          && request.resource.data.status in ['quoted', 'enRoute', 'arrived', 'inProgress']
+          && request.resource.data.status in ['quoted', 'enRoute', 'arrived', 'inProgress', 'providerQueued']
           && jobDiffKeys().hasOnly([
             'technicianId', 'technicianName', 'initialPrice', 'status',
             'lastAssignedTechnicianId', 'cancelledBy', 'cancelReason', 'exactLocation'
@@ -371,6 +371,32 @@ service cloud.firestore {
         || customerJobUpdate()
         || assignedTechJobUpdate()
         || adminCanWrite('orders');
+      allow delete: if adminCanWrite('orders');
+    }
+
+    // قفل زيارة واحدة لكل مزوّد. يُكتب مع تعيين الطلب في نفس العملية.
+    match /providerSlots/{providerId} {
+      function nextJob() {
+        return getAfter(/databases/$(database)/documents/jobs/$(request.resource.data.activeJobId)).data;
+      }
+      function slotKeysOk() {
+        return request.resource.data.keys().hasOnly(['activeJobId', 'updatedAt'])
+          && request.resource.data.activeJobId is string;
+      }
+      allow read: if signedIn() && (
+        request.auth.uid == providerId || adminCanRead('orders')
+      );
+      allow create, update: if slotKeysOk() && (
+        (request.auth.uid == providerId && (
+          request.resource.data.activeJobId.size() == 0
+          || nextJob().technicianId == providerId
+        ))
+        || (
+          request.resource.data.activeJobId.size() > 0
+          && nextJob().customerId == request.auth.uid
+          && nextJob().technicianId == providerId
+        )
+      );
       allow delete: if adminCanWrite('orders');
     }
 

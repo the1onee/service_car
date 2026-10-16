@@ -211,6 +211,32 @@ class _BodyState extends State<_Body> {
             const SizedBox(height: 12),
             CustomerContactBlock(job: job, framed: true),
           ],
+          if (customer && !parts && job.locationRevealed) ...[
+            const SizedBox(height: 12),
+            ProviderContactBlock(job: job, framed: true),
+          ],
+          if (!customer &&
+              !parts &&
+              job.status == JobStatus.providerQueued &&
+              job.technicianId == profile.id) ...[
+            const SizedBox(height: 12),
+            FilledButton(
+              onPressed: () async {
+                try {
+                  await AppScope.of(context).jobs.startQueuedJob(job.id);
+                  if (!context.mounted) return;
+                  AppSnackBar.showSuccess(context, 'بدأت هذا الطلب');
+                } catch (e) {
+                  if (!context.mounted) return;
+                  AppSnackBar.showError(
+                    context,
+                    userFacingError(e, prefix: 'تعذّر بدء الطلب.'),
+                  );
+                }
+              },
+              child: const Text('ابدأ هذا الطلب'),
+            ),
+          ],
           const SizedBox(height: 12),
           if (showWorkshopDetails)
             FieldCard(

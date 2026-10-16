@@ -1,8 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:barrr/core/app_brand.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/app_snackbar.dart';
+import 'package:barrr/core/phone.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/shared/app_network_or_data_image.dart';
@@ -354,6 +357,7 @@ String jobStatusLabel(
       case JobStatus.comparing:
         return 'مقارنة العروض';
       case JobStatus.quoted:
+      case JobStatus.providerQueued:
       case JobStatus.enRoute:
       case JobStatus.arrived:
         return 'جاري التجهيز';
@@ -378,6 +382,8 @@ String jobStatusLabel(
         return 'بانتظار عروض الغسيل';
       case JobStatus.quoted:
         return 'بانتظار التوجه';
+      case JobStatus.providerQueued:
+        return 'بانتظار دور المغسل';
       case JobStatus.enRoute:
         return 'مغسل في الطريق';
       case JobStatus.arrived:
@@ -402,6 +408,8 @@ String jobStatusLabel(
       return 'مقارنة العروض';
     case JobStatus.quoted:
       return 'بانتظار الموافقة';
+    case JobStatus.providerQueued:
+      return 'بانتظار دور المزوّد';
     case JobStatus.enRoute:
       return 'في الطريق';
     case JobStatus.arrived:
@@ -435,6 +443,7 @@ String jobStatusLabel(
       case JobStatus.finalQuote:
         return (AppColors.emeraldDeep, AppColors.emeraldTint);
       case JobStatus.quoted:
+      case JobStatus.providerQueued:
       case JobStatus.enRoute:
       case JobStatus.arrived:
         return (const Color(0xFF92400E), AppColors.amberTint);
@@ -454,6 +463,7 @@ String jobStatusLabel(
     case JobStatus.enRoute:
     case JobStatus.arrived:
     case JobStatus.finalQuote:
+    case JobStatus.providerQueued:
     case JobStatus.quoted:
       return (const Color(0xFF92400E), AppColors.amberTint);
     default:
@@ -525,6 +535,113 @@ Future<void> openCustomerInMaps(double lat, double lng) async {
   await launchUrl(uri, mode: LaunchMode.platformDefault);
 }
 
+String mapsPointLink(double lat, double lng) =>
+    'https://www.google.com/maps?q=$lat,$lng';
+
+Future<void> copyPhoneNumber(BuildContext context, String phone) async {
+  final value = phone.trim();
+  if (value.isEmpty) return;
+  await Clipboard.setData(ClipboardData(text: value));
+  if (!context.mounted) return;
+  AppSnackBar.showSuccess(context, 'تم نسخ رقم الهاتف');
+}
+
+/// يفتح واتساب على الرقم مع نص يتضمن رابط الموقع.
+Future<void> openWhatsAppLocation({
+  required String phone,
+  required String text,
+}) async {
+  final normalized = normalizeIraqiPhone(phone);
+  final digits = (looksLikeIraqiMobile(normalized) ? normalized : phone)
+      .replaceAll(RegExp(r'[^\d]'), '');
+  if (digits.isEmpty) return;
+  final uri = Uri.parse(
+    'https://wa.me/$digits?text=${Uri.encodeComponent(text)}',
+  );
+  final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (opened) return;
+  await launchUrl(uri, mode: LaunchMode.platformDefault);
+}
+
+String jobLocationWhatsAppText(Job job) {
+  final lines = <String>['موقع الطلب'];
+  final point = job.displayLocation;
+  if (job.isTowOrder) {
+    final pickup = job.pickupLabel.trim();
+    lines.add(
+      pickup.isEmpty
+          ? 'التحميل: ${mapsPointLink(point.latitude, point.longitude)}'
+          : 'التحميل ($pickup): ${mapsPointLink(point.latitude, point.longitude)}',
+    );
+    final drop = job.dropoffLocation;
+    if (drop != null) {
+      final label = job.dropoffLabel.trim();
+      lines.add(
+        label.isEmpty
+            ? 'التنزيل: ${mapsPointLink(drop.latitude, drop.longitude)}'
+            : 'التنزيل ($label): ${mapsPointLink(drop.latitude, drop.longitude)}',
+      );
+    }
+  } else {
+    final label = job.landmark.trim().isNotEmpty
+        ? job.landmark.trim()
+        : job.deliveryAddress.trim();
+    lines.add(
+      label.isEmpty
+          ? mapsPointLink(point.latitude, point.longitude)
+          : '$label: ${mapsPointLink(point.latitude, point.longitude)}',
+    );
+  }
+  return lines.join('\n');
+}
+
+class _PhoneActions extends StatelessWidget {
+  const _PhoneActions({
+    required this.phone,
+    required this.whatsAppText,
+    this.mapsLat,
+    this.mapsLng,
+    this.whatsAppLabel = 'واتساب الموقع',
+  });
+
+  final String phone;
+  final String whatsAppText;
+  final double? mapsLat;
+  final double? mapsLng;
+  final String whatsAppLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 4,
+      runSpacing: 0,
+      children: [
+        if (phone.isNotEmpty)
+          TextButton.icon(
+            onPressed: () => copyPhoneNumber(context, phone),
+            icon: const Icon(Icons.copy_rounded, size: 18),
+            label: const Text('نسخ الهاتف'),
+          ),
+        if (mapsLat != null && mapsLng != null)
+          TextButton.icon(
+            onPressed: () => openCustomerInMaps(mapsLat!, mapsLng!),
+            icon: const Icon(Icons.map_outlined, size: 18),
+            label: const Text('الخريطة'),
+          ),
+        if (phone.isNotEmpty)
+          TextButton.icon(
+            onPressed: () => openWhatsAppLocation(
+              phone: phone,
+              text: whatsAppText,
+            ),
+            icon: const Icon(Icons.chat_outlined, size: 18),
+            label: Text(whatsAppLabel),
+          ),
+      ],
+    );
+  }
+}
+
 /// صورة ورقم هاتف العميل للمزوّد بعد قبول الطلب (`locationRevealed`).
 class CustomerContactBlock extends StatefulWidget {
   const CustomerContactBlock({
@@ -590,64 +707,165 @@ class _CustomerContactBlockState extends State<CustomerContactBlock> {
 
     final phone = job.customerPhone.trim();
     final photo = (_photoUrl ?? '').trim();
-    if (phone.isEmpty && photo.isEmpty && !_loading) {
+    final point = job.displayLocation;
+    final hasPoint = point.latitude != 0 || point.longitude != 0;
+    if (phone.isEmpty && photo.isEmpty && !_loading && !hasPoint) {
       return const SizedBox.shrink();
     }
 
-    final body = Row(
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ClipOval(
-          child: SizedBox(
-            width: 52,
-            height: 52,
-            child: photo.isNotEmpty
-                ? AppNetworkOrDataImage(
-                    source: photo,
-                    memCacheWidth: 160,
-                    errorColor: AppColors.recessed,
-                  )
-                : ColoredBox(
-                    color: AppColors.recessed,
-                    child: _loading
-                        ? const Center(
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        : const Icon(
-                            Icons.person_outline,
-                            color: AppColors.inkSoft,
-                          ),
+        Row(
+          children: [
+            ClipOval(
+              child: SizedBox(
+                width: 52,
+                height: 52,
+                child: photo.isNotEmpty
+                    ? AppNetworkOrDataImage(
+                        source: photo,
+                        memCacheWidth: 160,
+                        errorColor: AppColors.recessed,
+                      )
+                    : ColoredBox(
+                        color: AppColors.recessed,
+                        child: _loading
+                            ? const Center(
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              )
+                            : const Icon(
+                                Icons.person_outline,
+                                color: AppColors.inkSoft,
+                              ),
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'هاتف العميل',
+                    style: TextStyle(fontSize: 12, color: AppColors.inkSoft),
                   ),
-          ),
+                  const SizedBox(height: 2),
+                  Text(
+                    phone.isEmpty ? '—' : phone,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    textDirection: TextDirection.ltr,
+                    textAlign: TextAlign.start,
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'هاتف العميل',
-                style: TextStyle(fontSize: 12, color: AppColors.inkSoft),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                phone.isEmpty ? '—' : phone,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-                textDirection: TextDirection.ltr,
-                textAlign: TextAlign.start,
-              ),
-            ],
-          ),
+        _PhoneActions(
+          phone: phone,
+          whatsAppText: jobLocationWhatsAppText(job),
+          mapsLat: hasPoint ? point.latitude : null,
+          mapsLng: hasPoint ? point.longitude : null,
+          whatsAppLabel: 'واتساب للعميل',
         ),
       ],
     );
 
+    if (!widget.framed) return body;
+    return FieldCard(child: body);
+  }
+}
+
+/// هاتف المزوّد المعيّن، مع نسخ الرقم وإرسال موقع الطلب إليه على واتساب.
+class ProviderContactBlock extends StatefulWidget {
+  const ProviderContactBlock({
+    super.key,
+    required this.job,
+    this.framed = false,
+  });
+
+  final Job job;
+  final bool framed;
+
+  @override
+  State<ProviderContactBlock> createState() => _ProviderContactBlockState();
+}
+
+class _ProviderContactBlockState extends State<ProviderContactBlock> {
+  String _phone = '';
+  var _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProviderContactBlock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.job.technicianId != widget.job.technicianId) {
+      _phone = '';
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    final id = (widget.job.technicianId ?? '').trim();
+    if (id.isEmpty) return;
+    try {
+      final user = await AppScope.of(context).users.get(id);
+      if (!mounted) return;
+      setState(() => _phone = user?.phone.trim() ?? '');
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final job = widget.job;
+    final id = (job.technicianId ?? '').trim();
+    if (id.isEmpty || job.isPartsOrder || !job.locationRevealed) {
+      return const SizedBox.shrink();
+    }
+    final phone = _phone.trim();
+    final point = job.displayLocation;
+    final hasPoint = point.latitude != 0 || point.longitude != 0;
+    final name = (job.technicianName ?? '').trim().isEmpty
+        ? 'المزوّد'
+        : job.technicianName!.trim();
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'هاتف $name',
+          style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          phone.isEmpty ? '—' : phone,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          textDirection: TextDirection.ltr,
+          textAlign: TextAlign.start,
+        ),
+        _PhoneActions(
+          phone: phone,
+          whatsAppText: jobLocationWhatsAppText(job),
+          mapsLat: hasPoint ? point.latitude : null,
+          mapsLng: hasPoint ? point.longitude : null,
+          whatsAppLabel: 'واتساب الموقع',
+        ),
+      ],
+    );
     if (!widget.framed) return body;
     return FieldCard(child: body);
   }

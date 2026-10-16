@@ -120,11 +120,26 @@ class JobRepository {
     JobStatus.offerPending,
     JobStatus.comparing,
     JobStatus.quoted,
+    JobStatus.providerQueued,
     JobStatus.enRoute,
     JobStatus.arrived,
     JobStatus.finalQuote,
     JobStatus.inProgress,
   };
+
+  static const _executingJobStatuses = {
+    JobStatus.enRoute,
+    JobStatus.arrived,
+    JobStatus.finalQuote,
+    JobStatus.inProgress,
+  };
+
+  bool _isExecutingName(String? status) {
+    return status == JobStatus.enRoute.name ||
+        status == JobStatus.arrived.name ||
+        status == JobStatus.finalQuote.name ||
+        status == JobStatus.inProgress.name;
+  }
 
   /// طلب العميل النشط — بلا مكتمل حتى لا يعود الطلب بعد إنهائه.
   Job? _firstActiveForCustomer(QuerySnapshot<Map<String, dynamic>> snap) {
@@ -136,13 +151,43 @@ class JobRepository {
     return null;
   }
 
-  /// مهمة الفني النشطة — لا تُعاد بعد الإكمال.
+  /// مهمة المزوّد الجارية. طلب الانتظار لا يخفي الطلب الذي بدأ تنفيذه،
+  /// وعند تعارض أكثر من زيارة تُعرض الأقدم.
   Job? _firstActiveForTechnician(QuerySnapshot<Map<String, dynamic>> snap) {
+    Job? oldestExecuting;
+    Job? fallback;
     for (final d in snap.docs) {
       final job = Job.fromDoc(d);
-      if (_liveJobStatuses.contains(job.status)) return job;
+      if (!_liveJobStatuses.contains(job.status)) continue;
+      if (job.status == JobStatus.providerQueued) continue;
+      fallback ??= job;
+      if (!_executingJobStatuses.contains(job.status)) continue;
+      if (oldestExecuting == null ||
+          job.createdAt.isBefore(oldestExecuting.createdAt)) {
+        oldestExecuting = job;
+      }
     }
-    return null;
+    return oldestExecuting ?? fallback;
+  }
+
+  Stream<List<Job>> watchProviderQueue(String technicianId) {
+    return _jobs
+        .where('technicianId', isEqualTo: technicianId)
+        .orderBy('createdAt', descending: true)
+        .limit(20)
+        .snapshots()
+        .map((s) {
+          final list = s.docs
+              .map(Job.fromDoc)
+              .where(
+                (job) =>
+                    job.status == JobStatus.providerQueued &&
+                    job.usesProviderQueue,
+              )
+              .toList();
+          list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          return list;
+        });
   }
 
   Future<String> createJob({
@@ -519,6 +564,11 @@ class JobRepository {
           job['status'] != JobStatus.noTechnician.name) {
         return false;
       }
+      final visit = await _visitChoice(
+        tx,
+        providerId: technicianId,
+        jobId: jobRef.id,
+      );
 
       tx.update(jobRef, {
         'technicianId': technicianId,
@@ -527,8 +577,14 @@ class JobRepository {
         'cancelledBy': FieldValue.delete(),
         'cancelReason': FieldValue.delete(),
         'initialPrice': initialPrice,
-        'status': JobStatus.enRoute.name,
+        'status': visit.name,
       });
+      if (visit == JobStatus.enRoute) {
+        tx.set(_slotRef(technicianId), {
+          'activeJobId': jobRef.id,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
       tx.update(offerRef, {'status': 'accepted', 'initialPrice': initialPrice});
       return true;
     }).then((won) async {
@@ -633,11 +689,69 @@ class JobRepository {
       return false;
     }
     if (offer.status != OfferStatus.submitted) return false;
-    await _assignOffer(jobId, offer);
-    return true;
+    return _assignOffer(jobId, offer);
   }
 
-  Future<void> _assignOffer(String jobId, JobOffer offer) async {
+  DocumentReference<Map<String, dynamic>> _slotRef(String providerId) {
+    return _db.collection(Cols.providerSlots).doc(providerId);
+  }
+
+  /// داخل معاملة، وبعد قراءة القفل: enRoute إن كان المزوّد فارغاً، وإلا انتظار.
+  Future<JobStatus> _visitChoice(
+    Transaction tx, {
+    required String providerId,
+    required String jobId,
+  }) async {
+    final slotSnap = await tx.get(_slotRef(providerId));
+    final currentId = (slotSnap.data()?['activeJobId'] as String?)?.trim() ?? '';
+    if (currentId.isEmpty || currentId == jobId) return JobStatus.enRoute;
+    final activeSnap = await tx.get(_jobs.doc(currentId));
+    if (_isExecutingName(activeSnap.data()?['status'] as String?)) {
+      return JobStatus.providerQueued;
+    }
+    return JobStatus.enRoute;
+  }
+
+  Future<bool> _commitQueuedVisit({
+    required String jobId,
+    required String providerId,
+    required Map<String, dynamic> fields,
+    bool requireUnassigned = false,
+    String? onlyFromStatus,
+  }) async {
+    final jobRef = _jobs.doc(jobId);
+    final slotRef = _slotRef(providerId);
+    return _db.runTransaction((tx) async {
+      final jobSnap = await tx.get(jobRef);
+      if (!jobSnap.exists) return false;
+      final data = jobSnap.data()!;
+      final existing = data['technicianId'];
+      if (requireUnassigned && existing is String && existing.isNotEmpty) {
+        return false;
+      }
+      if (onlyFromStatus != null && data['status'] != onlyFromStatus) {
+        return false;
+      }
+      final visit = await _visitChoice(
+        tx,
+        providerId: providerId,
+        jobId: jobId,
+      );
+      tx.update(jobRef, {
+        ...fields,
+        'status': visit.name,
+      });
+      if (visit == JobStatus.enRoute) {
+        tx.set(slotRef, {
+          'activeJobId': jobId,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      return true;
+    });
+  }
+
+  Future<bool> _assignOffer(String jobId, JobOffer offer) async {
     final warrantyDays = offer.warrantyDays;
     final warrantyNote = offer.warrantyNote;
     final jobSnap = await _jobs.doc(jobId).get();
@@ -656,7 +770,8 @@ class JobRepository {
       deliveryAddress = (data?['label'] as String? ?? '').trim();
     }
     // قطع / زيوت / فني: قبول العميل يُسند الطلب مباشرة (بدون خطوة «قبول السعر»).
-    await _jobs.doc(jobId).update({
+    // غير القطع: إن كان المزوّد في زيارة أخرى يبقى الطلب بانتظاره.
+    final fields = <String, dynamic>{
       'technicianId': offer.technicianId,
       'technicianName': offer.technicianName ??
           (isOil
@@ -669,7 +784,6 @@ class JobRepository {
       'cancelReason': FieldValue.delete(),
       'initialPrice': price,
       if (isParts && price != null) 'finalPrice': price,
-      'status': directAssign ? JobStatus.enRoute.name : JobStatus.quoted.name,
       if (exact != null) 'exactLocation': exact,
       if (deliveryAddress.isNotEmpty) 'deliveryAddress': deliveryAddress,
       if (offer.partCondition.isNotEmpty) 'partCondition': offer.partCondition,
@@ -682,7 +796,22 @@ class JobRepository {
           days: warrantyDays,
           note: warrantyNote.isEmpty ? 'ضمان $warrantyDays يوم' : warrantyNote,
         ).toMap(),
-    });
+    };
+    final queueVisit = job != null && job.usesProviderQueue && directAssign;
+    if (queueVisit) {
+      final ok = await _commitQueuedVisit(
+        jobId: jobId,
+        providerId: offer.technicianId,
+        fields: fields,
+        requireUnassigned: true,
+      );
+      if (!ok) return false;
+    } else {
+      await _jobs.doc(jobId).update({
+        ...fields,
+        'status': directAssign ? JobStatus.enRoute.name : JobStatus.quoted.name,
+      });
+    }
     await _offers.doc(offer.id).update({'status': 'accepted'});
     final others = await _offers.where('jobId', isEqualTo: jobId).get();
     final batch = _db.batch();
@@ -694,6 +823,7 @@ class JobRepository {
       }
     }
     await batch.commit();
+    return true;
   }
 
   Future<void> rejectOffer(String offerId) {
@@ -882,12 +1012,103 @@ class JobRepository {
   }
 
   Future<void> customerAcceptQuote(String jobId) async {
+    final snap = await _jobs.doc(jobId).get();
+    if (!snap.exists) return;
+    final job = Job.fromDoc(snap);
     final loc = await _db.collection(Cols.jobLocations).doc(jobId).get();
     final exact = loc.data()?['exact'] as GeoPoint?;
-    await _jobs.doc(jobId).update({
-      'status': JobStatus.enRoute.name,
+    final fields = <String, dynamic>{
       if (exact != null) 'exactLocation': exact,
+    };
+    final providerId = (job.technicianId ?? '').trim();
+    if (job.usesProviderQueue && providerId.isNotEmpty) {
+      final ok = await _commitQueuedVisit(
+        jobId: jobId,
+        providerId: providerId,
+        fields: fields,
+        onlyFromStatus: JobStatus.quoted.name,
+      );
+      if (!ok) {
+        throw StateError('تعذّر قبول الطلب');
+      }
+      return;
+    }
+    await _jobs.doc(jobId).update({
+      ...fields,
+      'status': JobStatus.enRoute.name,
     });
+  }
+
+  /// يبدأ طلباً منتظراً بعد أن يختاره المزوّد، بشرط ألا تكون لديه زيارة جارية.
+  Future<void> startQueuedJob(String jobId) async {
+    final snap = await _jobs.doc(jobId).get();
+    if (!snap.exists) throw StateError('الطلب غير موجود');
+    final job = Job.fromDoc(snap);
+    if (!job.usesProviderQueue) {
+      throw StateError('هذا المسار غير مستخدم لورش القطع');
+    }
+    if (job.status != JobStatus.providerQueued) {
+      throw StateError('الطلب ليس في الانتظار');
+    }
+    final providerId = (job.technicianId ?? '').trim();
+    if (providerId.isEmpty) throw StateError('لا يوجد مزوّد معيّن');
+    final slotRef = _slotRef(providerId);
+    final jobRef = _jobs.doc(jobId);
+    final started = await _db.runTransaction((tx) async {
+      final jobSnap = await tx.get(jobRef);
+      if (!jobSnap.exists) return false;
+      if (jobSnap.data()?['status'] != JobStatus.providerQueued.name) {
+        return false;
+      }
+      final visit = await _visitChoice(
+        tx,
+        providerId: providerId,
+        jobId: jobId,
+      );
+      if (visit != JobStatus.enRoute) return false;
+      tx.update(jobRef, {'status': JobStatus.enRoute.name});
+      tx.set(slotRef, {
+        'activeJobId': jobId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return true;
+    });
+    if (!started) {
+      throw StateError('أنهِ الطلب الجاري قبل بدء طلب آخر');
+    }
+  }
+
+  /// إن وُجد أكثر من طلب قيد التنفيذ لنفس المزوّد، يبقى الأقدم ويعود الباقي للانتظار.
+  Future<void> normalizeProviderQueue(String providerId) async {
+    final snap = await _jobs
+        .where('technicianId', isEqualTo: providerId)
+        .orderBy('createdAt', descending: true)
+        .limit(20)
+        .get();
+    final executing = snap.docs
+        .map(Job.fromDoc)
+        .where(
+          (job) =>
+              job.usesProviderQueue &&
+              _executingJobStatuses.contains(job.status),
+        )
+        .toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    if (executing.isEmpty) return;
+    final keep = executing.first;
+    for (final extra in executing.skip(1)) {
+      try {
+        await _jobs.doc(extra.id).update({
+          'status': JobStatus.providerQueued.name,
+        });
+      } catch (_) {}
+    }
+    try {
+      await _slotRef(providerId).set({
+        'activeJobId': keep.id,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
   }
 
   Future<void> customerRejectQuote(String jobId) {
