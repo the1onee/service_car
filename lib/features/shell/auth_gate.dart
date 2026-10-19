@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:barrr/core/app_brand.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/core/service_unavailable_screen.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/auth/auth_screen.dart';
 import 'package:barrr/features/legal/terms_accept_screen.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/shell/role_home.dart';
+import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/services/user_repository.dart';
 
@@ -84,6 +87,19 @@ class _HomeFromProfile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scope = AppScope.of(context);
+    return StreamBuilder<AppSettings>(
+      stream: scope.settings.watchSettings(),
+      builder: (context, settings) {
+        final minBuild = settings.data?.minAppBuild ?? 0;
+        if (AppBrand.buildNumber > 0 && AppBrand.buildNumber < minBuild) {
+          return const ServiceUnavailableScreen(updateRequired: true);
+        }
+        return _profileHome(scope);
+      },
+    );
+  }
+
+  Widget _profileHome(AppScope scope) {
     return StreamBuilder<AppUser?>(
       stream: scope.users.watch(uid),
       builder: (context, profile) {

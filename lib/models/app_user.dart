@@ -20,7 +20,6 @@ class AppUser {
     this.idCard = '',
     this.ratingAvg = 5,
     this.ratingCount = 0,
-    this.fcmToken,
     this.isOnline = false,
     this.geo,
     this.serviceIds = const [],
@@ -49,7 +48,6 @@ class AppUser {
   final String idCard;
   final double ratingAvg;
   final int ratingCount;
-  final String? fcmToken;
   final bool isOnline;
   final GeoPoint? geo;
   final List<String> serviceIds;
@@ -122,7 +120,6 @@ class AppUser {
         'idCard': idCard,
         'ratingAvg': ratingAvg,
         'ratingCount': ratingCount,
-        'fcmToken': fcmToken,
         'isOnline': isOnline,
         'geo': geo,
         'serviceIds': serviceIds,
@@ -173,7 +170,6 @@ class AppUser {
       idCard: d['idCard'] as String? ?? '',
       ratingAvg: (d['ratingAvg'] as num?)?.toDouble() ?? 5,
       ratingCount: (d['ratingCount'] as num?)?.toInt() ?? 0,
-      fcmToken: d['fcmToken'] as String?,
       isOnline: d['isOnline'] == true,
       geo: d['geo'] as GeoPoint?,
       serviceIds: List<String>.from(d['serviceIds'] as List? ?? const []),
@@ -218,7 +214,6 @@ class AppUser {
     String? photoUrl,
     bool? isOnline,
     GeoPoint? geo,
-    String? fcmToken,
     List<String>? serviceIds,
     List<String>? vehicleTypeIds,
     String? specialtyId,
@@ -242,7 +237,6 @@ class AppUser {
       idCard: idCard,
       ratingAvg: ratingAvg,
       ratingCount: ratingCount,
-      fcmToken: fcmToken ?? this.fcmToken,
       isOnline: isOnline ?? this.isOnline,
       geo: geo ?? this.geo,
       serviceIds: serviceIds ?? this.serviceIds,

@@ -80,16 +80,18 @@ class UserRepository {
         .map((s) => s.docs.map(AppUser.fromDoc).toList());
   }
 
+  /// التوكن في مجموعة منفصلة لا يقرأها إلا صاحبها والسيرفر.
   Future<void> updateFcm(String uid, String token) {
-    return _userRef(uid).set({'fcmToken': token}, SetOptions(merge: true));
+    return _db.collection(Cols.userTokens).doc(uid).set({
+      'token': token,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   /// عند تسجيل الخروج: إيقاف الاستقبال ومسح توكن الدفع حتى لا تصل طلبات/إشعارات.
-  Future<void> clearPushSession(String uid) {
-    return _userRef(uid).set({
-      'isOnline': false,
-      'fcmToken': FieldValue.delete(),
-    }, SetOptions(merge: true));
+  Future<void> clearPushSession(String uid) async {
+    await _userRef(uid).set({'isOnline': false}, SetOptions(merge: true));
+    await _db.collection(Cols.userTokens).doc(uid).delete();
   }
 
   Future<OnlineResult> setOnline(String uid, bool online) async {
@@ -366,21 +368,6 @@ class UserRepository {
       }
     }
     await _userRef(uid).set(patch, SetOptions(merge: true));
-  }
-
-  Future<void> applyRating(String uid, int stars) async {
-    await _db.runTransaction((tx) async {
-      final snap = await tx.get(_userRef(uid));
-      final data = snap.data() ?? {};
-      final count = (data['ratingCount'] as num?)?.toInt() ?? 0;
-      final avg = (data['ratingAvg'] as num?)?.toDouble() ?? 5;
-      final nextCount = count + 1;
-      final nextAvg = ((avg * count) + stars) / nextCount;
-      tx.update(_userRef(uid), {
-        'ratingCount': nextCount,
-        'ratingAvg': nextAvg,
-      });
-    });
   }
 
   Future<void> seedServicesIfNeeded() => syncMvpServices();

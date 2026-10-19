@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 /// عنوان باكند الإشعارات ورمز واتساب على VPS (بدون Cloud Functions).
 ///
 /// عند البناء/التشغيل للإنتاج:
@@ -14,16 +12,12 @@ class ApiConfig {
   /// إنتاج: https://albatariq.com — تجاوز عبر `--dart-define=BARRR_API_BASE=...`.
   static const productionBase = 'https://albatariq.com';
 
-  /// أولوية: dart-define ثم إنتاج في release ثم محلي حسب المنصة.
+  /// إنتاج دائماً إلا إذا مُرر `--dart-define=BARRR_API_BASE=...`.
+  /// الهاتف الحقيقي لا يصل إلى 10.0.2.2 (ذلك عنوان محاكي أندرويد فقط).
   static String get baseUrl {
     final env = _fromEnv.trim();
     if (env.isNotEmpty) return env.replaceAll(RegExp(r'/+$'), '');
-    if (kReleaseMode) return productionBase;
-    // محاكي أندرويد يصل للمضيف عبر 10.0.2.2
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:8787';
-    }
-    return 'http://127.0.0.1:8787';
+    return productionBase;
   }
 
   static Uri uri(String path) {

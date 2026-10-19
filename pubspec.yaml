@@ -1,7 +1,7 @@
 name: barrr
 description: تطبيق البطريق — خدمات سيارات (عميل وفني) على Flutter وFirebase.
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.0+7
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -28,6 +28,7 @@ dependencies:
   just_audio: ^0.9.34
   google_sign_in: ^7.2.0
   flutter_dotenv: ^6.0.1
+  package_info_plus: ^10.2.2
 
 dev_dependencies:
   flutter_test:

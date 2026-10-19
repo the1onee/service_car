@@ -579,7 +579,6 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
           if (job.ratings.customerToTech == null)
             FilledButton(
               onPressed: () async {
-                final users = AppScope.of(context).users;
                 final stars = await showRatingSheet(
                   context,
                   title: job.isOilOrder
@@ -594,9 +593,6 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
                 );
                 if (stars == null || !context.mounted) return;
                 await jobs.rateAsCustomer(job.id, stars);
-                if (job.technicianId != null) {
-                  await users.applyRating(job.technicianId!, stars);
-                }
                 await jobs.markRatedIfDone(job.id);
               },
               child: Text(

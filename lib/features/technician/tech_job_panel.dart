@@ -389,12 +389,10 @@ class _TechJobPanelState extends State<TechJobPanel> {
           if (job.ratings.techToCustomer == null)
             FilledButton(
               onPressed: () async {
-                final users = AppScope.of(context).users;
                 final stars =
                     await showRatingSheet(context, title: 'قيّم العميل');
                 if (stars == null || !context.mounted) return;
                 await jobs.rateAsTechnician(job.id, stars);
-                await users.applyRating(job.customerId, stars);
                 await jobs.markRatedIfDone(job.id);
               },
               child: const Text('تقييم العميل'),

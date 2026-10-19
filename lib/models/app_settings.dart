@@ -20,6 +20,7 @@ class AppSettings {
     this.topUpAccountName = '',
     this.topUpInstructions = defaultTopUpInstructions,
     this.supportPhone = '',
+    this.minAppBuild = 0,
   });
 
   final String activeCityId;
@@ -33,6 +34,8 @@ class AppSettings {
   final String topUpInstructions;
   /// رقم الدعم — إن فُرغ يُستخدم [AppBrand.supportPhone].
   final String supportPhone;
+  /// أقل رقم بناء مسموح؛ النسخ الأقدم تُطالَب بالتحديث من المتجر.
+  final int minAppBuild;
 
   String get resolvedSupportPhone {
     final fromSettings = supportPhone.trim();
@@ -62,6 +65,7 @@ class AppSettings {
       topUpAccountName: str('topUpAccountName', ''),
       topUpInstructions: str('topUpInstructions', defaultTopUpInstructions),
       supportPhone: str('supportPhone', ''),
+      minAppBuild: (data['minAppBuild'] as num?)?.toInt() ?? 0,
     );
   }
 }

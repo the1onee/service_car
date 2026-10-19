@@ -490,4 +490,43 @@ class AccountActions {
     AppSnackBar.showSuccess(context, 'تم حفظ رقم الهاتف بنجاح');
     return true;
   }
+
+  /// حذف حساب العميل نهائياً بعد تأكيد صريح.
+  static Future<void> deleteAccount(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف الحساب نهائياً'),
+        content: const Text(
+          'سيُحذف حسابك وبياناتك الشخصية ورصيد محفظتك، ولا يمكن التراجع. '
+          'نحتفظ فقط بسجل الطلبات السابقة للالتزامات القانونية والمالية.',
+          style: TextStyle(height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'حذف',
+              style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await AppScope.of(context).auth.deleteOwnAccount();
+    } catch (e) {
+      if (context.mounted) {
+        AppSnackBar.showError(
+          context,
+          userFacingError(e, fallback: 'تعذّر حذف الحساب. حاول لاحقاً.'),
+        );
+      }
+    }
+  }
 }

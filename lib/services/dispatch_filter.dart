@@ -7,7 +7,6 @@ class DispatchCandidate {
     required this.id,
     required this.online,
     required this.km,
-    required this.token,
     required this.name,
     required this.rating,
     required this.verified,
@@ -24,7 +23,6 @@ class DispatchCandidate {
   final String id;
   final bool online;
   final double km;
-  final String? token;
   final String name;
   final double rating;
   final bool verified;

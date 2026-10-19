@@ -1,4 +1,5 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 /// هوية التطبيق — عدّل [assets/branding/brand.env] والشعار [assets/branding/logo.png]
 /// دون تغيير كود Dart (أعد البناء بعد التعديل).
@@ -21,6 +22,9 @@ class AppBrand {
     return v;
   }
 
+  /// رقم البناء (`+N` في pubspec) — يُقارن بـ `minAppBuild` لإجبار التحديث.
+  static int buildNumber = 0;
+
   /// يُستدعى من [main] قبل [runApp].
   static Future<void> load() async {
     try {
@@ -28,6 +32,10 @@ class AppBrand {
     } catch (_) {
       // بدون الملف تبقى القيم الافتراضية أدناه.
     }
+    try {
+      final info = await PackageInfo.fromPlatform();
+      buildNumber = int.tryParse(info.buildNumber) ?? 0;
+    } catch (_) {}
   }
 
   static String get appName => _env('APP_NAME', _defaultAppName);

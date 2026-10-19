@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
+import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/services/auth_service.dart';
 import 'package:barrr/services/dispatch_service.dart';
@@ -50,7 +51,9 @@ class TestSession {
     dispatch = DispatchService(jobs);
     location = LocationService();
     fcm = FcmService(users);
-    settings = SettingsRepository();
+    settings = SettingsRepository(
+      watchOverride: Stream<AppSettings>.value(const AppSettings()).asBroadcastStream(),
+    );
   }
 
   late final StreamController<String?> _uidController;

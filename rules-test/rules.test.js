@@ -108,7 +108,41 @@ describe('Firestore rules', () => {
     );
   });
 
-  it('signed-in user can read public provider profile', async () => {
+  it('limited admin cannot promote self to super admin', async () => {
+    await seed({
+      'users/a2': {
+        role: 'admin',
+        adminLevel: 'admin',
+        adminPermissions: { orders: 'read' },
+        name: 'Admin',
+        walletBalance: 0,
+      },
+    });
+    const db = testEnv.authenticatedContext('a2').firestore();
+    await assertFails(updateDoc(doc(db, 'users/a2'), { adminLevel: 'super' }));
+    await assertFails(
+      updateDoc(doc(db, 'users/a2'), { adminPermissions: { users: 'write' } }),
+    );
+  });
+
+  it('workshop cannot change own commissionPercent', async () => {
+    await seed({
+      'users/w1': {
+        role: 'workshop',
+        name: 'ورشة',
+        walletBalance: 0,
+        commissionPercent: 10,
+        verified: true,
+        verificationStatus: 'approved',
+        ratingCount: 0,
+      },
+    });
+    const db = testEnv.authenticatedContext('w1').firestore();
+    await assertFails(updateDoc(doc(db, 'users/w1'), { commissionPercent: 0 }));
+    await assertSucceeds(updateDoc(doc(db, 'users/w1'), { name: 'ورشة 2' }));
+  });
+
+  it('customer cannot read technician profile', async () => {
     await seed({
       'users/c1': {
         role: 'customer',
@@ -130,7 +164,54 @@ describe('Firestore rules', () => {
       },
     });
     const customer = testEnv.authenticatedContext('c1');
-    await assertSucceeds(getDoc(doc(customer.firestore(), 'users/t1')));
+    await assertFails(getDoc(doc(customer.firestore(), 'users/t1')));
+  });
+
+  it('customer cannot complete a technician job from the client', async () => {
+    await seed({
+      'users/c1': {
+        role: 'customer',
+        name: 'عميل',
+        walletBalance: 0,
+        verified: true,
+        verificationStatus: 'approved',
+        ratingCount: 0,
+      },
+      'jobs/j2': {
+        customerId: 'c1',
+        technicianId: 't1',
+        serviceId: 'towing',
+        status: 'enRoute',
+      },
+    });
+    const db = testEnv.authenticatedContext('c1').firestore();
+    await assertFails(updateDoc(doc(db, 'jobs/j2'), { status: 'completed' }));
+  });
+
+  it('customer cannot assign a technician without a submitted offer', async () => {
+    await seed({
+      'users/c1': {
+        role: 'customer',
+        name: 'عميل',
+        walletBalance: 0,
+        verified: true,
+        verificationStatus: 'approved',
+        ratingCount: 0,
+      },
+      'jobs/j3': {
+        customerId: 'c1',
+        technicianId: null,
+        serviceId: 'wash',
+        status: 'offerPending',
+      },
+    });
+    const db = testEnv.authenticatedContext('c1').firestore();
+    await assertFails(
+      updateDoc(doc(db, 'jobs/j3'), {
+        technicianId: 't9',
+        status: 'enRoute',
+      }),
+    );
   });
 
   it('customer can create own job in dispatching', async () => {

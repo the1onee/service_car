@@ -14,9 +14,14 @@ import 'package:barrr/services/settings_repository.dart';
 import 'package:barrr/services/user_repository.dart';
 
 class FanniApp extends StatelessWidget {
-  FanniApp({super.key, required this.firebaseReady});
+  FanniApp({
+    super.key,
+    required this.firebaseReady,
+    this.onRetryFirebase,
+  });
 
   final bool firebaseReady;
+  final Future<void> Function()? onRetryFirebase;
   final _auth = AuthService();
   final _users = UserRepository();
   final _jobs = JobRepository();
@@ -60,7 +65,7 @@ class FanniApp extends StatelessWidget {
           },
           home: firebaseReady
               ? const AuthGate()
-              : const ServiceUnavailableScreen(),
+              : ServiceUnavailableScreen(onRetry: onRetryFirebase),
         ),
       ),
     );

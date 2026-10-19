@@ -18,11 +18,11 @@ Future<void> main() async {
   runApp(const _BootApp());
 }
 
+var _messagingHandlerBound = false;
+
 void _installGlobalErrorHandlers() {
   FlutterError.onError = (details) {
     logUserError(details.exception, details.stack, 'flutter');
-    // Assertion تطوير فقط عن ListTile/DecoratedBox — لا تعرض شاشة docs.flutter.dev
-    // الحمراء فوق مسار تحديد الموقع والحساب.
     final msg = details.exceptionAsString();
     if (msg.contains('ListTile background color or ink splashes may be invisible')) {
       return;
@@ -46,7 +46,7 @@ class _BootApp extends StatefulWidget {
 
 class _BootAppState extends State<_BootApp> {
   bool? _firebaseReady;
-  var _started = false;
+  var _busy = false;
 
   @override
   void initState() {
@@ -55,24 +55,51 @@ class _BootAppState extends State<_BootApp> {
   }
 
   Future<void> _initFirebase() async {
-    if (_started) return;
-    _started = true;
+    if (_busy) return;
+    _busy = true;
+    if (mounted) setState(() => _firebaseReady = null);
+
     var firebaseReady = false;
-    try {
-      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-      if (!kIsWeb) {
-        FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-      }
-      firebaseReady = true;
-    } on FirebaseException catch (e) {
-      if (e.code == 'duplicate-app') {
+    Object? lastError;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
         firebaseReady = true;
-      } else {
+        break;
+      } on FirebaseException catch (e) {
+        if (e.code == 'duplicate-app') {
+          firebaseReady = true;
+          break;
+        }
+        lastError = e;
         logUserError(e, null, 'firebase_init');
+      } catch (e, st) {
+        lastError = e;
+        logUserError(e, st, 'firebase_init');
       }
-    } catch (e, st) {
-      logUserError(e, st, 'firebase_init');
+      if (attempt < 2) {
+        await Future<void>.delayed(Duration(milliseconds: 400 * (attempt + 1)));
+      }
     }
+
+    if (firebaseReady && !kIsWeb) {
+      try {
+        if (!_messagingHandlerBound) {
+          FirebaseMessaging.onBackgroundMessage(
+            firebaseMessagingBackgroundHandler,
+          );
+          _messagingHandlerBound = true;
+        }
+      } catch (e, st) {
+        logUserError(e, st, 'firebase_addons');
+      }
+    } else if (lastError != null) {
+      logUserError(lastError, null, 'firebase_init_exhausted');
+    }
+
+    _busy = false;
     if (!mounted) return;
     setState(() => _firebaseReady = firebaseReady);
   }
@@ -86,6 +113,9 @@ class _BootAppState extends State<_BootApp> {
         home: BrandSplash(),
       );
     }
-    return FanniApp(firebaseReady: ready);
+    return FanniApp(
+      firebaseReady: ready,
+      onRetryFirebase: _initFirebase,
+    );
   }
 }

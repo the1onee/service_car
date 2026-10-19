@@ -52,13 +52,19 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (hasReleaseKeystore) {
-                signingConfigs.getByName("release")
-            } else {
-                // بدون key.properties يبقى debug حتى لا يتعطل البناء المحلي.
-                signingConfigs.getByName("debug")
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
             }
         }
+    }
+}
+
+// نسخة release موقّعة بمفتاح debug تُرفض في Play ولا يمكن تحديثها لاحقاً.
+gradle.taskGraph.whenReady {
+    if (!hasReleaseKeystore && allTasks.any { it.name.contains("Release") }) {
+        throw GradleException(
+            "Missing android/key.properties — release builds require the upload keystore.",
+        )
     }
 }
 

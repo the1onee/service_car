@@ -22,11 +22,27 @@
           }
         },
         {
+          "client_id": "500429219707-1693363m7dmbuk1rh66v2fo5d5rvp7f8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.albatariq.app",
+            "certificate_hash": "f7c4f6ac9d1bad505d392c47cb65b7e09d6e6974"
+          }
+        },
+        {
           "client_id": "500429219707-3en4cv6e275mch5of10vrknl1bjf2fpm.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.albatariq.app",
             "certificate_hash": "76ffc008ff0e3dc20551a29a3c21b61cf7d34a22"
+          }
+        },
+        {
+          "client_id": "500429219707-q913uu6gg7bgrjp8nps2vpr6j61fkg9f.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.albatariq.app",
+            "certificate_hash": "b147b89a3ca6e74b5ed577c9e1d961b83b03257c"
           }
         },
         {

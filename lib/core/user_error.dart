@@ -50,6 +50,10 @@ String _mapError(Object error, {String? fallback}) {
   if (error is IOException) {
     return _network;
   }
+  if (error is StateError) {
+    final msg = error.message.trim();
+    if (msg.isNotEmpty && msg != 'cancelled' && _safeToShow(msg)) return msg;
+  }
   if (kDebugMode) {
     final raw = error.toString().trim();
     if (raw.isNotEmpty && raw.length < 120 && _safeToShow(raw)) return raw;

@@ -97,6 +97,12 @@ service cloud.firestore {
           'walletBalance',
           'ratingAvg',
           'ratingCount',
+          'adminLevel',
+          'adminPermissions',
+          'disabled',
+          'commissionPercent',
+          'commissionRate',
+          'oilWorkshopTier',
         ];
       }
       function keepsProtectedFields() {
@@ -104,15 +110,7 @@ service cloud.firestore {
           .affectedKeys().hasAny(protectedFields());
       }
 
-      // قائمة/قراءة ملفات المزودين للمستخدمين المسجّلين (التصفية بالمعتمد تتم في التطبيق).
-      // تقييد verified في القاعدة يمنع استعلام role وحده → يفشل التوزيع ويعُلق الطلب.
-      function isPublicProviderProfile() {
-        return resource.data.role in ['technician', 'workshop', 'oilWorkshop', 'paintShop'];
-      }
-
-      allow read: if adminCanReadUserDoc()
-        || isUser(uid)
-        || (signedIn() && isPublicProviderProfile());
+      allow read: if adminCanReadUserDoc() || isUser(uid);
 
       // الفني يقرأ رصيد العميل عند التسوية فقط (قراءة مستند، لا قائمة).
       allow get: if isProviderRole() && resource.data.role == 'customer';
@@ -122,6 +120,10 @@ service cloud.firestore {
         || (isUser(uid)
           && request.resource.data.walletBalance == 0
           && request.resource.data.ratingCount == 0
+          && request.resource.data.get('commissionPercent', 0) == 0
+          && !request.resource.data.keys().hasAny([
+            'adminLevel', 'adminPermissions', 'disabled', 'commissionRate'
+          ])
           && (
             (request.resource.data.role == 'customer'
               && request.resource.data.verified == true
@@ -143,42 +145,7 @@ service cloud.firestore {
       allow update: if adminCanWriteUserDoc()
         || (isUser(uid) && keepsProtectedFields())
         || (isUser(uid) && commissionDebit())
-        || customerWalletSettle()
-        || customerDebitsWorkshopCommission();
-
-      // العميل يكمل طلب قطعة: يخصم نسبة الورشة المسجّلة على حسابها فقط.
-      function customerDebitsWorkshopCommission() {
-        let jobId = request.resource.data.walletJobId;
-        let job = getAfter(/databases/$(database)/documents/jobs/$(jobId)).data;
-        let beforeBal = resource.data.get('walletBalance', 0);
-        let afterBal = request.resource.data.walletBalance;
-        let percent = resource.data.get('commissionPercent', 0);
-        let bill = job.finalPrice is number && job.finalPrice > 0
-          ? job.finalPrice
-          : (job.initialPrice is number && job.initialPrice > 0
-              ? job.initialPrice
-              : 0);
-        let expected = bill * percent / 100;
-        return signedIn()
-          && resource.data.role == 'workshop'
-          && jobId is string
-          && request.resource.data.diff(resource.data)
-              .affectedKeys().hasOnly(['walletBalance', 'walletJobId'])
-          && afterBal is number
-          && percent is number
-          && percent >= 0
-          && percent <= 100
-          && job.customerId == request.auth.uid
-          && job.technicianId == uid
-          && job.status == 'completed'
-          && (job.serviceId == 'parts' || job.providerKind == 'workshop')
-          && job.commissionAmount is number
-          && job.commissionAmount >= 0
-          && beforeBal - afterBal >= job.commissionAmount - 0.05
-          && beforeBal - afterBal <= job.commissionAmount + 0.05
-          && job.commissionAmount >= expected - 0.05
-          && job.commissionAmount <= expected + 0.05;
-      }
+        || customerWalletSettle();
 
       // الفني/ورشة الزيوت يحدّث رصيد العميل فقط بمبلغ التسوية المسجّل على الطلب الذي يكمله.
       function customerWalletSettle() {
@@ -257,6 +224,11 @@ service cloud.firestore {
       function jobDiffKeys() {
         return request.resource.data.diff(resource.data).affectedKeys();
       }
+      // كل طرف يكتب تقييمه فقط؛ لا يغيّر تقييم الطرف الآخر له.
+      function keepsRating(side) {
+        return request.resource.data.get('ratings', {}).get(side, null)
+          == resource.data.get('ratings', {}).get(side, null);
+      }
 
       // قبول طارئ: المزود يعيّن نفسه على طلب مفتوح بحقول محدودة (مطابق لـ _winEmergencyOffer).
       function claimingOpenJob() {
@@ -271,37 +243,109 @@ service cloud.firestore {
           ]);
       }
 
-      // توزيع / إعادة توزيع بينما الطلب بلا مزود (عميل أو مزود يعيد المحاولة).
-      function openJobLifecycleUpdate() {
-        return resource.data.technicianId == null
-          && request.resource.data.technicianId == null
-          && (isCustomer() || isProviderRole())
-          && request.resource.data.status in [
-            'dispatching', 'offerPending', 'comparing', 'noTechnician'
-          ]
-          && jobDiffKeys().hasOnly([
-            'status', 'offerIds', 'windowSeconds', 'expiresAt', 'dispatchRound'
-          ]);
+      function isPartsJob() {
+        return resource.data.serviceId == 'parts'
+          || resource.data.providerKind == 'workshop';
       }
 
-      // العميل: إسناد عرض، إلغاء، محفظة، تقييم، إكمال قطع — بلا تغيير هوية الطلب.
-      function customerJobUpdate() {
+      function assignedOfferOk() {
+        let offerId = request.resource.data.assignedOfferId;
+        return offerId is string
+          && get(/databases/$(database)/documents/jobOffers/$(offerId)).data.jobId == jobId
+          && get(/databases/$(database)/documents/jobOffers/$(offerId)).data.technicianId
+              == request.resource.data.technicianId
+          && get(/databases/$(database)/documents/jobOffers/$(offerId)).data.status == 'submitted';
+      }
+
+      function customerRedispatch() {
         return isCustomer()
+          && resource.data.technicianId == null
+          && request.resource.data.technicianId == null
+          && request.resource.data.status in ['dispatching', 'noTechnician']
+          && jobDiffKeys().hasOnly(['status', 'dispatchRound', 'offerIds', 'windowSeconds', 'expiresAt']);
+      }
+
+      function customerComparing() {
+        return isCustomer()
+          && resource.data.technicianId == null
+          && request.resource.data.technicianId == null
+          && resource.data.status == 'offerPending'
+          && request.resource.data.status == 'comparing'
+          && jobDiffKeys().hasOnly(['status']);
+      }
+
+      function customerAssignOffer() {
+        return isCustomer()
+          && keepsRating('techToCustomer')
+          && resource.data.technicianId == null
+          && resource.data.status in ['offerPending', 'comparing']
+          && request.resource.data.status in ['quoted', 'enRoute', 'providerQueued']
+          && assignedOfferOk()
           && !jobDiffKeys().hasAny(['customerId', 'serviceId'])
-          && (resource.data.technicianId == null
-            || !jobDiffKeys().hasAny(['initialPrice'])
-            || request.resource.data.initialPrice == resource.data.get('initialPrice', null))
-          && (!jobDiffKeys().hasAny(['finalPrice'])
-            || !(resource.data.finalPrice is number)
-            || request.resource.data.finalPrice >= resource.data.finalPrice - 0.05)
           && jobDiffKeys().hasOnly([
             'status', 'technicianId', 'technicianName', 'lastAssignedTechnicianId',
             'cancelledBy', 'cancelReason', 'initialPrice', 'finalPrice',
             'exactLocation', 'deliveryAddress', 'partCondition', 'deliveryType',
-            'vendorNote', 'warranty', 'useWallet', 'walletReserve',
-            'offerIds', 'windowSeconds', 'expiresAt', 'dispatchRound',
-            'ratings', 'receivedAmount', 'commissionAmount', 'commissionRate'
+            'vendorNote', 'warranty', 'assignedOfferId'
           ]);
+      }
+
+      function customerAcceptQuote() {
+        return isCustomer()
+          && resource.data.status == 'quoted'
+          && request.resource.data.status in ['enRoute', 'providerQueued']
+          && request.resource.data.technicianId == resource.data.technicianId
+          && jobDiffKeys().hasOnly(['status', 'exactLocation']);
+      }
+
+      function customerCanCancelFrom() {
+        return resource.data.status in [
+          'dispatching', 'offerPending', 'comparing', 'quoted',
+          'providerQueued', 'noTechnician', 'enRoute', 'arrived', 'finalQuote'
+        ] || (isPartsJob() && resource.data.status == 'inProgress');
+      }
+
+      function customerCancel() {
+        return isCustomer()
+          && customerCanCancelFrom()
+          && request.resource.data.status == 'cancelled'
+          && request.resource.data.cancelledBy == 'customer'
+          && jobDiffKeys().hasOnly([
+            'status', 'technicianId', 'technicianName',
+            'lastAssignedTechnicianId', 'cancelledBy', 'cancelReason'
+          ]);
+      }
+
+      function customerWallet() {
+        return isCustomer()
+          && jobDiffKeys().hasOnly(['useWallet', 'walletReserve']);
+      }
+
+      function customerCompleteParts() {
+        return isCustomer()
+          && isPartsJob()
+          && resource.data.status in ['inProgress', 'arrived', 'finalQuote']
+          && request.resource.data.status == 'completed'
+          && request.resource.data.technicianId == resource.data.technicianId
+          && jobDiffKeys().hasOnly([
+            'status', 'receivedAmount', 'commissionAmount', 'commissionRate',
+            'finalPrice', 'warranty'
+          ]);
+      }
+
+      function customerAcceptFinal() {
+        return isCustomer()
+          && resource.data.status == 'finalQuote'
+          && request.resource.data.status == 'inProgress'
+          && jobDiffKeys().hasOnly(['status']);
+      }
+
+      function customerRate() {
+        return isCustomer()
+          && resource.data.status in ['completed', 'rated']
+          && request.resource.data.status in ['completed', 'rated']
+          && keepsRating('techToCustomer')
+          && jobDiffKeys().hasOnly(['status', 'ratings']);
       }
 
       // أدنى سعر مسموح بعد تخفيض حتى 20% من العرض المبدئي.
@@ -354,6 +398,7 @@ service cloud.firestore {
             'customerId', 'serviceId', 'commissionRate', 'useWallet', 'walletReserve'
           ])
           && respectsPriceReductionCap()
+          && keepsRating('customerToTech')
           && jobDiffKeys().hasOnly([
             'status', 'finalPrice', 'warranty', 'receivedAmount', 'commissionAmount',
             'exactLocation', 'technicianId', 'technicianName', 'lastAssignedTechnicianId',
@@ -367,8 +412,15 @@ service cloud.firestore {
       allow read: if isCustomer() || isTech() || isOpenForBidding()
         || adminCanRead('orders') || adminCanRead('ratings') || adminCanRead('reports');
       allow update: if claimingOpenJob()
-        || openJobLifecycleUpdate()
-        || customerJobUpdate()
+        || customerRedispatch()
+        || customerComparing()
+        || customerAssignOffer()
+        || customerAcceptQuote()
+        || customerCancel()
+        || customerWallet()
+        || customerCompleteParts()
+        || customerAcceptFinal()
+        || customerRate()
         || assignedTechJobUpdate()
         || adminCanWrite('orders');
       allow delete: if adminCanWrite('orders');
@@ -409,9 +461,6 @@ service cloud.firestore {
     }
 
     match /jobOffers/{offerId} {
-      function offerJob() {
-        return get(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data;
-      }
       function existingOfferJob() {
         return get(/databases/$(database)/documents/jobs/$(resource.data.jobId)).data;
       }
@@ -421,18 +470,14 @@ service cloud.firestore {
 
       allow read: if isOwner(resource.data.technicianId) || isOwner(jobCustomerId())
         || adminCanRead('orders');
-      // العميل ينشئ عروضاً معلّقة عند التوزيع؛ المزود ينشئ/يملك عرضه فقط.
+      // المزود ينشئ/يملك عرضه فقط. التوزيع من السيرفر.
       allow create: if adminCanWrite('orders')
         || (signedIn()
         && request.resource.data.jobId is string
         && request.resource.data.technicianId is string
         && request.resource.data.status in ['pending', 'submitted']
-        && (
-          (isOwner(offerJob().customerId)
-            && request.resource.data.status == 'pending')
-          || (isProviderRole()
-            && isOwner(request.resource.data.technicianId))
-        ));
+        && isProviderRole()
+        && isOwner(request.resource.data.technicianId));
       // الفني الفائز يغلق عروض الباقين (حالة فقط) بعد ما يُسند الطلب له.
       function winnerClosingOffer() {
         return isProviderRole()
@@ -442,8 +487,13 @@ service cloud.firestore {
           && existingOfferJob().technicianId == request.auth.uid;
       }
 
-      allow update: if isOwner(resource.data.technicianId)
-        || isOwner(jobCustomerId())
+      function keepsOfferIdentity() {
+        return request.resource.data.jobId == resource.data.jobId
+          && request.resource.data.technicianId == resource.data.technicianId;
+      }
+
+      allow update: if ((isOwner(resource.data.technicianId) || isOwner(jobCustomerId()))
+          && keepsOfferIdentity())
         || winnerClosingOffer()
         || adminCanWrite('orders');
       allow delete: if adminCanWrite('orders');
@@ -578,22 +628,6 @@ service cloud.firestore {
             || id.matches('change_.+')))
         || isOwner(resource.data.userId)
       ));
-      allow create: if request.resource.data.type == 'commission'
-        && request.resource.data.jobId is string
-        && id == 'commission_' + request.resource.data.jobId
-        && request.resource.data.amount is number
-        && request.resource.data.amount >= 0
-        && request.resource.data.signedAmount == (0 - request.resource.data.amount)
-        && getAfter(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.customerId == request.auth.uid
-        && getAfter(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.technicianId == request.resource.data.userId
-        && getAfter(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.status == 'completed'
-        && getAfter(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.commissionAmount == request.resource.data.amount
-        && get(/databases/$(database)/documents/users/$(request.resource.data.userId)).data.walletBalance
-            - getAfter(/databases/$(database)/documents/users/$(request.resource.data.userId)).data.walletBalance
-            >= request.resource.data.amount - 0.05
-        && get(/databases/$(database)/documents/users/$(request.resource.data.userId)).data.walletBalance
-            - getAfter(/databases/$(database)/documents/users/$(request.resource.data.userId)).data.walletBalance
-            <= request.resource.data.amount + 0.05;
       allow create: if isOwner(request.resource.data.userId)
         && request.resource.data.type == 'commission'
         && request.resource.data.jobId is string
@@ -715,6 +749,14 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.uid == request.auth.uid
         || adminCanWritePhoneRegistry();
       allow list: if isSuperAdmin();
+    }
+
+    // توكن FCM منفصل عن users حتى لا يُكشف لمن يقرأ ملفات المزوّدين. السيرفر يقرأ عبر Admin SDK.
+    match /userTokens/{uid} {
+      allow get, delete: if isUser(uid);
+      allow create, update: if isUser(uid)
+        && request.resource.data.keys().hasOnly(['token', 'updatedAt'])
+        && request.resource.data.token is string;
     }
 
     // جلسات OTP — Admin SDK فقط (السيرفر على VPS). حتى الأدمن لا يحتاجها من العميل.

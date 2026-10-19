@@ -3,7 +3,9 @@ import 'package:barrr/data/collections.dart';
 import 'package:barrr/models/app_settings.dart';
 
 class SettingsRepository {
-  SettingsRepository({FirebaseFirestore? db}) : _injected = db;
+  SettingsRepository({FirebaseFirestore? db, Stream<AppSettings>? watchOverride})
+      : _injected = db,
+        _settingsStream = watchOverride;
 
   final FirebaseFirestore? _injected;
   FirebaseFirestore get _db => _injected ?? FirebaseFirestore.instance;

@@ -21,4 +21,12 @@ void main() {
     final msg = userFacingError(Exception('internal stack trace detail'));
     expect(msg.toLowerCase(), isNot(contains('exception')));
   });
+
+  test('StateError Arabic upload message is shown', () {
+    final msg = userFacingError(
+      StateError('سجّل الدخول لرفع الصورة.'),
+      prefix: 'تعذر رفع الصورة.',
+    );
+    expect(msg, contains('سجّل الدخول'));
+  });
 }

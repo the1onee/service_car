@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:barrr/core/api_config.dart';
 import 'package:barrr/core/phone.dart';
@@ -25,11 +24,8 @@ void main() {
       expect(ApiConfig.productionBase, 'https://albatariq.com');
     });
 
-    test('android emulator host when no dart-define', () {
-      expect(ApiConfig.baseUrl, isNotEmpty);
-      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-        expect(ApiConfig.baseUrl, contains('10.0.2.2'));
-      }
+    test('defaults to production host when no dart-define', () {
+      expect(ApiConfig.baseUrl, 'https://albatariq.com');
     });
   });
 

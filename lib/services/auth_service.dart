@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
+import 'package:barrr/core/api_config.dart';
 import 'package:barrr/core/phone.dart';
 import 'package:barrr/data/collections.dart';
 import 'package:barrr/models/app_user.dart';
@@ -300,6 +303,29 @@ class AuthService {
       } catch (_) {}
     }
     await _auth.signOut();
+  }
+
+  /// حذف حساب العميل نهائياً عبر السيرفر (Auth + الملف + رقم الهاتف).
+  Future<void> deleteOwnAccount() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    final token = await user.getIdToken(true);
+    final res = await http
+        .post(
+          ApiConfig.uri('/api/users/delete-self'),
+          headers: {'Authorization': 'Bearer $token'},
+        )
+        .timeout(const Duration(seconds: 30));
+    if (res.statusCode != 200) {
+      String message = 'تعذّر حذف الحساب. حاول لاحقاً أو تواصل مع الدعم.';
+      try {
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        final m = (body['message'] as String?)?.trim() ?? '';
+        if (m.isNotEmpty && res.statusCode < 500) message = m;
+      } catch (_) {}
+      throw FormatException(message);
+    }
+    await signOut();
   }
 
   Future<void> cancelRegistration() async {

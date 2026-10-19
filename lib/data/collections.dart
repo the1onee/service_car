@@ -21,4 +21,6 @@ class Cols {
   static const phoneRegistry = 'phoneRegistry';
   /// قفل زيارة المزوّد: providerSlots/{providerId} → { activeJobId }
   static const providerSlots = 'providerSlots';
+  /// توكن FCM: userTokens/{uid} → { token } (خاص بصاحبه والسيرفر).
+  static const userTokens = 'userTokens';
 }

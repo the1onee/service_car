@@ -1,11 +1,12 @@
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:barrr/core/cloudinary_config.dart';
+import 'package:barrr/core/api_config.dart';
 
-/// رفع صور مضغوطة إلى Cloudinary عبر unsigned preset (--dart-define).
+/// رفع صور مضغوطة عبر سيرفر البطريق (التوقيع وCloudinary على السيرفر).
 class CloudinaryUpload {
   CloudinaryUpload({ImagePicker? picker}) : _picker = picker ?? ImagePicker();
 
@@ -56,70 +57,54 @@ class CloudinaryUpload {
         'الصورة ما زالت كبيرة بعد الضغط. اختر صورة أوضح بحجم أصغر.',
       );
     }
-    if (!CloudinaryConfig.isUnsignedConfigured) {
-      throw StateError(
-        'ارفع الصور يحتاج Cloud name من لوحة Cloudinary مع preset barrr_unsigned.',
-      );
+    final user = FirebaseAuth.instance.currentUser;
+    final token = await user?.getIdToken();
+    if (token == null || token.isEmpty) {
+      throw StateError('سجّل الدخول لرفع الصورة.');
     }
-
-    final filename = file.name.trim().isEmpty ? 'upload.jpg' : file.name;
-    final request = http.MultipartRequest(
-      'POST',
-      CloudinaryConfig.uploadUri(),
-    )
-      ..files.add(
-        http.MultipartFile.fromBytes(
-          'file',
-          bytes,
-          filename: filename,
-        ),
-      )
-      ..fields['upload_preset'] = CloudinaryConfig.uploadPreset.trim();
-
-    final folderTrim = folder.trim();
-    if (folderTrim.isNotEmpty) {
-      request.fields['folder'] = folderTrim;
-    }
-    if (tags.isNotEmpty) {
-      request.fields['tags'] = tags.join(',');
-    }
-
-    final streamed = await request.send().timeout(const Duration(seconds: 60));
-    final body = await streamed.stream.bytesToString();
-    if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
+    final res = await http
+        .post(
+          ApiConfig.uri('/api/uploads').replace(
+            queryParameters: {'folder': folder.trim()},
+          ),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/octet-stream',
+          },
+          body: bytes,
+        )
+        .timeout(const Duration(seconds: 60));
+    if (res.statusCode != 200) {
       if (kDebugMode) {
-        debugPrint('Cloudinary upload failed ${streamed.statusCode}: $body');
+        debugPrint('Upload failed ${res.statusCode}: ${res.body}');
       }
-      throw StateError(_cloudinaryErrorMessage(streamed.statusCode, body));
+      throw StateError(_uploadErrorMessage(res.statusCode, res.body));
     }
-
-    final decoded = jsonDecode(body);
+    final decoded = jsonDecode(res.body);
     if (decoded is! Map) {
-      throw StateError('استجابة Cloudinary غير صالحة.');
+      throw StateError('استجابة الرفع غير صالحة.');
     }
-    final url = decoded['secure_url'] as String? ?? decoded['url'] as String?;
+    final url = decoded['url'] as String?;
     if (url == null || url.trim().isEmpty) {
-      throw StateError('لم يُرجع Cloudinary رابط الصورة.');
+      throw StateError('لم يُرجع السيرفر رابط الصورة.');
     }
     if (kDebugMode) {
-      debugPrint('Cloudinary uploaded ${bytes.length}B → $url');
+      debugPrint('Uploaded ${bytes.length}B → $url');
     }
     return url.trim();
   }
 
-  static String _cloudinaryErrorMessage(int statusCode, String body) {
+  static String _uploadErrorMessage(int statusCode, String body) {
     try {
       final decoded = jsonDecode(body);
       if (decoded is Map) {
-        final error = decoded['error'];
-        if (error is Map) {
-          final message = error['message']?.toString().trim();
-          if (message != null && message.isNotEmpty) {
-            return 'تعذّر رفع الصورة إلى Cloudinary: $message';
-          }
+        final message = decoded['message']?.toString().trim();
+        if (message != null && message.isNotEmpty) {
+          return message;
         }
       }
     } catch (_) {}
-    return 'تعذّر رفع الصورة إلى Cloudinary ($statusCode).';
+    if (statusCode == 401) return 'سجّل الدخول لرفع الصورة.';
+    return 'تعذّر رفع الصورة ($statusCode).';
   }
 }

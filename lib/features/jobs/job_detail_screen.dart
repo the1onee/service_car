@@ -688,7 +688,6 @@ class _BodyState extends State<_Body> {
 
   Future<void> _rate(BuildContext context) async {
     final jobs = AppScope.of(context).jobs;
-    final users = AppScope.of(context).users;
     final stars = await showRatingSheet(
       context,
       title: job.isPartsOrder
@@ -701,9 +700,6 @@ class _BodyState extends State<_Body> {
     );
     if (stars == null || !context.mounted) return;
     await jobs.rateAsCustomer(job.id, stars);
-    if (job.technicianId != null) {
-      await users.applyRating(job.technicianId!, stars);
-    }
     await jobs.markRatedIfDone(job.id);
   }
 }

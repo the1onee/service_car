@@ -1,7 +1,7 @@
 import 'package:barrr/models/job_offer.dart';
 import 'package:barrr/services/job_repository.dart';
 
-/// التوزيع والقبول يتمان من التطبيق على Firestore مباشرة، بدون Cloud Functions.
+/// القبول من التطبيق. التوزيع يُشغَّل على السيرفر عند حالة dispatching.
 class DispatchService {
   DispatchService(this._jobs);
 

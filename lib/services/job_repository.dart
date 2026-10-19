@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/geo.dart';
-import 'package:barrr/services/dispatch_filter.dart';
 import 'package:barrr/data/collections.dart';
 import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/models/job.dart';
@@ -19,20 +18,6 @@ bool _offerExpired(Map<String, dynamic> data, [DateTime? now]) {
     windowSeconds: window,
   );
   return !(now ?? DateTime.now()).isBefore(deadline);
-}
-
-List<String> _specialtyIdsOf(Map<String, dynamic> data) {
-  final raw = data['specialtyIds'];
-  if (raw is List) {
-    final ids = raw
-        .whereType<String>()
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
-    if (ids.isNotEmpty) return ids;
-  }
-  final single = (data['specialtyId'] as String?)?.trim() ?? '';
-  return single.isEmpty ? const [] : [single];
 }
 
 class JobRepository {
@@ -293,199 +278,14 @@ class JobRepository {
     return ref.id;
   }
 
+  /// يضع الطلب في `dispatching` ليوزّعه السيرفر. لا يقرأ ملفات المزودين.
   Future<void> dispatch(String jobId) async {
-    final jobSnap = await _jobs.doc(jobId).get();
-    if (!jobSnap.exists) return;
-    final job = Job.fromDoc(jobSnap);
+    final snap = await _jobs.doc(jobId).get();
+    if (!snap.exists) return;
+    final job = Job.fromDoc(snap);
     if (job.technicianId != null) return;
-    if (job.status != JobStatus.dispatching &&
-        job.status != JobStatus.offerPending &&
-        job.status != JobStatus.noTechnician) {
-      return;
-    }
-
-    final providerRole = job.isPartsOrder
-        ? 'workshop'
-        : (job.isOilOrder
-            ? 'oilWorkshop'
-            : (job.isPaintOrder ? 'paintShop' : 'technician'));
-    // استعلام role فقط (متوافق مع قواعد القراءة). التصفية بالمعتمد محلياً.
-    // حد أقصى 200 مزود لتقليل استهلاك Firestore – التصفية الأدق محلياً.
-    QuerySnapshot<Map<String, dynamic>> techsSnap;
-    try {
-      techsSnap = await _db
-          .collection(Cols.users)
-          .where('role', isEqualTo: providerRole)
-          .limit(AppConstants.maxProvidersPerQuery)
-          .get();
-    } catch (e) {
-      // لا نترك الطلب معلّقاً على dispatching.
-      await _jobs.doc(jobId).update({'status': JobStatus.noTechnician.name});
-      rethrow;
-    }
-    final techs = techsSnap;
-
-    final previous = await _offers.where('jobId', isEqualTo: jobId).get();
-    final now = DateTime.now();
-    final livePending = previous.docs.where((d) {
-      final data = d.data();
-      if (data['status'] != 'pending') return false;
-      return !_offerExpired(data, now);
-    }).toList();
-    if (livePending.isNotEmpty) {
-      if (job.status != JobStatus.offerPending) {
-        await _jobs.doc(jobId).update({'status': JobStatus.offerPending.name});
-      }
-      return;
-    }
-    final used = previous.docs
-        .map((d) => d.data()['technicianId'] as String?)
-        .whereType<String>()
-        .toSet();
-    final settingsSnap = await _db.collection(Cols.appSettings).doc('main').get();
-    final minWallet =
-        (settingsSnap.data()?['minWalletBalance'] as num?)?.toDouble() ??
-            AppConstants.minWalletBalance;
-
-    // تحويل مستندات Firestore إلى DispatchCandidate (كائن نقي قابل للاختبار).
-    final allCandidates = techs.docs.map((d) {
-      final data = d.data();
-      final geo = data['geo'] as GeoPoint?;
-      final km = geo == null
-          ? 0.0 // بلا موقع: لا نستبعد ورش القطع بسبب المسافة
-          : haversineKm(
-              job.approxLocation.latitude,
-              job.approxLocation.longitude,
-              geo.latitude,
-              geo.longitude,
-            );
-      final role = data['role'] as String? ?? '';
-      final defaultName = switch (role) {
-        'workshop' => 'ورشة',
-        'oilWorkshop' => 'ورشة زيوت',
-        'paintShop' => 'ورشة دهان',
-        _ => 'فني',
-      };
-      return DispatchCandidate(
-        id: d.id,
-        online: data['isOnline'] == true,
-        km: km,
-        token: data['fcmToken'] as String?,
-        name: data['name'] as String? ?? defaultName,
-        rating: (data['ratingAvg'] as num?)?.toDouble() ?? 5,
-        verified: data['verified'] == true ||
-            data['verificationStatus'] == 'approved',
-        wallet: (data['walletBalance'] as num?)?.toDouble() ?? 0,
-        serviceIds: List<String>.from(data['serviceIds'] as List? ?? const []),
-        vehicleTypeIds:
-            List<String>.from(data['vehicleTypeIds'] as List? ?? const []),
-        isWorkshop: role == 'workshop' || role == 'paintShop',
-        oilWorkshopTier: data['oilWorkshopTier'] as String? ?? '',
-        specialtyId: data['specialtyId'] as String? ?? '',
-        specialtyIds: _specialtyIdsOf(data),
-        specialtyAr: data['specialtyAr'] as String? ?? '',
-      );
-    }).toList();
-
-    // فلترة + ترتيب بالمسافة + تحديد العدد عبر دالة نقية.
-    final ranked = filterAndRankCandidates(
-      all: allCandidates,
-      filter: DispatchFilter(
-        isPartsOrder: job.isPartsOrder,
-        isOilOrder: job.isOilOrder,
-        isPaintOrder: job.isPaintOrder,
-        isEmergency: job.isEmergency,
-        serviceId: job.serviceId,
-        vehicleTypeId: job.vehicleTypeId,
-        specialtyId: job.specialtyId,
-        minWallet: minWallet,
-        usedProviderIds: used,
-      ),
-    );
-
-    final take = job.isPartsOrder
-        ? ranked.length
-        : (job.isEmergency
-            ? AppConstants.emergencyTechsPerRound
-            : AppConstants.quoteTechsPerRound);
-    final chosen = ranked.take(take).toList();
-    if (chosen.isEmpty) {
-      await _jobs.doc(jobId).update({'status': JobStatus.noTechnician.name});
-      return;
-    }
-
-    // قطع / زيوت / فني: بلا نافذة زمنية — تبقى العروض حتى قبول العميل.
-    final noExpiry = job.isOpenEndedDispatch;
-    final seconds = job.isEmergency
-        ? AppConstants.emergencyOfferSeconds
-        : AppConstants.quoteWindowSeconds;
-    final expires =
-        noExpiry ? null : DateTime.now().add(Duration(seconds: seconds));
-    GeoPoint? towPickupExact = job.exactLocation;
-    if (job.isTowOrder && towPickupExact == null) {
-      final locSnap =
-          await _db.collection(Cols.jobLocations).doc(jobId).get();
-      towPickupExact = locSnap.data()?['exact'] as GeoPoint?;
-    }
-    final batch = _db.batch();
-    final offerIds = <String>[];
-    for (final t in chosen) {
-      final offer = _offers.doc();
-      offerIds.add(offer.id);
-      batch.set(offer, {
-        'jobId': jobId,
-        'technicianId': t.id,
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-        if (expires != null) 'windowSeconds': seconds,
-        if (expires != null) 'expiresAt': Timestamp.fromDate(expires),
-        'serviceTitle': job.serviceTitle,
-        'vehicleTypeTitle': job.vehicleTypeTitle,
-        'approxLocation': job.approxLocation,
-        'round': job.dispatchRound,
-        'technicianName': t.name,
-        'ratingAvg': t.rating,
-        'distanceKm': t.km,
-        'verified': t.verified,
-        'partName': job.partName,
-        if (job.partCondition.isNotEmpty) 'partCondition': job.partCondition,
-        'carMake': job.carMake,
-        'carModel': job.carModel,
-        'carYear': job.carYear,
-        'providerKind': job.providerKind,
-        'specialtyAr':
-            t.specialtyAr.isNotEmpty ? t.specialtyAr : job.specialtyAr,
-        if (job.partImageUrl.isNotEmpty) 'partImageUrl': job.partImageUrl,
-        if (job.partNote.isNotEmpty) 'partNote': job.partNote,
-        if (job.oilTypeId.isNotEmpty) 'oilTypeId': job.oilTypeId,
-        if (job.oilTypeName.isNotEmpty) 'oilTypeName': job.oilTypeName,
-        if (job.cylinders > 0) 'cylinders': job.cylinders,
-        if (job.liters > 0) 'liters': job.liters,
-        if (job.isOilOrder) 'includeOilFilter': job.includeOilFilter,
-        if (job.landmark.isNotEmpty) 'landmark': job.landmark,
-        if (job.washPackageId.isNotEmpty) 'washPackageId': job.washPackageId,
-        if (job.washPackageName.isNotEmpty)
-          'washPackageName': job.washPackageName,
-        if (job.pickupLabel.isNotEmpty) 'pickupLabel': job.pickupLabel,
-        // سطحة: نقاط التحميل/التنزيل الدقيقة على الخريطة.
-        if (job.isTowOrder && towPickupExact != null)
-          'pickupLocation': towPickupExact,
-        if (job.dropoffLocation != null)
-          'dropoffLocation': job.dropoffLocation,
-        if (job.dropoffLabel.isNotEmpty) 'dropoffLabel': job.dropoffLabel,
-        if (t.oilWorkshopTier.isNotEmpty)
-          'oilWorkshopTier': t.oilWorkshopTier,
-      });
-    }
-    batch.update(_jobs.doc(jobId), {
-      'status': JobStatus.offerPending.name,
-      'offerIds': offerIds,
-      if (expires != null) 'windowSeconds': seconds,
-      if (expires != null) 'expiresAt': Timestamp.fromDate(expires),
-      if (noExpiry) 'expiresAt': FieldValue.delete(),
-      if (noExpiry) 'windowSeconds': FieldValue.delete(),
-    });
-    await batch.commit();
+    if (job.status == JobStatus.dispatching) return;
+    await maybeRedispatch(jobId, expirePending: false);
   }
 
   Future<bool> acceptOffer({
@@ -776,6 +576,7 @@ class JobRepository {
     // قطع / زيوت / فني: قبول العميل يُسند الطلب مباشرة (بدون خطوة «قبول السعر»).
     // غير القطع: إن كان المزوّد في زيارة أخرى يبقى الطلب بانتظاره.
     final fields = <String, dynamic>{
+      'assignedOfferId': offer.id,
       'technicianId': offer.technicianId,
       'technicianName': offer.technicianName ??
           (isOil
@@ -994,7 +795,6 @@ class JobRepository {
         'dispatchRound': 1,
         'status': JobStatus.dispatching.name,
       });
-      await dispatch(jobId);
       return;
     }
     if (job.dispatchRound >= AppConstants.maxDispatchRounds &&
@@ -1012,7 +812,6 @@ class JobRepository {
       'dispatchRound': nextRound,
       'status': JobStatus.dispatching.name,
     });
-    await dispatch(jobId);
   }
 
   Future<void> customerAcceptQuote(String jobId) async {
@@ -1289,7 +1088,6 @@ class JobRepository {
   /// العميل يؤكد استلام القطعة، وتُخصم نسبة الورشة المسجّلة على حسابها.
   Future<void> customerConfirmPartsReceived(String jobId) async {
     final jobRef = _jobs.doc(jobId);
-    final entryRef = _db.collection(Cols.walletEntries).doc('commission_$jobId');
     await _db.runTransaction((tx) async {
       final jobSnap = await tx.get(jobRef);
       if (!jobSnap.exists) return;
@@ -1309,13 +1107,8 @@ class JobRepository {
       if (techId == null || techId.isEmpty) {
         throw StateError('لا توجد ورشة معيّنة');
       }
-      final techRef = _db.collection(Cols.users).doc(techId);
-      final techSnap = await tx.get(techRef);
-      final entrySnap = await tx.get(entryRef);
-      final percent =
-          (techSnap.data()?['commissionPercent'] as num?)?.toDouble() ?? 0;
-      final rate = (percent / 100).clamp(0.0, 1.0);
       final amount = job.billAmount;
+      final rate = (job.commissionRate ?? AppConstants.commissionRate).clamp(0.0, 1.0);
       final commission = _money(amount * rate);
       tx.update(jobRef, {
         'status': JobStatus.completed.name,
@@ -1326,24 +1119,6 @@ class JobRepository {
         'commissionRate': rate,
         if (job.warranty.enabled)
           'warranty.startsAt': Timestamp.fromDate(DateTime.now()),
-      });
-      if (commission <= 0 || entrySnap.exists) return;
-      final wallet = (techSnap.data()?['walletBalance'] as num?)?.toDouble() ?? 0;
-      final next = wallet - commission;
-      tx.set(entryRef, {
-        'userId': techId,
-        'type': 'commission',
-        'amount': commission,
-        'signedAmount': -commission,
-        'balanceAfter': next,
-        'jobId': jobId,
-        'note': 'عمولة قطعة الغيار',
-        'createdBy': job.customerId,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      tx.update(techRef, {
-        'walletBalance': next,
-        'walletJobId': jobId,
       });
     });
   }

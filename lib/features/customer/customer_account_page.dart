@@ -314,6 +314,14 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => AccountActions.deleteAccount(context),
+                  child: const Text(
+                    'حذف الحساب',
+                    style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
+                  ),
+                ),
               ],
             ),
           ),
