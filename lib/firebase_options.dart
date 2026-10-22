@@ -49,10 +49,10 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyBtJv1B4RiGVcyEsLpusr1dgBplcke350Q',
-    appId: '1:500429219707:ios:3eb1afce134a5a9ecdffde',
+    appId: '1:500429219707:ios:254fcdf740f46789cdffde',
     messagingSenderId: '500429219707',
     projectId: 'car-services-iraq',
     storageBucket: 'car-services-iraq.firebasestorage.app',
-    iosBundleId: 'com.barrr.barrr',
+    iosBundleId: 'com.albatariq.app',
   );
 }

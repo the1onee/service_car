@@ -658,7 +658,7 @@ service cloud.firestore {
       allow write: if adminCanWrite('payments');
     }
 
-    // طلبات شحن المحفظة: المزود (فني/ورشة/زيوت/دهان) ينشئ طلباً معلّقاً مع فاتورة.
+    // طلبات شحن المحفظة: المزود ينشئ طلباً معلّقاً مع هاتف التحويل؛ الفاتورة اختيارية.
     match /walletTopUps/{id} {
       allow read: if isOwner(resource.data.technicianId) || adminCanRead('payments');
       allow create: if isOwner(request.resource.data.technicianId)
@@ -667,7 +667,9 @@ service cloud.firestore {
         && request.resource.data.amount is number
         && request.resource.data.amount > 0
         && request.resource.data.receiptUrl is string
-        && request.resource.data.receiptUrl.size() > 8;
+        && request.resource.data.transferPhone is string
+        && request.resource.data.transferPhone.size() >= 10
+        && request.resource.data.transferPhone.size() <= 20;
       allow update, delete: if adminCanWrite('payments');
     }
 

@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/constants.dart';
+import 'package:barrr/core/phone.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/field_ui.dart';
@@ -490,6 +491,7 @@ class _WalletRechargePanel extends StatefulWidget {
 
 class _WalletRechargePanelState extends State<_WalletRechargePanel> {
   final _amountCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
   final _uploader = WalletTopUpUpload();
   XFile? _receipt;
@@ -506,6 +508,7 @@ class _WalletRechargePanelState extends State<_WalletRechargePanel> {
   @override
   void dispose() {
     _amountCtrl.dispose();
+    _phoneCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
   }
@@ -533,8 +536,9 @@ class _WalletRechargePanelState extends State<_WalletRechargePanel> {
       setState(() => _error = 'أدخل مبلغ التحويل بشكل صحيح.');
       return;
     }
-    if (_receipt == null) {
-      setState(() => _error = 'أضف صورة فاتورة التحويل أولاً.');
+    final phone = normalizeIraqiPhone(_phoneCtrl.text);
+    if (!looksLikeIraqiMobile(phone)) {
+      setState(() => _error = 'أدخل رقم الهاتف الذي حوّلتَ منه بشكل صحيح.');
       return;
     }
     setState(() {
@@ -543,15 +547,19 @@ class _WalletRechargePanelState extends State<_WalletRechargePanel> {
     });
     final users = AppScope.of(context).users;
     try {
-      final url = await _uploader.uploadReceipt(_receipt!);
+      final url = _receipt == null
+          ? ''
+          : await _uploader.uploadReceipt(_receipt!);
       await users.createWalletTopUp(
-            technicianId: widget.technicianId,
-            amount: amount,
-            receiptUrl: url,
-            transferNote: _noteCtrl.text,
-          );
+        technicianId: widget.technicianId,
+        amount: amount,
+        transferPhone: phone,
+        receiptUrl: url,
+        transferNote: _noteCtrl.text,
+      );
       if (!mounted) return;
       _amountCtrl.clear();
+      _phoneCtrl.clear();
       _noteCtrl.clear();
       setState(() => _receipt = null);
       AppSnackBar.showSuccess(
@@ -712,6 +720,19 @@ class _WalletRechargePanelState extends State<_WalletRechargePanel> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
+                    controller: _phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    textDirection: TextDirection.ltr,
+                    decoration: const InputDecoration(
+                      labelText: 'رقم الهاتف الذي حوّلتَ منه',
+                      hintText: '07xxxxxxxxx',
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
                     controller: _noteCtrl,
                     decoration: const InputDecoration(
                       labelText: 'ملاحظة (اختياري)',
@@ -731,7 +752,7 @@ class _WalletRechargePanelState extends State<_WalletRechargePanel> {
                       icon: const Icon(Icons.receipt_long),
                       label: Text(
                         _receipt == null
-                            ? 'إضافة فاتورة التحويل'
+                            ? 'إضافة فاتورة التحويل (اختياري)'
                             : 'تم اختيار الفاتورة — تغيير',
                       ),
                     ),
@@ -799,6 +820,15 @@ class _WalletRechargePanelState extends State<_WalletRechargePanel> {
                                     formatIqd(row.amount),
                                     style: const TextStyle(fontWeight: FontWeight.w700),
                                   ),
+                                  if (row.transferPhone.isNotEmpty)
+                                    Text(
+                                      prettyIraqiPhone(row.transferPhone),
+                                      textDirection: TextDirection.ltr,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF5A6B82),
+                                      ),
+                                    ),
                                   Text(
                                     row.statusLabelAr,
                                     style: TextStyle(

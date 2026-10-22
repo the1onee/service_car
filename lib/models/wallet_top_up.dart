@@ -9,6 +9,7 @@ class WalletTopUp {
     required this.amount,
     required this.receiptUrl,
     required this.status,
+    this.transferPhone = '',
     this.transferNote = '',
     this.rejectReason = '',
     this.walletEntryId = '',
@@ -22,6 +23,7 @@ class WalletTopUp {
   final double amount;
   final String receiptUrl;
   final WalletTopUpStatus status;
+  final String transferPhone;
   final String transferNote;
   final String rejectReason;
   final String walletEntryId;
@@ -37,6 +39,7 @@ class WalletTopUp {
       amount: (d['amount'] as num?)?.toDouble() ?? 0,
       receiptUrl: d['receiptUrl'] as String? ?? '',
       status: _statusOf(d['status'] as String?),
+      transferPhone: d['transferPhone'] as String? ?? '',
       transferNote: d['transferNote'] as String? ?? '',
       rejectReason: d['rejectReason'] as String? ?? '',
       walletEntryId: d['walletEntryId'] as String? ?? '',

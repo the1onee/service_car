@@ -63,10 +63,10 @@
               "client_type": 3
             },
             {
-              "client_id": "500429219707-5u2gfft8f28a92cid193c9f62cfi2v9j.apps.googleusercontent.com",
+              "client_id": "500429219707-9mtnspj6cp7a7ltdjdp8jsaem3u27isj.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.barrr.barrr"
+                "bundle_id": "com.albatariq.app"
               }
             }
           ]

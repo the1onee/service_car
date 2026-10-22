@@ -4,6 +4,12 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>لالتقاط صورة الإيصال أو صورة الملف الشخصي</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>لاختيار صورة الإيصال أو صورة الملف الشخصي</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>نحتاج موقعك لطلب الخدمة عبر البطريق وتتبع الوصول</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
@@ -35,14 +41,18 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.500429219707-5u2gfft8f28a92cid193c9f62cfi2v9j</string>
+				<string>com.googleusercontent.apps.500429219707-9mtnspj6cp7a7ltdjdp8jsaem3u27isj</string>
 			</array>
 		</dict>
 	</array>
 	<key>GIDClientID</key>
-	<string>500429219707-5u2gfft8f28a92cid193c9f62cfi2v9j.apps.googleusercontent.com</string>
+	<string>500429219707-9mtnspj6cp7a7ltdjdp8jsaem3u27isj.apps.googleusercontent.com</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

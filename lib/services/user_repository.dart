@@ -285,19 +285,22 @@ class UserRepository {
   Future<String> createWalletTopUp({
     required String technicianId,
     required double amount,
-    required String receiptUrl,
+    required String transferPhone,
+    String receiptUrl = '',
     String transferNote = '',
   }) async {
     if (amount <= 0) {
       throw ArgumentError('المبلغ يجب أن يكون أكبر من صفر.');
     }
-    if (receiptUrl.trim().isEmpty) {
-      throw ArgumentError('فاتورة التحويل مطلوبة.');
+    final phone = transferPhone.trim();
+    if (phone.isEmpty) {
+      throw ArgumentError('رقم الهاتف الذي حوّلتَ منه مطلوب.');
     }
     final ref = await _db.collection(Cols.walletTopUps).add({
       'technicianId': technicianId,
       'amount': amount,
       'receiptUrl': receiptUrl.trim(),
+      'transferPhone': phone,
       'transferNote': transferNote.trim(),
       'status': 'pending',
       'rejectReason': '',

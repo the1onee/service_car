@@ -25,6 +25,10 @@ class AppBrand {
   /// رقم البناء (`+N` في pubspec) — يُقارن بـ `minAppBuild` لإجبار التحديث.
   static int buildNumber = 0;
 
+  /// رقم تطبيق آبل من App Store Connect (App Information → Apple ID).
+  /// املأه بعد إنشاء التطبيق حتى يفتح زر التحديث متجر آبل لا Play.
+  static const appleAppId = '';
+
   /// يُستدعى من [main] قبل [runApp].
   static Future<void> load() async {
     try {
