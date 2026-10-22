@@ -8,6 +8,8 @@
 	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>لالتقاط صورة الإيصال أو صورة الملف الشخصي</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>يُستخدم الصوت داخل التطبيق لتشغيل تنبيهات الطلبات؛ لا نسجّل صوت الميكروفون.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>لاختيار صورة الإيصال أو صورة الملف الشخصي</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
