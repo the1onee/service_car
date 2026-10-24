@@ -110,16 +110,19 @@ service cloud.firestore {
           .affectedKeys().hasAny(protectedFields());
       }
 
-      allow read: if adminCanReadUserDoc() || isUser(uid);
-
-      // الفني يقرأ رصيد العميل عند التسوية فقط (قراءة مستند، لا قائمة).
-      allow get: if isProviderRole() && resource.data.role == 'customer';
+      // list عبر read. get منفصل حتى لا يغطي allow get الأضيق صلاحية isUser.
+      allow list: if adminCanReadUserDoc();
+      allow get: if isUser(uid)
+        || adminCanReadUserDoc()
+        // الفني يقرأ رصيد العميل عند التسوية فقط (قراءة مستند، لا قائمة).
+        || (isProviderRole()
+          && resource.data.role == 'customer');
 
       // الأدمن (بصلاحية القسم) ينشئ حساباً؛ التطبيق ينشئ حسابه فقط وفق القيود.
       allow create: if adminCanCreateUserDoc()
         || (isUser(uid)
-          && request.resource.data.walletBalance == 0
-          && request.resource.data.ratingCount == 0
+          && request.resource.data.get('walletBalance', 0) == 0
+          && request.resource.data.get('ratingCount', 0) == 0
           && request.resource.data.get('commissionPercent', 0) == 0
           && !request.resource.data.keys().hasAny([
             'adminLevel', 'adminPermissions', 'disabled', 'commissionRate'
@@ -184,7 +187,7 @@ service cloud.firestore {
           && request.resource.data.walletBalance <= resource.data.walletBalance;
       }
 
-      allow delete: if adminCanWriteUserDoc();
+      allow delete: if adminCanWriteUserDoc() || isUser(uid);
     }
 
     // كتالوج الخدمات يُدار من لوحة التحكم فقط، والتطبيق يقرأه.
