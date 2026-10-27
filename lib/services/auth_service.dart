@@ -104,6 +104,7 @@ class AuthService {
 
       final user = cred.user;
       if (user == null) return GoogleAuthResult.cancelled;
+      await _awaitSignedIn(user);
 
       if (await _hasProfile(user.uid)) {
         registering.value = false;
@@ -174,6 +175,7 @@ class AuthService {
       final cred = await _auth.signInWithCredential(oauthCredential);
       final user = cred.user;
       if (user == null) return GoogleAuthResult.cancelled;
+      await _awaitSignedIn(user);
 
       if (await _hasProfile(user.uid)) {
         registering.value = false;
@@ -266,19 +268,6 @@ class AuthService {
     pendingPhone = phone.isEmpty ? null : phone;
     registering.value = true;
 
-    if (phone.isNotEmpty) {
-      final phoneKey = phone.replaceAll('+', '');
-      final reg = await _db.collection(Cols.phoneRegistry).doc(phoneKey).get();
-      final owner = (reg.data()?['uid'] as String?)?.trim() ?? '';
-      if (reg.exists && owner.isNotEmpty) {
-        registering.value = false;
-        throw FirebaseAuthException(
-          code: 'phone-already-registered',
-          message: 'هذا الحساب مسجّل مسبقاً. سجّل الدخول.',
-        );
-      }
-    }
-
     final leftover = _auth.currentUser;
     if (leftover != null && !await _hasProfile(leftover.uid)) {
       await _discardIncompleteAccount(leftover);
@@ -299,6 +288,8 @@ class AuthService {
           message: 'هذا الحساب مسجّل مسبقاً. سجّل الدخول.',
         );
       }
+
+      await _awaitSignedIn(user);
 
       final name =
           phone.isNotEmpty ? prettyIraqiPhone(phone) : email.split('@').first;
@@ -433,6 +424,20 @@ class AuthService {
       return;
     }
     await _discardIncompleteAccount(user);
+  }
+
+  /// ينتظر رمز الدخول قبل أي قراءة أو كتابة في Firestore.
+  /// على أندرويد تُرفض أول عملية بـ permission-denied إن سبقت إرفاق الرمز.
+  Future<void> _awaitSignedIn(User user) async {
+    final token = await user.getIdToken(true);
+    if (token == null || token.isEmpty) {
+      throw FirebaseAuthException(
+        code: 'network-request-failed',
+        message: 'تعذّر تأكيد الجلسة. أعد المحاولة.',
+      );
+    }
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    await Future<void>.delayed(const Duration(milliseconds: 250));
   }
 
   Future<bool> _hasProfile(String uid) async {
