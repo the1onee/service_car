@@ -1,23 +1,26 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:barrr/core/api_config.dart';
 import 'package:barrr/core/phone.dart';
 import 'package:barrr/data/collections.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/services/user_repository.dart';
 
-/// نتيجة تسجيل الدخول عبر Google.
+/// نتيجة تسجيل الدخول عبر Google أو Apple.
 enum GoogleAuthResult {
   /// يوجد ملف أو اكتمل إنشاؤه — يدخل التطبيق.
   signedIn,
 
-  /// أغلق نافذة Google دون إكمال.
+  /// أغلق نافذة المزوّد دون إكمال.
   cancelled,
 }
 
@@ -137,6 +140,94 @@ class AuthService {
       }
       rethrow;
     }
+  }
+
+  /// Sign in with Apple — iOS فقط (مطلوب مع Google وفق Guideline 4.8).
+  Future<GoogleAuthResult> signInWithApple() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) {
+      throw FirebaseAuthException(
+        code: 'operation-not-allowed',
+        message: 'تسجيل الدخول عبر Apple متاح على الآيفون فقط.',
+      );
+    }
+    try {
+      final rawNonce = _generateNonce();
+      final nonce = _sha256ofString(rawNonce);
+      final appleCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: nonce,
+      );
+      final idToken = appleCredential.identityToken;
+      if (idToken == null || idToken.isEmpty) {
+        throw FirebaseAuthException(
+          code: 'invalid-credential',
+          message: 'تعذّر الحصول على رمز Apple. أعد المحاولة.',
+        );
+      }
+      final oauthCredential = OAuthProvider('apple.com').credential(
+        idToken: idToken,
+        rawNonce: rawNonce,
+      );
+      final cred = await _auth.signInWithCredential(oauthCredential);
+      final user = cred.user;
+      if (user == null) return GoogleAuthResult.cancelled;
+
+      if (await _hasProfile(user.uid)) {
+        registering.value = false;
+        return GoogleAuthResult.signedIn;
+      }
+
+      final given = appleCredential.givenName?.trim() ?? '';
+      final family = appleCredential.familyName?.trim() ?? '';
+      final appleName = '$given $family'.trim();
+      final name = appleName.isNotEmpty
+          ? appleName
+          : ((user.displayName?.trim().isNotEmpty == true)
+              ? user.displayName!.trim()
+              : (user.email?.split('@').first ?? 'مستخدم'));
+      if (appleName.isNotEmpty && user.displayName != appleName) {
+        await user.updateDisplayName(appleName);
+      }
+      await _writeCustomerProfile(
+        user: user,
+        phone: '',
+        name: name,
+        authProvider: 'apple',
+        photoUrl: user.photoURL ?? '',
+        email: user.email ?? '',
+        discardOnFailure: false,
+      );
+      registering.value = false;
+      return GoogleAuthResult.signedIn;
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code == AuthorizationErrorCode.canceled) {
+        return GoogleAuthResult.cancelled;
+      }
+      throw FirebaseAuthException(
+        code: 'apple-sign-in-failed',
+        message: e.message.isNotEmpty
+            ? e.message
+            : 'تعذّر تسجيل الدخول عبر Apple.',
+      );
+    }
+  }
+
+  static String _generateNonce([int length = 32]) {
+    const charset =
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(
+      length,
+      (_) => charset[random.nextInt(charset.length)],
+    ).join();
+  }
+
+  static String _sha256ofString(String input) {
+    final bytes = utf8.encode(input);
+    return sha256.convert(bytes).toString();
   }
 
   Future<void> signInWithIdentifier({
@@ -334,8 +425,10 @@ class AuthService {
     pendingPhone = null;
     if (user == null) return;
     if (await _hasProfile(user.uid)) return;
-    final isGoogle = user.providerData.any((p) => p.providerId == 'google.com');
-    if (isGoogle) {
+    final isSocial = user.providerData.any(
+      (p) => p.providerId == 'google.com' || p.providerId == 'apple.com',
+    );
+    if (isSocial) {
       await signOut();
       return;
     }

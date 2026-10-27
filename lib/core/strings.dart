@@ -15,9 +15,14 @@ class AppStrings {
   static const address = 'العنوان';
   static const welcomeBack = 'أهلاً بعودتك';
   static const loginHint = 'سجّل عبر Google أو بالهاتف/البريد وكلمة المرور';
+  static const loginHintIos =
+      'سجّل عبر Google أو Apple أو بالهاتف/البريد وكلمة المرور';
   static const registerTitle = 'إنشاء حساب';
   static const registerHint = 'Google أو رقم الهاتف/البريد مع كلمة المرور';
+  static const registerHintIos =
+      'Google أو Apple أو رقم الهاتف/البريد مع كلمة المرور';
   static const continueWithGoogle = 'Google';
+  static const continueWithApple = 'Apple';
   static const phoneOrEmail = 'رقم الهاتف أو البريد الإلكتروني';
   static const phoneOrEmailHint = '0770… أو name@email.com';
   static const addPhoneTitle = 'أضف رقم هاتفك';

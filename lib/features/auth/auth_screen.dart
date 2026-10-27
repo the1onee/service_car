@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:barrr/core/app_brand.dart';
@@ -79,6 +80,38 @@ class _AuthScreenState extends State<AuthScreen> {
       if (!mounted) return;
       if (result == GoogleAuthResult.cancelled) return;
     });
+  }
+
+  void _continueWithApple() {
+    _run(() async {
+      final result = await _auth.signInWithApple();
+      if (!mounted) return;
+      if (result == GoogleAuthResult.cancelled) return;
+    });
+  }
+
+  bool get _showAppleSignIn =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+  Widget _socialButtons() {
+    return Center(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _GoogleCircleButton(
+            busy: _busy,
+            onPressed: _continueWithGoogle,
+          ),
+          if (_showAppleSignIn) ...[
+            const SizedBox(width: 28),
+            _AppleCircleButton(
+              busy: _busy,
+              onPressed: _continueWithApple,
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   void _startRegistration() {
@@ -312,17 +345,13 @@ class _AuthScreenState extends State<AuthScreen> {
           }),
         ),
         const SizedBox(height: 22),
-        const _SectionTitle(
+        _SectionTitle(
           title: AppStrings.welcomeBack,
-          subtitle: AppStrings.loginHint,
+          subtitle:
+              _showAppleSignIn ? AppStrings.loginHintIos : AppStrings.loginHint,
         ),
         const SizedBox(height: 20),
-        Center(
-          child: _GoogleCircleButton(
-            busy: _busy,
-            onPressed: _continueWithGoogle,
-          ),
-        ),
+        _socialButtons(),
         const SizedBox(height: 22),
         Form(
           key: _loginForm,
@@ -385,17 +414,14 @@ class _AuthScreenState extends State<AuthScreen> {
           }),
         ),
         const SizedBox(height: 22),
-        const _SectionTitle(
+        _SectionTitle(
           title: AppStrings.registerTitle,
-          subtitle: AppStrings.registerHint,
+          subtitle: _showAppleSignIn
+              ? AppStrings.registerHintIos
+              : AppStrings.registerHint,
         ),
         const SizedBox(height: 20),
-        Center(
-          child: _GoogleCircleButton(
-            busy: _busy,
-            onPressed: _continueWithGoogle,
-          ),
-        ),
+        _socialButtons(),
         const SizedBox(height: 22),
         Form(
           key: _registerForm,

@@ -326,6 +326,55 @@ class _GoogleCircleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return _SocialCircleButton(
+      busy: busy,
+      onPressed: onPressed,
+      label: AppStrings.continueWithGoogle,
+      glyph: const Text(
+        'G',
+        style: TextStyle(
+          fontSize: 32,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF4285F4),
+          height: 1,
+        ),
+      ),
+    );
+  }
+}
+
+class _AppleCircleButton extends StatelessWidget {
+  const _AppleCircleButton({required this.busy, required this.onPressed});
+
+  final bool busy;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SocialCircleButton(
+      busy: busy,
+      onPressed: onPressed,
+      label: AppStrings.continueWithApple,
+      glyph: const Icon(Icons.apple, size: 34, color: Color(0xFF111111)),
+    );
+  }
+}
+
+class _SocialCircleButton extends StatelessWidget {
+  const _SocialCircleButton({
+    required this.busy,
+    required this.onPressed,
+    required this.label,
+    required this.glyph,
+  });
+
+  final bool busy;
+  final VoidCallback onPressed;
+  final String label;
+  final Widget glyph;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       children: [
         Material(
@@ -348,23 +397,15 @@ class _GoogleCircleButton extends StatelessWidget {
                         height: 26,
                         child: CircularProgressIndicator(strokeWidth: 2.4),
                       )
-                    : const Text(
-                        'G',
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF4285F4),
-                          height: 1,
-                        ),
-                      ),
+                    : glyph,
               ),
             ),
           ),
         ),
         const SizedBox(height: 8),
-        const Text(
-          AppStrings.continueWithGoogle,
-          style: TextStyle(
+        Text(
+          label,
+          style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
             color: AppColors.inkSoft,
