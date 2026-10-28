@@ -103,9 +103,13 @@ String _authMessage(FirebaseAuthException e) {
   switch (e.code) {
     case 'invalid-phone-number':
       return 'رقم الهاتف غير صالح. استخدم صيغة 07701234567';
-    case 'invalid-credential':
     case 'wrong-password':
       return 'رقم الهاتف أو كلمة المرور غير صحيحة.';
+    case 'invalid-credential':
+      // مشترك بين تسجيل الهاتف وOAuth؛ نفضّل الرسالة المخصّصة إن وُجدت.
+      final msg = e.message?.trim() ?? '';
+      if (msg.isNotEmpty && _safeToShow(msg)) return msg;
+      return 'بيانات الدخول غير صحيحة. أعد المحاولة.';
     case 'invalid-email':
       final msg = e.message?.trim() ?? '';
       return msg.isNotEmpty && _safeToShow(msg)
@@ -124,6 +128,11 @@ String _authMessage(FirebaseAuthException e) {
       return msg.isNotEmpty && _safeToShow(msg)
           ? msg
           : 'تعذّر تسجيل الدخول عبر Google.';
+    case 'apple-sign-in-failed':
+      final msg = e.message?.trim() ?? '';
+      return msg.isNotEmpty && _safeToShow(msg)
+          ? msg
+          : 'تعذّر تسجيل الدخول عبر Apple.';
     case 'operation-not-allowed':
       return kReleaseMode
           ? 'تعذّر تسجيل الدخول. تواصل مع الدعم.'

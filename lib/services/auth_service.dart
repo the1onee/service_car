@@ -164,13 +164,16 @@ class AuthService {
       final idToken = appleCredential.identityToken;
       if (idToken == null || idToken.isEmpty) {
         throw FirebaseAuthException(
-          code: 'invalid-credential',
+          code: 'apple-sign-in-failed',
           message: 'تعذّر الحصول على رمز Apple. أعد المحاولة.',
         );
       }
+      // firebase_auth ≥5.2 يتطلب authorizationCode كـ accessToken وإلا
+      // يفشل بـ invalid-credential ويُترجم خطأً لرسالة الهاتف/كلمة المرور.
       final oauthCredential = OAuthProvider('apple.com').credential(
         idToken: idToken,
         rawNonce: rawNonce,
+        accessToken: appleCredential.authorizationCode,
       );
       final cred = await _auth.signInWithCredential(oauthCredential);
       final user = cred.user;
@@ -214,6 +217,24 @@ class AuthService {
             ? e.message
             : 'تعذّر تسجيل الدخول عبر Apple.',
       );
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'invalid-credential' ||
+          e.code == 'invalid-oauth-response' ||
+          e.code == 'missing-or-invalid-nonce') {
+        throw FirebaseAuthException(
+          code: 'apple-sign-in-failed',
+          message: 'تعذّر التحقق من حساب Apple. أعد المحاولة.',
+        );
+      }
+      if (e.code == 'operation-not-allowed') {
+        throw FirebaseAuthException(
+          code: 'apple-sign-in-failed',
+          message: kReleaseMode
+              ? 'تسجيل الدخول عبر Apple غير متاح حالياً.'
+              : 'فعّل مزوّد Apple في Firebase Authentication.',
+        );
+      }
+      rethrow;
     }
   }
 
