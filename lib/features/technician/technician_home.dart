@@ -458,19 +458,7 @@ class _TechnicianMapTab extends StatelessWidget {
                                     trailing: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        StatusPill(
-                                          label: ready
-                                              ? 'جاهز للطلبات'
-                                              : (me.isApproved
-                                                  ? 'رصيد غير كافٍ'
-                                                  : 'بانتظار التوثيق'),
-                                          color: ready
-                                              ? AppColors.emeraldDeep
-                                              : AppColors.inkSoft,
-                                          background: ready
-                                              ? AppColors.emeraldTint
-                                              : AppColors.recessed,
-                                        ),
+                                        ProviderActiveSwitch(user: me),
                                         NotificationsBellButton(uid: me.id),
                                       ],
                                     ),
@@ -553,11 +541,14 @@ class _TechnicianMapTab extends StatelessWidget {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
-                                          ready
-                                              ? 'بانتظار طلبات الخدمة'
-                                              : (me.isApproved
-                                                  ? 'اشحن المحفظة لاستقبال الطلبات'
-                                                  : AppStrings.pendingVerify),
+                                          !me.isOnline
+                                              ? 'غير نشط — فعّل الاستقبال لاستلام الطلبات'
+                                              : ready
+                                                  ? 'بانتظار طلبات الخدمة'
+                                                  : (me.isApproved
+                                                      ? 'اشحن المحفظة لاستقبال الطلبات'
+                                                      : AppStrings
+                                                          .pendingVerify),
                                           style: const TextStyle(
                                               fontWeight: FontWeight.w700),
                                         ),

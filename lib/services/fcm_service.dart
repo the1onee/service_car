@@ -20,7 +20,7 @@ class FcmService {
   final UserRepository _users;
   final GlobalKey<ScaffoldMessengerState>? messengerKey;
 
-  /// عند فتح إشعار يحمل jobId — الشاشات الرئيسية تنتقل لتبويب الطلب.
+  /// عند فتح إشعار يحمل jobId — الشاشات الرئيسية تنتقل لتبويب الطلب / عرض الفني.
   final ValueNotifier<String?> focusJobId = ValueNotifier<String?>(null);
 
   StreamSubscription<String>? _tokenSub;
@@ -77,7 +77,26 @@ class FcmService {
     }
   }
 
+  bool _isNewOfferMessage(RemoteMessage message) {
+    final type = message.data['type']?.toString().trim() ?? '';
+    if (type == 'offer' || type == 'newOffer' || type == 'jobOffer') {
+      return true;
+    }
+    final title = message.notification?.title?.trim() ?? '';
+    return title == 'طلب جديد';
+  }
+
   void _showForeground(RemoteMessage message) {
+    final jobId = message.data['jobId']?.toString().trim();
+
+    // طلب جديد للفني: افتح شاشة العرض مباشرة.
+    if (_isNewOfferMessage(message) &&
+        jobId != null &&
+        jobId.isNotEmpty) {
+      focusJobId.value = jobId;
+      return;
+    }
+
     final title = message.notification?.title?.trim();
     final body = message.notification?.body?.trim();
     final text = [

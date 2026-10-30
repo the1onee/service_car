@@ -16,9 +16,9 @@ import 'package:barrr/models/service_item.dart';
 import 'package:barrr/services/cloudinary_upload.dart';
 import 'package:barrr/services/specialties_catalog.dart';
 
-/// نتيجة إرسال طلب القطع — للانتقال لتبويب الطلبات.
+/// نتيجة إرسال طلب القطع — تبقى المتابعة في الرئيسية.
 class PartsOrderResult {
-  const PartsOrderResult({required this.jobId, this.goOrders = true});
+  const PartsOrderResult({required this.jobId, this.goOrders = false});
 
   final String jobId;
   final bool goOrders;
@@ -246,7 +246,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
         ),
       );
       Navigator.of(context).pop(
-        PartsOrderResult(jobId: jobId, goOrders: true),
+        PartsOrderResult(jobId: jobId, goOrders: false),
       );
     } catch (e) {
       if (!mounted) return;
@@ -287,73 +287,79 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
   @override
   Widget build(BuildContext context) {
     final city = _cityHint();
+    final textTheme = Theme.of(context).textTheme;
 
-    return Scaffold(
-      backgroundColor: AppColors.canvas,
-      body: Column(
-        children: [
-          Material(
-            color: AppColors.canvas.withValues(alpha: 0.88),
-            elevation: 0,
-            child: SafeArea(
-              bottom: false,
-              child: SizedBox(
-                height: 64,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        onPressed: () => Navigator.of(context).maybePop(),
-                        icon: const Icon(Icons.arrow_forward_ios_rounded, size: 18),
-                      ),
-                      const FieldMark(size: 32),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                if (city.isNotEmpty) ...[
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.azureTint,
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: Text(
-                                      city,
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w500,
-                                        color: Color(0xFF45464D),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.opaque,
+      child: Scaffold(
+        backgroundColor: AppColors.canvas,
+        body: Column(
+          children: [
+            Material(
+              color: AppColors.canvas.withValues(alpha: 0.88),
+              elevation: 0,
+              child: SafeArea(
+                bottom: false,
+                child: SizedBox(
+                  height: 64,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          onPressed: () => Navigator.of(context).maybePop(),
+                          icon: const Icon(Icons.arrow_forward_ios_rounded,
+                              size: 18),
+                        ),
+                        const FieldMark(size: 32),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  if (city.isNotEmpty) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.azureTint,
+                                        borderRadius: BorderRadius.circular(999),
+                                      ),
+                                      child: Text(
+                                        city,
+                                        style: textTheme.labelSmall?.copyWith(
+                                          color: AppColors.inkSoft,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                  ],
                                 ],
-                              ],
-                            ),
-                          ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      NotificationsBellButton(uid: widget.profile.id),
-                    ],
+                        NotificationsBellButton(uid: widget.profile.id),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          Expanded(
-            child: Form(
-              key: _form,
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
+            Expanded(
+              child: Form(
+                key: _form,
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
                     child: Container(
@@ -372,16 +378,16 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const Row(
+                          Row(
                             children: [
-                              Icon(Icons.edit_note_rounded, color: AppColors.amberDeep, size: 22),
-                              SizedBox(width: 8),
+                              const Icon(Icons.edit_note_rounded,
+                                  color: AppColors.amberDeep, size: 20),
+                              const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
                                   'الطلب',
-                                  style: TextStyle(
+                                  style: textTheme.titleSmall?.copyWith(
                                     fontWeight: FontWeight.w700,
-                                    fontSize: 16,
                                   ),
                                 ),
                               ),
@@ -696,16 +702,18 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                                         color: Colors.white,
                                       ),
                                     )
-                                  : const Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                  : Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
-                                        Icon(Icons.send_rounded, size: 22),
-                                        SizedBox(width: 8),
+                                        const Icon(Icons.send_rounded,
+                                            size: 20),
+                                        const SizedBox(width: 8),
                                         Text(
-                                          'إرسال الطلب للورش المختصة',
-                                          style: TextStyle(
+                                          'إرسال الطلب',
+                                          style: textTheme.titleSmall?.copyWith(
                                             fontWeight: FontWeight.w700,
-                                            fontSize: 16,
+                                            color: Colors.white,
                                           ),
                                         ),
                                       ],
@@ -721,6 +729,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

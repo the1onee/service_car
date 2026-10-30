@@ -107,8 +107,9 @@ class AppStrings {
   static const reject = 'رفض';
   static const cancelJob = 'إلغاء الطلب';
   static const withdrawSearch = 'إلغاء والبحث عن فني';
-  static const online = 'متاح لاستقبال الطلبات';
-  static const offline = 'غير متاح';
+  static const online = 'نشط';
+  static const offline = 'غير نشط';
+  static const activeToggleHint = 'استقبال الطلبات';
   static const pendingVerify = 'حسابك بانتظار توثيق الإدارة';
   static const initialPrice = 'السعر المبدئي';
   static const finalPrice = 'السعر النهائي';

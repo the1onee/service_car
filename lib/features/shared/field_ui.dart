@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -11,6 +12,7 @@ import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/shared/app_network_or_data_image.dart';
 import 'package:barrr/models/app_user.dart';
 import 'package:barrr/models/job.dart';
+import 'package:barrr/services/user_repository.dart';
 
 class FieldNavItem {
   const FieldNavItem({required this.icon, required this.label});
@@ -40,6 +42,13 @@ Route<T> softPageRoute<T extends Object?>({required WidgetBuilder builder}) {
     transitionDuration: const Duration(milliseconds: 280),
     reverseTransitionDuration: const Duration(milliseconds: 220),
   );
+}
+
+/// مسار iOS مع سحب للرجوع — لشاشات النماذج مثل قطع الغيار.
+Route<T> cupertinoSoftPageRoute<T extends Object?>({
+  required WidgetBuilder builder,
+}) {
+  return CupertinoPageRoute<T>(builder: builder);
 }
 
 class FieldShell extends StatelessWidget {
@@ -288,6 +297,74 @@ class StatusPill extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// مفتاح نشط/غير نشط للمزوّدين — عند الإيقاف لا تُوزَّع طلبات جديدة.
+class ProviderActiveSwitch extends StatefulWidget {
+  const ProviderActiveSwitch({super.key, required this.user});
+
+  final AppUser user;
+
+  @override
+  State<ProviderActiveSwitch> createState() => _ProviderActiveSwitchState();
+}
+
+class _ProviderActiveSwitchState extends State<ProviderActiveSwitch> {
+  var _busy = false;
+
+  Future<void> _toggle(bool value) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final result =
+          await AppScope.of(context).users.setOnline(widget.user.id, value);
+      if (!mounted) return;
+      if (!result.ok) {
+        final msg = switch (result.block) {
+          OnlineBlock.lowBalance => 'الرصيد غير كافٍ لتفعيل الاستقبال',
+          OnlineBlock.rejected => 'الحساب مرفوض — راجع الإدارة',
+          OnlineBlock.pending => 'الحساب بانتظار التوثيق',
+          OnlineBlock.none => 'تعذّر تغيير الحالة',
+        };
+        AppSnackBar.showError(context, msg);
+      }
+    } catch (_) {
+      if (mounted) {
+        AppSnackBar.showError(context, 'تعذّر تغيير حالة النشاط');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final online = widget.user.isOnline;
+    final ready = online && widget.user.canReceiveJobs;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        StatusPill(
+          label: online
+              ? (ready ? AppStrings.online : (widget.user.isApproved
+                  ? 'رصيد غير كافٍ'
+                  : 'بانتظار التوثيق'))
+              : AppStrings.offline,
+          color: ready ? AppColors.emeraldDeep : AppColors.inkSoft,
+          background: ready ? AppColors.emeraldTint : AppColors.recessed,
+        ),
+        const SizedBox(width: 4),
+        SizedBox(
+          height: 28,
+          child: Switch.adaptive(
+            value: online,
+            onChanged: _busy ? null : _toggle,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+      ],
     );
   }
 }

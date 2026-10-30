@@ -726,6 +726,11 @@ class JobRepository {
     await batch.commit();
   }
 
+  /// يغلق العروض المفتوحة عبر `offerIds` فقط — الفني/الورشة لا يستعلمان عروض غيرهم.
+  Future<void> expireOffersSafe(String jobId) async {
+    await closeSiblingOffers(jobId, '');
+  }
+
   Future<void> onWindowExpired(String jobId) async {
     final snap = await _jobs.doc(jobId).get();
     if (!snap.exists) return;
@@ -973,7 +978,7 @@ class JobRepository {
     if (!job.technicianCanWithdraw) {
       throw StateError('لا يمكن الانسحاب بعد بدء العمل');
     }
-    await expireOpenOffers(jobId);
+    await expireOffersSafe(jobId);
     final prevTech = job.technicianId;
     final fields = <String, dynamic>{
       'status': JobStatus.dispatching.name,
@@ -1015,7 +1020,7 @@ class JobRepository {
     if (!job.technicianCanWithdraw) {
       throw StateError('لا يمكن إلغاء الطلب بعد بدء التنفيذ');
     }
-    await expireOpenOffers(jobId);
+    await expireOffersSafe(jobId);
     final prevTech = job.technicianId;
     await _jobs.doc(jobId).update({
       'status': JobStatus.cancelled.name,

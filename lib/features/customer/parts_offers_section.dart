@@ -22,7 +22,6 @@ class PartsOffersSection extends StatelessWidget {
   final bool? selectable;
 
   static const _secondary = Color(0xFF855300);
-  static const _surfaceHigh = Color(0xFFDCE9FF);
 
   bool get _canSelect =>
       selectable ??
@@ -30,6 +29,7 @@ class PartsOffersSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
     return StreamBuilder<List<JobOffer>>(
       stream: AppScope.of(context).jobs.watchJobQuotes(job.id),
       builder: (context, snap) {
@@ -62,52 +62,41 @@ class PartsOffersSection extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.local_offer_outlined, color: _secondary, size: 22),
+                const Icon(Icons.local_offer_outlined,
+                    color: _secondary, size: 20),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
                     'العروض',
-                    style: TextStyle(
+                    style: textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
-                      fontSize: 16,
                     ),
                   ),
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: _surfaceHigh,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    quotes.isEmpty
-                        ? (waiting ? 'جارٍ الجمع…' : 'لا عروض')
-                        : '${quotes.length} عرض متاح',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF45464D),
-                    ),
+                Text(
+                  quotes.isEmpty
+                      ? (waiting ? 'جارٍ الجمع…' : 'لا عروض')
+                      : '${quotes.length} عرض',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: AppColors.inkSoft,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             if (quotes.isEmpty && waiting) ...[
               const LinearProgressIndicator(minHeight: 3),
-              const SizedBox(height: 16),
-              const Text('بانتظار العروض'),
+              const SizedBox(height: 12),
+              Text('بانتظار العروض', style: textTheme.bodyMedium),
             ] else if (quotes.isEmpty)
-              const Text('بانتظار العروض')
+              Text('بانتظار العروض', style: textTheme.bodyMedium)
             else
               for (final q in quotes)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.only(bottom: 12),
                   child: _OfferCard(
                     offer: q,
-                    isAgency: quotes.length == 1 ||
-                        q.id == bestRated?.id,
+                    isAgency: quotes.length == 1 || q.id == bestRated?.id,
                     canSelect: _canSelect &&
                         job.status != JobStatus.quoted &&
                         job.status != JobStatus.enRoute &&
@@ -145,261 +134,106 @@ class _OfferCard extends StatelessWidget {
 
   static const _secondary = Color(0xFF855300);
   static const _secondaryContainer = Color(0xFFFEA619);
-  static const _onSecondaryContainer = Color(0xFF684000);
-  static const _surfaceLow = Color(0xFFEFF4FF);
   static const _surfaceHigh = Color(0xFFDCE9FF);
+
+  String get _conditionShort {
+    return switch (offer.partCondition) {
+      'oem' => 'أصلي',
+      'aftermarket' => 'تجاري',
+      'used' => 'مستعمل',
+      _ => offer.partCondition,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
-    final badgeLabel = isAgency ? 'أفضل خيار وكالة' : 'سعر اقتصادي';
-    final badgeIcon = isAgency ? Icons.verified : Icons.sell_outlined;
-    final km = offer.distanceKm;
-    final etaMin = km == null ? null : (12 + km * 2.2).clamp(20, 90).round();
+    final textTheme = Theme.of(context).textTheme;
+    final meta = <String>[
+      if (_conditionShort.isNotEmpty) _conditionShort,
+      if (offer.warrantyDays > 0) 'ضمان ${offer.warrantyDays}ي',
+    ].join(' · ');
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: isAgency
-            ? Border.all(color: Colors.black.withValues(alpha: 0.18), width: 2)
-            : null,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+            ? Border.all(color: Colors.black.withValues(alpha: 0.14))
+            : Border.all(color: AppColors.outline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isAgency
-                      ? _secondaryContainer
-                      : const Color(0xFFE5EEFF),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      badgeIcon,
-                      size: 14,
-                      color: isAgency
-                          ? _onSecondaryContainer
-                          : const Color(0xFF45464D),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      badgeLabel,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: isAgency
-                            ? _onSecondaryContainer
-                            : const Color(0xFF45464D),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              Row(
-                children: [
-                  const Icon(Icons.star_rounded,
-                      size: 16, color: _secondaryContainer),
-                  const SizedBox(width: 2),
-                  Text(
-                    offer.ratingAvg.toStringAsFixed(1),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: _secondary,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              AppSvgIcons.workshop(size: 24),
+              AppSvgIcons.workshop(size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   offer.technicianName ?? 'ورشة',
-                  style: const TextStyle(
+                  style: textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                    height: 1.35,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Icon(Icons.star_rounded,
+                  size: 14, color: _secondaryContainer),
+              const SizedBox(width: 2),
+              Text(
+                offer.ratingAvg.toStringAsFixed(1),
+                style: textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: _secondary,
                 ),
               ),
             ],
           ),
-          if (offer.specialtyAr.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.precision_manufacturing_outlined,
-                    size: 15, color: Color(0xFF45464D)),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    offer.specialtyAr,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF45464D),
-                    ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Text(
+                  meta.isEmpty ? 'حسب عرض الورشة' : meta,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: AppColors.inkSoft,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            ),
-          ],
-          if (etaMin != null) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.schedule, size: 16, color: Color(0xFF45464D)),
-                const SizedBox(width: 4),
-                Text(
-                  '~$etaMin د',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF45464D),
-                  ),
+              ),
+              Text(
+                offer.initialPrice == null
+                    ? '—'
+                    : formatIqd(offer.initialPrice!),
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: isAgency ? _secondary : AppColors.ink,
                 ),
-              ],
-            ),
-          ],
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: _surfaceLow,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'المواصفات والضمان',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF45464D),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        [
-                          if (offer.partCondition.isNotEmpty)
-                            switch (offer.partCondition) {
-                              'oem' => 'أصلي وكالة',
-                              'aftermarket' => 'تجاري',
-                              'used' => 'مستعمل مفحوص',
-                              _ => offer.partCondition,
-                            },
-                          if (offer.warrantyDays > 0)
-                            'ضمان ${offer.warrantyDays} يوم',
-                          if (offer.warrantyNote.isNotEmpty) offer.warrantyNote,
-                          if (offer.partCondition.isEmpty &&
-                              offer.warrantyDays <= 0)
-                            'حسب عرض الورشة',
-                        ].join(' · '),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    const Text(
-                      'السعر الإجمالي',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF45464D),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      offer.initialPrice == null
-                          ? '—'
-                          : formatIqd(offer.initialPrice!),
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: isAgency ? _secondary : AppColors.ink,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          if (offer.vendorNote.trim().isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              'ملاحظات',
-              style: const TextStyle(
-                fontSize: 11,
-                color: Color(0xFF45464D),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              offer.vendorNote.trim(),
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                height: 1.35,
-              ),
-            ),
-          ],
           if (canSelect) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             SizedBox(
-              height: 48,
+              height: 42,
               child: FilledButton(
                 onPressed: onAccept,
                 style: FilledButton.styleFrom(
                   backgroundColor: isAgency ? Colors.black : _surfaceHigh,
                   foregroundColor: isAgency ? Colors.white : AppColors.ink,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      isAgency ? Icons.check_circle_outline : Icons.done,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      isAgency ? 'قبول' : 'قبول',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  'قبول',
+                  style: textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),

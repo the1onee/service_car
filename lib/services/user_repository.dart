@@ -101,7 +101,10 @@ class UserRepository {
     }
     final user = await get(uid);
     if (user == null ||
-        (!user.isTechnician && !user.isWorkshop && !user.isOilWorkshop)) {
+        (!user.isTechnician &&
+            !user.isWorkshop &&
+            !user.isOilWorkshop &&
+            !user.isPaintShop)) {
       return const OnlineResult.blocked(OnlineBlock.pending);
     }
     if (user.verificationStatus == VerificationStatus.rejected && !user.verified) {
@@ -133,6 +136,16 @@ class UserRepository {
       }
       if (user.vehicleTypeIds.isEmpty) {
         patch['vehicleTypeIds'] = seedVehicleTypes.map((t) => t.id).toList();
+      }
+    } else if (user.isPaintShop) {
+      if (user.serviceIds.isEmpty) {
+        patch['serviceIds'] = seedServices
+            .where((s) => s.id == 'paint' || s.category == 'paint')
+            .map((s) => s.id)
+            .toList();
+        if ((patch['serviceIds'] as List).isEmpty) {
+          patch['serviceIds'] = const ['paint'];
+        }
       }
     } else {
       if (user.serviceIds.isEmpty) {
@@ -330,7 +343,7 @@ class UserRepository {
     }, SetOptions(merge: true));
   }
 
-  /// يبقي المزوّد المعتمد جاهزاً للتوزيع (بدون مفتاح متصل/غير متصل).
+  /// يجهّز serviceIds/vehicleTypes للمزوّد المعتمد دون فرض isOnline (يُدار بزر نشط).
   Future<void> ensureProviderReady(String uid) async {
     final user = await get(uid);
     if (user == null) return;
@@ -341,7 +354,7 @@ class UserRepository {
       return;
     }
     if (!user.isApproved) return;
-    final patch = <String, dynamic>{'isOnline': true};
+    final patch = <String, dynamic>{};
     if (user.isWorkshop) {
       if (user.serviceIds.isEmpty) patch['serviceIds'] = const ['parts'];
     } else if (user.isOilWorkshop) {
@@ -370,6 +383,7 @@ class UserRepository {
         patch['vehicleTypeIds'] = seedVehicleTypes.map((t) => t.id).toList();
       }
     }
+    if (patch.isEmpty) return;
     await _userRef(uid).set(patch, SetOptions(merge: true));
   }
 

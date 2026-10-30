@@ -16,6 +16,7 @@ import 'package:barrr/features/customer/customer_landing.dart';
 import 'package:barrr/features/customer/customer_request_map.dart';
 import 'package:barrr/features/customer/customer_ledger_page.dart';
 import 'package:barrr/features/customer/customer_account_page.dart';
+import 'package:barrr/features/customer/job_status_panel.dart';
 import 'package:barrr/features/customer/parts_order_screen.dart';
 import 'package:barrr/features/customer/technician_request_form.dart';
 import 'package:barrr/features/customer/oil_request_form.dart';
@@ -586,34 +587,22 @@ class _CustomerHomeState extends State<CustomerHome> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (job != null && job.isPartsOrder)
-              Material(
-                color: AppColors.azureTint,
-                child: InkWell(
-                  onTap: () => _onTab(1),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.local_offer_outlined, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            job.partName.isNotEmpty
-                                ? job.partName
-                                : 'عروض قطع',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        const Icon(Icons.chevron_left, size: 20),
-                      ],
+              Flexible(
+                flex: 3,
+                child: Material(
+                  color: AppColors.surface,
+                  elevation: 1,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                    child: CustomerJobPanel(
+                      job: job,
+                      me: widget.profile,
                     ),
                   ),
                 ),
               ),
             Expanded(
+              flex: job != null && job.isPartsOrder ? 2 : 1,
               child: CustomerLanding(
                 profile: widget.profile,
                 city: _zone?.nameAr,
@@ -662,18 +651,14 @@ class _CustomerHomeState extends State<CustomerHome> {
 
   Future<void> _onLandingService(ServiceItem s) async {
     if (s.id == 'parts') {
-      final result = await Navigator.of(context).push<PartsOrderResult>(
-        softPageRoute(
+      await Navigator.of(context).push<PartsOrderResult>(
+        cupertinoSoftPageRoute(
           builder: (_) => PartsOrderScreen(
             profile: widget.profile,
             service: s,
           ),
         ),
       );
-      if (!mounted) return;
-      if (result?.goOrders == true) {
-        _onTab(1);
-      }
       return;
     }
     setState(() {
