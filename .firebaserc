@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "car-services-iraq"
+    "default": "car-services-iraq",
+    "production": "car-services-iraq",
+    "staging": "car-services-iraq-staging"
   }
 }

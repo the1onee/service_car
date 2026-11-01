@@ -19,6 +19,9 @@ workflows:
       - name: Build IPA
         script: |
           flutter build ipa --release \
+            --flavor production \
+            --dart-define=APP_ENV=production \
+            --dart-define=BARRR_API_BASE=https://albatariq.com \
             --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa

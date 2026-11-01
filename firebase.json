@@ -1,5 +1,11 @@
 {
   "auth": {
+    "authorizedDomains": [
+      "localhost",
+      "car-services-iraq-staging.firebaseapp.com",
+      "car-services-iraq-staging.web.app",
+      "staging.31.220.90.124.nip.io"
+    ],
     "providers": {
       "emailPassword": true,
       "googleSignIn": {

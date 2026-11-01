@@ -1,0 +1,30 @@
+name: Build staging app
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - name: Build isolated staging APK
+        run: >-
+          flutter build apk --debug
+          --flavor staging
+          --dart-define=APP_ENV=staging
+          --dart-define=BARRR_API_BASE=https://api-staging.31.220.90.124.nip.io
+      - uses: actions/upload-artifact@v4
+        with:
+          name: albatariq-staging-android
+          path: build/app/outputs/flutter-apk/app-staging-debug.apk
+          retention-days: 14

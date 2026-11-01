@@ -35,6 +35,20 @@ android {
         versionName = flutter.versionName
     }
 
+    flavorDimensions += "environment"
+    productFlavors {
+        create("production") {
+            dimension = "environment"
+            resValue("string", "app_name", "البطريق")
+        }
+        create("staging") {
+            dimension = "environment"
+            applicationIdSuffix = ".staging"
+            versionNameSuffix = "-staging"
+            resValue("string", "app_name", "البطريق Staging")
+        }
+    }
+
     signingConfigs {
         if (hasReleaseKeystore) {
             create("release") {

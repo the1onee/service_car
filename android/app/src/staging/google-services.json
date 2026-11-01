@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "747129120691",
+    "project_id": "car-services-iraq-staging",
+    "storage_bucket": "car-services-iraq-staging.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:747129120691:android:bbc2fe86d2338e9c3dcdc6",
+        "android_client_info": {
+          "package_name": "com.albatariq.app.staging"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-YRAXHT9I68janjnY1DGoDr9UUssEyqI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
