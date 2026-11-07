@@ -27,6 +27,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // AGP 9 defaults resValues=false; flavors use resValue for app_name.
+    buildFeatures {
+        resValues = true
+    }
+
     defaultConfig {
         applicationId = "com.albatariq.app"
         minSdk = flutter.minSdkVersion
