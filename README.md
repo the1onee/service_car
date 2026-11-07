@@ -1,5 +1,7 @@
 # البطريق (Flutter + Firebase)
 
+**الكتيّب الشامل للمشغّل (ابدأ هنا):** [HANDBOOK.md](./HANDBOOK.md) — شرح من الأساس للكود والنشر وحل المشاكل.
+
 **دليل سريع:** [GUIDE.md](./GUIDE.md) — الشعار والهوية: `assets/branding/brand.env` + `logo.png`.  
 **إنتاج:** [PRODUCTION.md](./PRODUCTION.md).
 
