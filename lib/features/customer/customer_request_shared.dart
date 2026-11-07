@@ -7,6 +7,7 @@ import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/shared/osm_map.dart';
 import 'package:barrr/models/app_settings.dart';
+import 'package:barrr/services/car_years_catalog.dart';
 
 /// هل النقطة ضمن نطاق المدينة؟
 bool requestPointInZone(LatLng p, CityZone? zone) {
@@ -180,6 +181,78 @@ InputDecoration requestInputDecoration({required String hint}) {
     ),
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
   );
+}
+
+/// قائمة منسدلة لسنة الصنع (من كتالوج الأدمن أو 1885–2027).
+class CarYearDropdown extends StatefulWidget {
+  const CarYearDropdown({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.required = true,
+    this.decoration,
+  });
+
+  final String? value;
+  final ValueChanged<String?> onChanged;
+  final bool required;
+  final InputDecoration? decoration;
+
+  @override
+  State<CarYearDropdown> createState() => _CarYearDropdownState();
+}
+
+class _CarYearDropdownState extends State<CarYearDropdown> {
+  List<int> _years = const [];
+  var _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final years = await loadCarYears();
+    if (!mounted) return;
+    if (!mounted) return;
+    setState(() {
+      _years = years;
+      _loading = false;
+    });
+    final current = int.tryParse(widget.value ?? '');
+    if (current != null && !_years.contains(current)) {
+      widget.onChanged(null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = int.tryParse(widget.value ?? '');
+    final value =
+        selected != null && _years.contains(selected) ? selected : null;
+    return DropdownButtonFormField<int>(
+      key: ValueKey('car-year-$value-${_years.length}'),
+      initialValue: value,
+      isExpanded: true,
+      decoration: widget.decoration ??
+          requestInputDecoration(hint: _loading ? 'جارٍ التحميل…' : 'اختر السنة'),
+      hint: Text(_loading ? 'جارٍ التحميل…' : 'اختر السنة'),
+      items: [
+        for (final y in _years)
+          DropdownMenuItem<int>(
+            value: y,
+            child: Text('$y', overflow: TextOverflow.ellipsis),
+          ),
+      ],
+      onChanged: _loading
+          ? null
+          : (y) => widget.onChanged(y == null ? null : '$y'),
+      validator: widget.required
+          ? (v) => v == null ? 'اختر سنة الصنع.' : null
+          : null,
+    );
+  }
 }
 
 Widget requestStepHeader(

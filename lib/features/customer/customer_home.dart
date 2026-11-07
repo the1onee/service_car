@@ -10,7 +10,6 @@ import 'package:barrr/data/service_catalog.dart';
 import 'package:barrr/core/constants.dart';
 import 'package:barrr/core/geo.dart';
 import 'package:barrr/core/strings.dart';
-import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/customer/customer_landing.dart';
 import 'package:barrr/features/customer/customer_request_map.dart';
@@ -583,51 +582,36 @@ class _CustomerHomeState extends State<CustomerHome> {
             showBack: true,
           );
         }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (job != null && job.isPartsOrder)
-              Flexible(
-                flex: 3,
-                child: Material(
-                  color: AppColors.surface,
-                  elevation: 1,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                    child: CustomerJobPanel(
-                      job: job,
-                      me: widget.profile,
-                    ),
-                  ),
+        // طلب قطع نشط: لوحة الطلب فقط — بدون الرئيسية أسفلها.
+        if (job != null && job.isPartsOrder) {
+          return CustomerJobPanel(
+            job: job,
+            me: widget.profile,
+            fullscreen: true,
+          );
+        }
+        return CustomerLanding(
+          profile: widget.profile,
+          city: _zone?.nameAr,
+          addressLabel: _addressLabel,
+          services: catalog,
+          recentJobs: recent,
+          onServiceTap: _onLandingService,
+          onEmergencyTap: _onPartsHero,
+          onOpenWarranties: () {
+            Navigator.of(context).push(
+              softPageRoute<void>(
+                builder: (_) => WarrantiesScreen(
+                  stream: AppScope.of(context)
+                      .jobs
+                      .watchRecentForCustomer(widget.profile.id),
+                  profile: widget.profile,
                 ),
               ),
-            Expanded(
-              flex: job != null && job.isPartsOrder ? 2 : 1,
-              child: CustomerLanding(
-                profile: widget.profile,
-                city: _zone?.nameAr,
-                addressLabel: _addressLabel,
-                services: catalog,
-                recentJobs: recent,
-                onServiceTap: _onLandingService,
-                onEmergencyTap: _onPartsHero,
-                onOpenWarranties: () {
-                  Navigator.of(context).push(
-                    softPageRoute<void>(
-                      builder: (_) => WarrantiesScreen(
-                        stream: AppScope.of(context)
-                            .jobs
-                            .watchRecentForCustomer(widget.profile.id),
-                        profile: widget.profile,
-                      ),
-                    ),
-                  );
-                },
-                onOpenAccount: () => _onTab(3),
-                onRefresh: _refreshLanding,
-              ),
-            ),
-          ],
+            );
+          },
+          onOpenAccount: () => _onTab(3),
+          onRefresh: _refreshLanding,
         );
       },
     );

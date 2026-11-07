@@ -18,6 +18,8 @@ class DispatchCandidate {
     required this.specialtyId,
     required this.specialtyIds,
     required this.specialtyAr,
+    this.yearFrom,
+    this.yearTo,
   });
 
   final String id;
@@ -34,6 +36,10 @@ class DispatchCandidate {
   final String specialtyId;
   final List<String> specialtyIds;
   final String specialtyAr;
+
+  /// نطاق سنوات قطع الغيار التي تغطيها الورشة (null = غير مضبوط).
+  final int? yearFrom;
+  final int? yearTo;
 }
 
 /// معايير الفلترة التي تأتي من الطلب (Job) والإعدادات.
@@ -48,6 +54,7 @@ class DispatchFilter {
     required this.specialtyId,
     required this.minWallet,
     required this.usedProviderIds,
+    this.carYear = '',
   });
 
   final bool isPartsOrder;
@@ -59,6 +66,15 @@ class DispatchFilter {
   final String specialtyId;
   final double minWallet;
   final Set<String> usedProviderIds;
+
+  /// سنة صنع المركبة على طلب القطع.
+  final String carYear;
+}
+
+int? parseDispatchCarYear(String? raw) {
+  final s = (raw ?? '').trim();
+  if (s.isEmpty) return null;
+  return int.tryParse(s);
 }
 
 /// تصفية وترتيب المرشحين بدالة نقية (pure) قابلة للاختبار.
@@ -106,10 +122,22 @@ List<DispatchCandidate> filterAndRankCandidates({
       }
     }
 
+    // 7. نطاق سنوات ورشة القطع
+    if (filter.isPartsOrder) {
+      final year = parseDispatchCarYear(filter.carYear);
+      if (year == null) return false;
+      final from = t.yearFrom;
+      final to = t.yearTo;
+      if (from == null || to == null) return false;
+      final lo = from <= to ? from : to;
+      final hi = from <= to ? to : from;
+      if (year < lo || year > hi) return false;
+    }
+
     return true;
   }).toList();
 
-  // 7. تطابق اختصاص صارم لطلبات القطع
+  // 8. تطابق اختصاص صارم لطلبات القطع
   final specialized = filtered.where((t) {
     if (filter.isPartsOrder && filter.specialtyId.isNotEmpty) {
       return t.specialtyIds.contains(filter.specialtyId);
@@ -117,10 +145,10 @@ List<DispatchCandidate> filterAndRankCandidates({
     return true;
   }).toList();
 
-  // 8. ترتيب بالمسافة
+  // 9. ترتيب بالمسافة
   specialized.sort((a, b) => a.km.compareTo(b.km));
 
-  // 9. تطبيق الحد الأقصى
+  // 10. تطبيق الحد الأقصى
   final limit = maxResults ?? AppConstants.maxCandidatesPerDispatch;
   if (specialized.length > limit) {
     return specialized.sublist(0, limit);

@@ -34,6 +34,8 @@ class AppUser {
     this.verificationStatus = VerificationStatus.pending,
     this.walletBalance = 0,
     this.commissionPercent = 0,
+    this.yearFrom,
+    this.yearTo,
     this.termsAcceptedVersion = '',
   });
 
@@ -69,6 +71,10 @@ class AppUser {
   final double walletBalance;
   /// نسبة عمولة ورشة القطع (٥ تعني ٥٪). يحدّدها الأدمن عند التسجيل.
   final double commissionPercent;
+
+  /// نطاق سنوات قطع الغيار التي تغطيها ورشة القطع.
+  final int? yearFrom;
+  final int? yearTo;
 
   /// آخر نسخة شروط استخدام وافق عليها المستخدم.
   final String termsAcceptedVersion;
@@ -134,6 +140,8 @@ class AppUser {
         'verificationStatus': verificationStatus.name,
         'walletBalance': walletBalance,
         'commissionPercent': commissionPercent,
+        if (yearFrom != null) 'yearFrom': yearFrom,
+        if (yearTo != null) 'yearTo': yearTo,
         if (termsAcceptedVersion.isNotEmpty)
           'termsAcceptedVersion': termsAcceptedVersion,
       };
@@ -191,6 +199,8 @@ class AppUser {
       verificationStatus: _statusOf(d['verificationStatus'], verifiedFlag),
       walletBalance: (d['walletBalance'] as num?)?.toDouble() ?? 0,
       commissionPercent: (d['commissionPercent'] as num?)?.toDouble() ?? 0,
+      yearFrom: (d['yearFrom'] as num?)?.round(),
+      yearTo: (d['yearTo'] as num?)?.round(),
       termsAcceptedVersion: d['termsAcceptedVersion'] as String? ?? '',
     );
   }
@@ -251,6 +261,8 @@ class AppUser {
       verificationStatus: verificationStatus ?? this.verificationStatus,
       walletBalance: walletBalance ?? this.walletBalance,
       commissionPercent: commissionPercent,
+      yearFrom: yearFrom,
+      yearTo: yearTo,
       termsAcceptedVersion: termsAcceptedVersion ?? this.termsAcceptedVersion,
     );
   }

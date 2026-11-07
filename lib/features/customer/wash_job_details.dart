@@ -25,7 +25,7 @@ class WashJobDetailsCard extends StatelessWidget {
     bool showPhone = false,
   }) {
     return WashJobDetailsCard(
-      packageName: job.washDisplayTitle,
+      packageName: job.washPackageLabel,
       vehicleTypeTitle: job.vehicleTypeTitle,
       carSummary: job.carSummary,
       landmark: job.landmark,
@@ -41,7 +41,7 @@ class WashJobDetailsCard extends StatelessWidget {
     bool compact = false,
   }) {
     return WashJobDetailsCard(
-      packageName: offer.washDisplayTitle,
+      packageName: offer.washPackageLabel,
       vehicleTypeTitle: offer.vehicleTypeTitle,
       carSummary: offer.carSummary,
       landmark: offer.landmark,
