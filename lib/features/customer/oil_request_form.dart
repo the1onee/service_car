@@ -50,8 +50,8 @@ class OilRequestForm extends StatefulWidget {
 class _OilRequestFormState extends State<OilRequestForm> {
   final _map = MapController();
   final _vehicle = TextEditingController();
-  final _year = TextEditingController();
   final _landmark = TextEditingController();
+  String? _year;
   final _phone = TextEditingController();
 
   late LatLng _pin;
@@ -78,7 +78,6 @@ class _OilRequestFormState extends State<OilRequestForm> {
   @override
   void dispose() {
     _vehicle.dispose();
-    _year.dispose();
     _landmark.dispose();
     _phone.dispose();
     _map.dispose();
@@ -190,6 +189,11 @@ class _OilRequestFormState extends State<OilRequestForm> {
       AppSnackBar.showError(context, 'أدخل رقم الاتصال');
       return;
     }
+    final year = (_year ?? '').trim();
+    if (year.isEmpty) {
+      AppSnackBar.showError(context, 'اختر سنة الصنع');
+      return;
+    }
 
     final vehicleRaw = _vehicle.text.trim();
     var make = vehicleRaw;
@@ -233,7 +237,7 @@ class _OilRequestFormState extends State<OilRequestForm> {
         partNote: note,
         carMake: make,
         carModel: model,
-        carYear: _year.text.trim(),
+        carYear: year,
         customerPhone: phone,
         providerKind: 'oilWorkshop',
         oilTypeId: oil.id,
@@ -364,11 +368,10 @@ class _OilRequestFormState extends State<OilRequestForm> {
                                       children: [
                                         const RequestFormLabel('سنة الصنع'),
                                         const SizedBox(height: 6),
-                                        RequestIconField(
-                                          controller: _year,
-                                          icon: Icons.calendar_today_outlined,
-                                          hint: '2022',
-                                          keyboardType: TextInputType.number,
+                                        CarYearDropdown(
+                                          value: _year,
+                                          onChanged: (v) =>
+                                              setState(() => _year = v),
                                         ),
                                       ],
                                     ),

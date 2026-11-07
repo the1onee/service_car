@@ -42,8 +42,8 @@ class PartsOrderScreen extends StatefulWidget {
 class _PartsOrderScreenState extends State<PartsOrderScreen> {
   final _form = GlobalKey<FormState>();
   final _vehicle = TextEditingController();
-  final _carYear = TextEditingController();
   final _partDetails = TextEditingController();
+  String? _carYear;
   final _address = TextEditingController();
   final _phone = TextEditingController();
   final _uploader = CloudinaryUpload();
@@ -104,7 +104,6 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
   @override
   void dispose() {
     _vehicle.dispose();
-    _carYear.dispose();
     _partDetails.dispose();
     _address.dispose();
     _phone.dispose();
@@ -205,7 +204,7 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
         partImageUrl: _partImageUrl ?? '',
         carMake: make,
         carModel: model,
-        carYear: _carYear.text.trim(),
+        carYear: (_carYear ?? '').trim(),
         customerPhone: _phone.text.trim(),
         deliveryAddress: address,
         providerKind: 'workshop',
@@ -481,11 +480,10 @@ class _PartsOrderScreenState extends State<PartsOrderScreen> {
                           ),
                           const SizedBox(height: 12),
                           const RequestFormLabel('سنة الصنع'),
-                          TextFormField(
-                            controller: _carYear,
-                            keyboardType: TextInputType.number,
-                            textInputAction: TextInputAction.next,
-                            decoration: _fieldDeco(hint: 'مثال: 2021'),
+                          CarYearDropdown(
+                            value: _carYear,
+                            onChanged: (v) => setState(() => _carYear = v),
+                            decoration: _fieldDeco(hint: 'اختر السنة'),
                           ),
                           const SizedBox(height: 12),
                           const RequestFormLabel('القطعة'),

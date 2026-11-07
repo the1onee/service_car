@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:barrr/core/constants.dart';
+import 'package:barrr/models/job.dart';
 
 /// مهلة العرض من وقت السيرفر، لا من ساعة الهاتف.
 /// إذا كانت ساعة الجهاز متأخرة يُحفظ expiresAt قبل createdAt فيختفي الطلب.
@@ -134,10 +135,14 @@ class JobOffer {
       pickupLabel.isNotEmpty ||
       partName.contains('سطحة');
 
-  String get washDisplayTitle {
-    if (washPackageName.trim().isNotEmpty) return washPackageName.trim();
-    if (partName.trim().isNotEmpty) return partName.trim();
-    return serviceTitle ?? 'غسيل سيارات';
+  String get washDisplayTitle => Job.washServiceTitle;
+
+  String get washPackageLabel {
+    final pkg = washPackageName.trim();
+    if (pkg.isNotEmpty) return pkg;
+    final part = partName.trim();
+    if (part.isNotEmpty) return part;
+    return '';
   }
 
   String get oilDisplayTitle {

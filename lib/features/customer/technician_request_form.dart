@@ -48,8 +48,8 @@ class TechnicianRequestForm extends StatefulWidget {
 class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
   final _map = MapController();
   final _vehicle = TextEditingController();
-  final _year = TextEditingController();
   final _note = TextEditingController();
+  String? _year;
   final _landmark = TextEditingController();
   final _phone = TextEditingController();
   final _uploader = CloudinaryUpload();
@@ -76,7 +76,6 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
   @override
   void dispose() {
     _vehicle.dispose();
-    _year.dispose();
     _note.dispose();
     _landmark.dispose();
     _phone.dispose();
@@ -171,6 +170,11 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
       AppSnackBar.showError(context, 'أدخل رقم الاتصال');
       return;
     }
+    final year = (_year ?? '').trim();
+    if (year.isEmpty) {
+      AppSnackBar.showError(context, 'اختر سنة الصنع');
+      return;
+    }
 
     final vehicleRaw = _vehicle.text.trim();
     var make = vehicleRaw;
@@ -212,7 +216,7 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
         partImageUrl: _imageUrl ?? '',
         carMake: make,
         carModel: model,
-        carYear: _year.text.trim(),
+        carYear: year,
         customerPhone: phone,
         providerKind: service.providerKind.firestoreValue,
         landmark: landmark,
@@ -370,11 +374,9 @@ class _TechnicianRequestFormState extends State<TechnicianRequestForm> {
                               const SizedBox(height: 12),
                               const RequestFormLabel('سنة الصنع'),
                               const SizedBox(height: 6),
-                              RequestIconField(
-                                controller: _year,
-                                icon: Icons.calendar_today_outlined,
-                                hint: '2021',
-                                keyboardType: TextInputType.number,
+                              CarYearDropdown(
+                                value: _year,
+                                onChanged: (v) => setState(() => _year = v),
                               ),
                             ],
                           ),

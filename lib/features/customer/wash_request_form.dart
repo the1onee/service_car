@@ -12,6 +12,7 @@ import 'package:barrr/features/customer/customer_request_shared.dart';
 import 'package:barrr/features/shared/address_map_picker.dart';
 import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
+import 'package:barrr/models/job.dart';
 import 'package:barrr/models/service_item.dart';
 import 'package:barrr/models/vehicle_type.dart';
 
@@ -82,7 +83,6 @@ class WashRequestForm extends StatefulWidget {
 class _WashRequestFormState extends State<WashRequestForm> {
   final _map = MapController();
   final _vehicle = TextEditingController();
-  final _year = TextEditingController();
   final _note = TextEditingController();
   final _landmark = TextEditingController();
   final _phone = TextEditingController();
@@ -107,7 +107,6 @@ class _WashRequestFormState extends State<WashRequestForm> {
   @override
   void dispose() {
     _vehicle.dispose();
-    _year.dispose();
     _note.dispose();
     _landmark.dispose();
     _phone.dispose();
@@ -155,7 +154,7 @@ class _WashRequestFormState extends State<WashRequestForm> {
       (s) => s.id == 'wash',
       orElse: () => const ServiceItem(
         id: 'wash',
-        titleAr: 'غسيل السيارات',
+        titleAr: Job.washServiceTitle,
         category: 'عناية',
         providerKind: ServiceProviderKind.mobile,
       ),
@@ -205,7 +204,7 @@ class _WashRequestFormState extends State<WashRequestForm> {
       final jobId = await scope.jobs.createJob(
         customerId: widget.profile.id,
         serviceId: washService.id,
-        serviceTitle: washService.titleAr,
+        serviceTitle: Job.washServiceTitle,
         vehicleTypeId: vehicleType.id,
         vehicleTypeTitle: vehicleType.nameAr,
         exact: geo,
@@ -215,7 +214,7 @@ class _WashRequestFormState extends State<WashRequestForm> {
         partNote: note,
         carMake: make,
         carModel: model,
-        carYear: _year.text.trim(),
+        carYear: '',
         customerPhone: phone,
         providerKind: washService.providerKind.firestoreValue,
         landmark: landmark,
@@ -308,41 +307,12 @@ class _WashRequestFormState extends State<WashRequestForm> {
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        const RequestFormLabel('الشركة ونوع الشركة'),
-                                        const SizedBox(height: 6),
-                                        RequestIconField(
-                                          controller: _vehicle,
-                                          icon: Icons.directions_car_outlined,
-                                          hint: 'تويوتا كامري',
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        const RequestFormLabel('سنة الصنع'),
-                                        const SizedBox(height: 6),
-                                        RequestIconField(
-                                          controller: _year,
-                                          icon: Icons.calendar_today_outlined,
-                                          hint: '2022',
-                                          keyboardType: TextInputType.number,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
+                              const RequestFormLabel('الشركة ونوع الشركة'),
+                              const SizedBox(height: 6),
+                              RequestIconField(
+                                controller: _vehicle,
+                                icon: Icons.directions_car_outlined,
+                                hint: 'تويوتا كامري',
                               ),
                             ],
                           ),

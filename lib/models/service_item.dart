@@ -107,9 +107,14 @@ class ServiceItem {
             providerKind: providerKind,
             isEmergency: isEmergency,
           );
+    final rawTitle = (data['titleAr'] as String?)?.trim() ?? '';
+    // عنوان الغسيل ثابت في الواجهة مهما تغيّر في Firestore.
+    final titleAr = id == 'wash'
+        ? 'غسيل سيارات'
+        : (rawTitle.isNotEmpty ? rawTitle : id);
     return ServiceItem(
       id: id,
-      titleAr: data['titleAr'] as String? ?? id,
+      titleAr: titleAr,
       category: data['category'] as String? ?? '',
       isEmergency: isEmergency,
       active: data['active'] as bool? ?? true,

@@ -187,10 +187,18 @@ class Job {
     return serviceTitle ?? 'تبديل زيت';
   }
 
-  String get washDisplayTitle {
-    if (washPackageName.trim().isNotEmpty) return washPackageName.trim();
-    if (partName.trim().isNotEmpty) return partName.trim();
-    return serviceTitle ?? 'غسيل سيارات';
+  /// عنوان الخدمة المعروض دائماً — لا يتغيّر باسم الباقة.
+  static const washServiceTitle = 'غسيل سيارات';
+
+  String get washDisplayTitle => washServiceTitle;
+
+  /// اسم باقة الغسيل فقط (خارجي / كامل / تلميع…).
+  String get washPackageLabel {
+    final pkg = washPackageName.trim();
+    if (pkg.isNotEmpty) return pkg;
+    final part = partName.trim();
+    if (part.isNotEmpty) return part;
+    return '';
   }
 
   String get carSummary {

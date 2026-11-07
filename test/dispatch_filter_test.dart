@@ -19,6 +19,8 @@ DispatchCandidate _candidate({
   String specialtyId = '',
   List<String> specialtyIds = const [],
   String specialtyAr = '',
+  int? yearFrom,
+  int? yearTo,
 }) =>
     DispatchCandidate(
       id: id,
@@ -35,6 +37,8 @@ DispatchCandidate _candidate({
       specialtyId: specialtyId,
       specialtyIds: specialtyIds,
       specialtyAr: specialtyAr,
+      yearFrom: yearFrom,
+      yearTo: yearTo,
     );
 
 DispatchFilter _filter({
@@ -47,6 +51,7 @@ DispatchFilter _filter({
   String specialtyId = '',
   double minWallet = 10000,
   Set<String> usedProviderIds = const {},
+  String carYear = '',
 }) =>
     DispatchFilter(
       isPartsOrder: isPartsOrder,
@@ -58,6 +63,7 @@ DispatchFilter _filter({
       specialtyId: specialtyId,
       minWallet: minWallet,
       usedProviderIds: usedProviderIds,
+      carYear: carYear,
     );
 
 // ─── tests ──────────────────────────────────────────────────────────────────
@@ -107,8 +113,10 @@ void main() {
 
     test('parts orders skip wallet check entirely', () {
       final result = filterAndRankCandidates(
-        all: [_candidate(wallet: 0, isWorkshop: false)],
-        filter: _filter(isPartsOrder: true),
+        all: [
+          _candidate(wallet: 0, isWorkshop: false, yearFrom: 2000, yearTo: 2027),
+        ],
+        filter: _filter(isPartsOrder: true, carYear: '2020'),
       );
       expect(result, hasLength(1));
     });
@@ -142,8 +150,15 @@ void main() {
 
     test('parts-order workshops skip service filter', () {
       final result = filterAndRankCandidates(
-        all: [_candidate(isWorkshop: true, serviceIds: ['other'])],
-        filter: _filter(isPartsOrder: true, serviceId: 'svc1'),
+        all: [
+          _candidate(
+            isWorkshop: true,
+            serviceIds: ['other'],
+            yearFrom: 2000,
+            yearTo: 2027,
+          ),
+        ],
+        filter: _filter(isPartsOrder: true, serviceId: 'svc1', carYear: '2015'),
       );
       expect(result, hasLength(1));
     });
@@ -158,20 +173,27 @@ void main() {
     });
 
     test('parts orders use maxPartsMatchKm instead', () {
-      final midRange =
-          _candidate(km: AppConstants.maxMatchKm + 10); // > 25 but < 120
+      final midRange = _candidate(
+        km: AppConstants.maxMatchKm + 10, // > 25 but < 120
+        yearFrom: 2000,
+        yearTo: 2027,
+      );
       final result = filterAndRankCandidates(
         all: [midRange],
-        filter: _filter(isPartsOrder: true),
+        filter: _filter(isPartsOrder: true, carYear: '2018'),
       );
       expect(result, hasLength(1));
     });
 
     test('excludes candidates beyond maxPartsMatchKm for parts', () {
-      final tooFar = _candidate(km: AppConstants.maxPartsMatchKm + 1);
+      final tooFar = _candidate(
+        km: AppConstants.maxPartsMatchKm + 1,
+        yearFrom: 2000,
+        yearTo: 2027,
+      );
       final result = filterAndRankCandidates(
         all: [tooFar],
-        filter: _filter(isPartsOrder: true),
+        filter: _filter(isPartsOrder: true, carYear: '2018'),
       );
       expect(result, isEmpty);
     });
@@ -198,10 +220,24 @@ void main() {
     test('specialty filter for parts orders', () {
       final result = filterAndRankCandidates(
         all: [
-          _candidate(id: 'match', specialtyIds: ['sp1']),
-          _candidate(id: 'no', specialtyIds: ['sp2']),
+          _candidate(
+            id: 'match',
+            specialtyIds: ['sp1'],
+            yearFrom: 2000,
+            yearTo: 2027,
+          ),
+          _candidate(
+            id: 'no',
+            specialtyIds: ['sp2'],
+            yearFrom: 2000,
+            yearTo: 2027,
+          ),
         ],
-        filter: _filter(isPartsOrder: true, specialtyId: 'sp1'),
+        filter: _filter(
+          isPartsOrder: true,
+          specialtyId: 'sp1',
+          carYear: '2021',
+        ),
       );
       expect(result.map((c) => c.id), ['match']);
     });
@@ -209,12 +245,34 @@ void main() {
     test('specialty filter skipped when specialtyId is empty', () {
       final result = filterAndRankCandidates(
         all: [
-          _candidate(id: 'a', specialtyIds: ['sp1']),
-          _candidate(id: 'b', specialtyIds: ['sp2']),
+          _candidate(
+            id: 'a',
+            specialtyIds: ['sp1'],
+            yearFrom: 2000,
+            yearTo: 2027,
+          ),
+          _candidate(
+            id: 'b',
+            specialtyIds: ['sp2'],
+            yearFrom: 2000,
+            yearTo: 2027,
+          ),
         ],
-        filter: _filter(isPartsOrder: true, specialtyId: ''),
+        filter: _filter(isPartsOrder: true, specialtyId: '', carYear: '2021'),
       );
       expect(result, hasLength(2));
+    });
+
+    test('parts year range filter', () {
+      final result = filterAndRankCandidates(
+        all: [
+          _candidate(id: 'modern', yearFrom: 2020, yearTo: 2027),
+          _candidate(id: 'old', yearFrom: 1990, yearTo: 2019),
+          _candidate(id: 'missing'),
+        ],
+        filter: _filter(isPartsOrder: true, carYear: '2023'),
+      );
+      expect(result.map((c) => c.id), ['modern']);
     });
 
     test('results sorted by distance ascending', () {

@@ -40,7 +40,7 @@ const seedServices = <ServiceItem>[
   ),
   ServiceItem(
     id: 'wash',
-    titleAr: 'غسيل السيارات',
+    titleAr: 'غسيل سيارات',
     category: 'عناية',
     providerKind: ServiceProviderKind.mobile,
     sortOrder: 20,

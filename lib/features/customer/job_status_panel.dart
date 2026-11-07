@@ -20,10 +20,18 @@ import 'package:barrr/models/job.dart';
 import 'package:barrr/services/job_repository.dart';
 
 class CustomerJobPanel extends StatefulWidget {
-  const CustomerJobPanel({super.key, required this.job, required this.me});
+  const CustomerJobPanel({
+    super.key,
+    required this.job,
+    required this.me,
+    this.fullscreen = false,
+  });
 
   final Job job;
   final AppUser me;
+
+  /// شاشة كاملة (طلب قطع على الرئيسية) بدل ورقة سفلية فوق الخريطة.
+  final bool fullscreen;
 
   @override
   State<CustomerJobPanel> createState() => _CustomerJobPanelState();
@@ -67,8 +75,97 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
     });
   }
 
+  String get _serviceLabel {
+    if (job.isTowOrder) return job.serviceTitle ?? 'سطحة';
+    if (job.isWashOrder) return job.washDisplayTitle;
+    if (job.isOilOrder) return job.oilDisplayTitle;
+    return job.serviceTitle ?? job.serviceId;
+  }
+
+  bool get _isFullscreenWaiting =>
+      widget.fullscreen &&
+      (job.status == JobStatus.noTechnician ||
+          job.status == JobStatus.dispatching);
+
   @override
   Widget build(BuildContext context) {
+    if (_isFullscreenWaiting) {
+      return _buildFullscreenWaiting(context);
+    }
+
+    final fullscreen = widget.fullscreen;
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (!fullscreen)
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: AppColors.outlineStrong,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+          ),
+        Text(_title(job.status),
+            style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 4),
+        Text(
+          _serviceLabel,
+          style: TextStyle(
+            color: (job.isOilOrder || job.isWashOrder || job.isTowOrder)
+                ? AppColors.amberDeep
+                : AppColors.inkSoft,
+            fontWeight: (job.isOilOrder || job.isWashOrder || job.isTowOrder)
+                ? FontWeight.w700
+                : FontWeight.w400,
+          ),
+        ),
+        if (job.isTowOrder) ...[
+          const SizedBox(height: 10),
+          TowJobDetailsCard.fromJob(job, compact: true, showPhone: true),
+        ] else if (job.isWashOrder) ...[
+          const SizedBox(height: 10),
+          WashJobDetailsCard.fromJob(job, compact: true, showPhone: true),
+        ] else if (job.isOilOrder) ...[
+          const SizedBox(height: 10),
+          OilJobDetailsCard.fromJob(job, compact: true, showPhone: true),
+        ] else if (job.vehicleTypeTitle != null &&
+            job.vehicleTypeTitle!.trim().isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            'نوع السيارة: ${job.vehicleTypeTitle}',
+            style: const TextStyle(color: AppColors.inkSoft, fontSize: 13),
+          ),
+        ],
+        if (_showSteps(job.status)) ...[
+          const SizedBox(height: 14),
+          _Steps(
+            status: job.status,
+            isParts: job.isPartsOrder,
+            isWash: job.isWashOrder,
+            isTow: job.isTowOrder,
+          ),
+        ],
+        const SizedBox(height: 14),
+        ..._body(context),
+      ],
+    );
+
+    final scroll = SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(16, fullscreen ? 16 : 10, 16, 20),
+      child: body,
+    );
+
+    if (fullscreen) {
+      return Material(
+        color: AppColors.canvas,
+        child: SafeArea(child: scroll),
+      );
+    }
+
     return Material(
       color: AppColors.surface,
       elevation: 16,
@@ -77,77 +174,325 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
       child: ConstrainedBox(
         constraints:
             BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.62),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.outlineStrong,
-                    borderRadius: BorderRadius.circular(99),
+        child: scroll,
+      ),
+    );
+  }
+
+  Widget _buildFullscreenWaiting(BuildContext context) {
+    final jobs = AppScope.of(context).jobs;
+    final searching = job.status == JobStatus.dispatching;
+    final car = job.carSummary.trim();
+    final part = job.partName.trim();
+    final specialty = job.specialtyAr.trim();
+    final address = job.deliveryAddress.trim();
+
+    return Material(
+      color: AppColors.canvas,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.amberTint,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      searching
+                          ? Icons.radar_rounded
+                          : Icons.hourglass_top_rounded,
+                      color: AppColors.amberDeep,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _title(job.status),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _serviceLabel,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.amberDeep,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(18, 22, 18, 22),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: AppColors.outline),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.slate.withValues(alpha: 0.06),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 88,
+                            height: 88,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                begin: Alignment.topRight,
+                                end: Alignment.bottomLeft,
+                                colors: [
+                                  AppColors.amberTint,
+                                  AppColors.amber.withValues(alpha: 0.35),
+                                ],
+                              ),
+                            ),
+                            child: Icon(
+                              searching
+                                  ? Icons.search_rounded
+                                  : Icons.storefront_outlined,
+                              size: 40,
+                              color: AppColors.amberDeep,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Text(
+                            searching
+                                ? 'نبحث عن ورش مناسبة لطلبك'
+                                : 'لا يوجد مزوّد متاح الآن',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            searching
+                                ? 'سيصلك إشعار فور وصول عروض جديدة.'
+                                : AppStrings.waitingForProviderBody,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              height: 1.55,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF92400E),
+                            ),
+                          ),
+                          if (searching) ...[
+                            const SizedBox(height: 18),
+                            const SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.6,
+                                color: AppColors.amberDeep,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (car.isNotEmpty ||
+                        part.isNotEmpty ||
+                        specialty.isNotEmpty ||
+                        address.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: AppColors.outline),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Text(
+                              'تفاصيل الطلب',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                                color: AppColors.ink,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            if (specialty.isNotEmpty)
+                              _waitingDetailRow(
+                                Icons.category_outlined,
+                                'الاختصاص',
+                                specialty,
+                              ),
+                            if (car.isNotEmpty)
+                              _waitingDetailRow(
+                                Icons.directions_car_outlined,
+                                'المركبة',
+                                car,
+                              ),
+                            if (part.isNotEmpty)
+                              _waitingDetailRow(
+                                Icons.settings_outlined,
+                                'القطعة',
+                                part,
+                              ),
+                            if (address.isNotEmpty)
+                              _waitingDetailRow(
+                                Icons.location_on_outlined,
+                                'التوصيل',
+                                address,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.azureTint,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(
+                            Icons.autorenew_rounded,
+                            size: 20,
+                            color: AppColors.azure,
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'نعيد المحاولة تلقائياً كل فترة قصيرة.',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.ink,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FilledButton.icon(
+                    onPressed: () => jobs.maybeRedispatch(job.id),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.slate,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    icon: const Icon(Icons.refresh_rounded, size: 20),
+                    label: const Text(
+                      AppStrings.retrySearchProviders,
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  if (job.customerCanCancel) ...[
+                    const SizedBox(height: 10),
+                    OutlinedButton(
+                      onPressed: () => _confirmCancel(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.danger,
+                        side: const BorderSide(color: Color(0xFFFECACA)),
+                        backgroundColor: AppColors.dangerTint,
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text(
+                        AppStrings.cancelJob,
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _waitingDetailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: AppColors.inkSoft),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.inkSoft,
                   ),
                 ),
-              ),
-              Text(_title(job.status),
-                  style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 4),
-              Text(
-                job.isTowOrder
-                    ? (job.serviceTitle ?? 'سطحة')
-                    : job.isWashOrder
-                        ? job.washDisplayTitle
-                        : job.isOilOrder
-                            ? job.oilDisplayTitle
-                            : (job.serviceTitle ?? job.serviceId),
-                style: TextStyle(
-                  color: (job.isOilOrder ||
-                          job.isWashOrder ||
-                          job.isTowOrder)
-                      ? AppColors.amberDeep
-                      : AppColors.inkSoft,
-                  fontWeight: (job.isOilOrder ||
-                          job.isWashOrder ||
-                          job.isTowOrder)
-                      ? FontWeight.w700
-                      : FontWeight.w400,
-                ),
-              ),
-              if (job.isTowOrder) ...[
-                const SizedBox(height: 10),
-                TowJobDetailsCard.fromJob(job, compact: true, showPhone: true),
-              ] else if (job.isWashOrder) ...[
-                const SizedBox(height: 10),
-                WashJobDetailsCard.fromJob(job, compact: true, showPhone: true),
-              ] else if (job.isOilOrder) ...[
-                const SizedBox(height: 10),
-                OilJobDetailsCard.fromJob(job, compact: true, showPhone: true),
-              ] else if (job.vehicleTypeTitle != null &&
-                  job.vehicleTypeTitle!.trim().isNotEmpty) ...[
                 const SizedBox(height: 2),
                 Text(
-                  'نوع السيارة: ${job.vehicleTypeTitle}',
-                  style: const TextStyle(color: AppColors.inkSoft, fontSize: 13),
+                  value,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
+                    height: 1.35,
+                  ),
                 ),
               ],
-              if (_showSteps(job.status)) ...[
-                const SizedBox(height: 14),
-                _Steps(
-                  status: job.status,
-                  isParts: job.isPartsOrder,
-                  isWash: job.isWashOrder,
-                  isTow: job.isTowOrder,
-                ),
-              ],
-              const SizedBox(height: 14),
-              ..._body(context),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -245,10 +590,16 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
     final jobs = AppScope.of(context).jobs;
     final items = List<Widget>.of(_statusBody(context, jobs));
     if (job.customerCanCancel) {
-      items.add(const SizedBox(height: 8));
+      items.add(const SizedBox(height: 10));
       items.add(
         OutlinedButton(
           onPressed: () => _confirmCancel(context),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.danger,
+            side: const BorderSide(color: Color(0xFFFECACA)),
+            backgroundColor: AppColors.dangerTint,
+            minimumSize: const Size.fromHeight(46),
+          ),
           child: const Text(AppStrings.cancelJob),
         ),
       );
@@ -627,20 +978,38 @@ class _CustomerJobPanelState extends State<CustomerJobPanel> {
             decoration: BoxDecoration(
               color: AppColors.amberTint,
               borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFFDE68A)),
             ),
-            child: const Text(
-              AppStrings.waitingForProviderBody,
-              style: TextStyle(
-                height: 1.55,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF92400E),
-              ),
+            child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline_rounded,
+                    size: 20, color: Color(0xFF92400E)),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    AppStrings.waitingForProviderBody,
+                    style: TextStyle(
+                      height: 1.55,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF92400E),
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
-          OutlinedButton(
+          FilledButton.icon(
             onPressed: () => jobs.maybeRedispatch(job.id),
-            child: const Text(AppStrings.retrySearchProviders),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.slate,
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(48),
+            ),
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text(AppStrings.retrySearchProviders),
           ),
         ];
       case JobStatus.cancelled:
