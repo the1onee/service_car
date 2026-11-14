@@ -7,6 +7,11 @@ service firebase.storage {
     function isOwner(uid) {
       return signedIn() && request.auth.uid == uid;
     }
+    // الأدمن يُتحقق منه عبر دور المستخدم في Firestore (للاطلاع على الفواتير عند المراجعة).
+    function isAdmin() {
+      return signedIn()
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
     function isImage() {
       return request.resource.contentType.matches('image/.*');
     }
@@ -17,16 +22,16 @@ service firebase.storage {
       return request.resource.size < 5 * 1024 * 1024;
     }
 
-    // مسار موحّد: uploads/{folder}/{uid}/{file}
+    // مسار موحّد: uploads/{folder}/{uid}/{file} — القراءة للمالك أو الأدمن فقط.
     match /uploads/{folder}/{uid}/{fileName} {
-      allow read: if signedIn();
+      allow read: if isOwner(uid) || isAdmin();
       allow create, update: if isOwner(uid) && isImage() && underOneMb();
       allow delete: if isOwner(uid);
     }
 
-    // توافق مع مسار قديم لفواتير المحفظة إن وُجد.
+    // توافق مع مسار قديم لفواتير المحفظة إن وُجد — القراءة للمالك أو الأدمن فقط.
     match /walletTopUps/{uid}/{fileName} {
-      allow read: if signedIn();
+      allow read: if isOwner(uid) || isAdmin();
       allow create, update: if isOwner(uid) && isImage() && underFiveMb();
       allow delete: if isOwner(uid);
     }

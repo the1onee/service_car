@@ -1,4 +1,3 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/features/admin/admin_home.dart';
@@ -48,18 +47,7 @@ class _RoleHomeState extends State<RoleHome> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       scope.fcm.init(profile.id);
-      // الكتالوج يُدار من لوحة التحكم، والقواعد تسمح بالكتابة للأدمن فقط.
-      if (!profile.isAdmin) return;
-      // بدون Firebase (اختبارات الوحدة) لا نلمس Firestore.
-      if (Firebase.apps.isEmpty) return;
-      try {
-        scope.users.seedServicesIfNeeded();
-        scope.users.syncSeedVehicleTypes().catchError((Object e) {
-          debugPrint('syncSeedVehicleTypes: $e');
-        });
-      } catch (e) {
-        debugPrint('admin seed skipped: $e');
-      }
+      // بذر الكتالوج (خدمات / أنواع مركبات) من لوحة التحكم فقط — لا من تطبيق الموبايل.
     });
   }
 
