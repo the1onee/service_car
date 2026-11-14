@@ -4,10 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:barrr/app.dart';
 import 'package:barrr/core/app_brand.dart';
+import 'package:barrr/core/app_environment.dart';
 import 'package:barrr/core/app_error_widget.dart';
 import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/shell/auth_gate.dart';
 import 'package:barrr/firebase_options.dart';
+import 'package:barrr/firebase_options_staging.dart';
 import 'package:barrr/services/fcm_service.dart';
 
 Future<void> main() async {
@@ -24,7 +26,8 @@ void _installGlobalErrorHandlers() {
   FlutterError.onError = (details) {
     logUserError(details.exception, details.stack, 'flutter');
     final msg = details.exceptionAsString();
-    if (msg.contains('ListTile background color or ink splashes may be invisible')) {
+    if (msg.contains(
+        'ListTile background color or ink splashes may be invisible')) {
       return;
     }
     FlutterError.presentError(details);
@@ -63,8 +66,12 @@ class _BootAppState extends State<_BootApp> {
     Object? lastError;
     for (var attempt = 0; attempt < 3; attempt++) {
       try {
+        final options = AppEnvironmentConfig.isStaging
+            ? StagingFirebaseOptions.currentPlatform
+            : DefaultFirebaseOptions.currentPlatform;
+        AppEnvironmentConfig.validateFirebaseProject(options.projectId);
         await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform,
+          options: options,
         );
         firebaseReady = true;
         break;

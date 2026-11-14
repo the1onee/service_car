@@ -27,12 +27,31 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // AGP 9 defaults resValues=false; flavors use resValue for app_name.
+    buildFeatures {
+        resValues = true
+    }
+
     defaultConfig {
         applicationId = "com.albatariq.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+    }
+
+    flavorDimensions += "environment"
+    productFlavors {
+        create("production") {
+            dimension = "environment"
+            resValue("string", "app_name", "البطريق")
+        }
+        create("staging") {
+            dimension = "environment"
+            applicationIdSuffix = ".staging"
+            versionNameSuffix = "-staging"
+            resValue("string", "app_name", "البطريق Staging")
+        }
     }
 
     signingConfigs {

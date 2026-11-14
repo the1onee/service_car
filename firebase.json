@@ -1,5 +1,12 @@
 {
   "auth": {
+    "authorizedDomains": [
+      "localhost",
+      "albatariq.com",
+      "www.albatariq.com",
+      "car-services-iraq.firebaseapp.com",
+      "car-services-iraq.web.app"
+    ],
     "providers": {
       "emailPassword": true,
       "googleSignIn": {

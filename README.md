@@ -58,7 +58,7 @@ flutter run -d android \
 ### نشر قواعد Firestore
 
 ```bash
-firebase deploy --only firestore:rules,firestore:indexes
+npx -y firebase-tools@latest deploy --only firestore:rules,firestore:indexes
 ```
 
 ### سيرفر الإشعارات / الإدارة
@@ -77,6 +77,15 @@ powershell -File scripts/build-release-apk.ps1
 ```
 
 في **release** يتصل التطبيق بـ `https://albatariq.com` تلقائياً.
+
+### بناء Staging المعزول
+
+```powershell
+powershell -File scripts/build-staging-apk.ps1
+```
+
+نسخة staging تستخدم `com.albatariq.app.staging` ومشروع
+`car-services-iraq-staging`، ولا تسمح بالرجوع التلقائي إلى API الإنتاج.
 
 بصمات SHA لمفتاح الرفع تُضاف عبر:
 `npx firebase-tools apps:android:sha:create <appId> <hash>`

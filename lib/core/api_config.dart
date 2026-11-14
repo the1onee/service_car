@@ -1,3 +1,5 @@
+import 'package:barrr/core/app_environment.dart';
+
 /// عنوان باكند الإشعارات ورمز واتساب على VPS (بدون Cloud Functions).
 ///
 /// عند البناء/التشغيل للإنتاج:
@@ -16,8 +18,16 @@ class ApiConfig {
   /// الهاتف الحقيقي لا يصل إلى 10.0.2.2 (ذلك عنوان محاكي أندرويد فقط).
   static String get baseUrl {
     final env = _fromEnv.trim();
-    if (env.isNotEmpty) return env.replaceAll(RegExp(r'/+$'), '');
-    return productionBase;
+    if (AppEnvironmentConfig.isStaging && env.isEmpty) {
+      throw StateError(
+        'Staging requires an explicit BARRR_API_BASE. '
+        'No production fallback is allowed.',
+      );
+    }
+    final value =
+        (env.isNotEmpty ? env : productionBase).replaceAll(RegExp(r'/+$'), '');
+    AppEnvironmentConfig.validateApiBase(value);
+    return value;
   }
 
   static Uri uri(String path) {

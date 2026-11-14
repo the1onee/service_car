@@ -22,9 +22,10 @@ service cloud.firestore {
     function isAdmin() {
       return hasRole('admin');
     }
-    // غياب adminLevel أو أي قيمة غير 'admin' = سوبر (مطابق لـ adminLevel.ts).
+    // adminLevel == 'super' صراحةً فقط = سوبر (fail-safe). الغياب أو أي قيمة أخرى = أدمن محدود.
+    // ملاحظة: شغّل scripts/migrate-admin-levels.mjs قبل نشر هذه القاعدة لضبط السوبر الحاليين.
     function isSuperAdmin() {
-      return isAdmin() && userDoc().get('adminLevel', '') != 'admin';
+      return isAdmin() && userDoc().get('adminLevel', '') == 'super';
     }
     function adminPerm(key) {
       return userDoc().get('adminPermissions', {}).get(key, 'none');
@@ -82,6 +83,17 @@ service cloud.firestore {
       return signedIn() && uid == request.auth.uid;
     }
 
+    // المزود لديه قفل زيارة نشط لطلب يخصّ هذا العميل — يسمح بقراءة مستنده أثناء التسوية فقط.
+    function providerActiveJobCustomer(customerUid) {
+      let slotPath = /databases/$(database)/documents/providerSlots/$(request.auth.uid);
+      let activeJobId = exists(slotPath)
+        ? get(slotPath).data.get('activeJobId', '')
+        : '';
+      return activeJobId is string
+        && activeJobId.size() > 0
+        && get(/databases/$(database)/documents/jobs/$(activeJobId)).data.customerId == customerUid;
+    }
+
     // سوبر أدمن فقط على القاعدة العامة. الأدمن المحدود عبر قواعد المجموعات أدناه.
     match /{document=**} {
       allow read, write: if isSuperAdmin();
@@ -114,9 +126,10 @@ service cloud.firestore {
       allow list: if adminCanReadUserDoc();
       allow get: if isUser(uid)
         || adminCanReadUserDoc()
-        // الفني يقرأ رصيد العميل عند التسوية فقط (قراءة مستند، لا قائمة).
+        // المزود يقرأ مستند العميل فقط أثناء طلب نشط يخصّه (للتسوية)، لا قائمة.
         || (isProviderRole()
-          && resource.data.role == 'customer');
+          && resource.data.role == 'customer'
+          && providerActiveJobCustomer(uid));
 
       // الأدمن (بصلاحية القسم) ينشئ حساباً؛ التطبيق ينشئ حسابه فقط وفق القيود.
       allow create: if adminCanCreateUserDoc()
@@ -125,7 +138,8 @@ service cloud.firestore {
           && request.resource.data.get('ratingCount', 0) == 0
           && request.resource.data.get('commissionPercent', 0) == 0
           && !request.resource.data.keys().hasAny([
-            'adminLevel', 'adminPermissions', 'disabled', 'commissionRate'
+            'adminLevel', 'adminPermissions', 'disabled', 'commissionRate',
+            'ratingAvg', 'oilWorkshopTier'
           ])
           && (
             (request.resource.data.role == 'customer'
@@ -151,6 +165,7 @@ service cloud.firestore {
         || customerWalletSettle();
 
       // الفني/ورشة الزيوت يحدّث رصيد العميل فقط بمبلغ التسوية المسجّل على الطلب الذي يكمله.
+      // مؤقتاً على العميل مع سقوف صارمة؛ الهدف النهائي نقل التسوية لـ Admin SDK على الـ VPS.
       function customerWalletSettle() {
         let jobId = request.resource.data.walletJobId;
         let job = getAfter(/databases/$(database)/documents/jobs/$(jobId)).data;
@@ -162,6 +177,8 @@ service cloud.firestore {
         return (isTechnicianRole() || isOilWorkshopRole())
           && resource.data.role == 'customer'
           && jobId is string
+          // منع إعادة تطبيق نفس الطلب (نفخ الرصيد بتكرار التسوية).
+          && resource.data.get('walletJobId', '') != jobId
           && request.resource.data.diff(resource.data)
               .affectedKeys().hasOnly(['walletBalance', 'walletJobId'])
           && request.resource.data.walletBalance is number
@@ -175,6 +192,10 @@ service cloud.firestore {
           && job.walletApplied <= bill + 0.05
           && job.receivedAmount is number
           && job.changeAmount <= job.receivedAmount + 0.05
+          // سقف أعلى صارم: لا يمكن أن يتجاوز الباقي المضاف للمحفظة قيمة الفاتورة (يمنع نفخ الرصيد).
+          && job.changeAmount <= bill + 0.05
+          // المبلغ المستلم لا يتجاوز الفاتورة + الباقي المسموح (يمنع أرقاماً خيالية).
+          && job.receivedAmount <= bill + job.changeAmount + 0.05
           && request.resource.data.walletBalance
               == resource.data.walletBalance - job.walletApplied + job.changeAmount;
       }
@@ -187,7 +208,8 @@ service cloud.firestore {
           && request.resource.data.walletBalance <= resource.data.walletBalance;
       }
 
-      allow delete: if adminCanWriteUserDoc() || isUser(uid);
+      // الحذف النهائي للعميل يمرّ عبر /api/users/delete-self أو لوحة التحكم (Admin SDK) فقط.
+      allow delete: if adminCanWriteUserDoc();
     }
 
     // كتالوج الخدمات يُدار من لوحة التحكم فقط، والتطبيق يقرأه.
@@ -330,6 +352,10 @@ service cloud.firestore {
           && resource.data.status in ['inProgress', 'arrived', 'finalQuote']
           && request.resource.data.status == 'completed'
           && request.resource.data.technicianId == resource.data.technicianId
+          && commissionAmountOk()
+          && respectsPriceUpperCap()
+          // لا يُخفّض العميل معدل العمولة المسجّل على الطلب.
+          && request.resource.data.get('commissionRate', 0) >= resource.data.get('commissionRate', 0)
           && jobDiffKeys().hasOnly([
             'status', 'receivedAmount', 'commissionAmount', 'commissionRate',
             'finalPrice', 'warranty'
@@ -367,6 +393,60 @@ service cloud.firestore {
               : 0);
       }
 
+      // الفاتورة بعد التحديث (مطابقة لـ _billOf في التطبيق): finalPrice ثم initialPrice ثم receivedAmount.
+      function billAfter() {
+        return request.resource.data.finalPrice is number && request.resource.data.finalPrice > 0
+          ? request.resource.data.finalPrice
+          : (request.resource.data.initialPrice is number && request.resource.data.initialPrice > 0
+              ? request.resource.data.initialPrice
+              : (request.resource.data.receivedAmount is number && request.resource.data.receivedAmount > 0
+                  ? request.resource.data.receivedAmount
+                  : 0));
+      }
+      function commissionRateVal() {
+        return request.resource.data.commissionRate is number
+          ? request.resource.data.commissionRate
+          : (resource.data.commissionRate is number ? resource.data.commissionRate : 0);
+      }
+      // العمولة ضمن حدود منطقية: موجبة عند وجود فاتورة ومعدل > 0، ولا تتجاوز الفاتورة.
+      // (يمنع ضبط commissionAmount = 0 للتهرب، دون فرض مطابقة دقيقة قد تكسر التدفق الشرعي.)
+      function commissionAmountOk() {
+        return !jobDiffKeys().hasAny(['commissionAmount'])
+          || !(request.resource.data.commissionAmount is number)
+          || billAfter() <= 0
+          || (request.resource.data.commissionAmount >= 0
+            && request.resource.data.commissionAmount <= billAfter() + 0.05
+            && (request.resource.data.commissionAmount > 0 || commissionRateVal() <= 0));
+      }
+
+      // سقف أعلى مطلق للأسعار (د.ع) — يمنع أرقاماً خيالية تُستخدم لنفخ المحفظة/العمولة.
+      function maxJobMoney() {
+        return 50000000;
+      }
+      function respectsPriceUpperCap() {
+        let finalOk = !jobDiffKeys().hasAny(['finalPrice'])
+          || !(request.resource.data.finalPrice is number)
+          || (request.resource.data.finalPrice >= 0
+            && request.resource.data.finalPrice <= maxJobMoney());
+        let initialOk = !jobDiffKeys().hasAny(['initialPrice'])
+          || !(request.resource.data.initialPrice is number)
+          || (request.resource.data.initialPrice >= 0
+            && request.resource.data.initialPrice <= maxJobMoney());
+        let receivedOk = !jobDiffKeys().hasAny(['receivedAmount'])
+          || !(request.resource.data.receivedAmount is number)
+          || (request.resource.data.receivedAmount >= 0
+            && request.resource.data.receivedAmount <= maxJobMoney());
+        let changeOk = !jobDiffKeys().hasAny(['changeAmount'])
+          || !(request.resource.data.changeAmount is number)
+          || (request.resource.data.changeAmount >= 0
+            && request.resource.data.changeAmount <= billAfter() + 0.05);
+        let appliedOk = !jobDiffKeys().hasAny(['walletApplied'])
+          || !(request.resource.data.walletApplied is number)
+          || (request.resource.data.walletApplied >= 0
+            && request.resource.data.walletApplied <= billAfter() + 0.05);
+        return finalOk && initialOk && receivedOk && changeOk && appliedOk;
+      }
+
       // لا يُخفض السعر النهائي أو المبلغ المستلم أكثر من 20% عن المرجع.
       // استثناء: عند المحفظة يُسمح بالمطلوب نقداً إن كان أقل من حد 20%.
       function respectsPriceReductionCap() {
@@ -391,7 +471,7 @@ service cloud.firestore {
           || (resource.data.useWallet == true
             && cashDueClamped < minFromBaseline
             && request.resource.data.receivedAmount >= cashDueClamped - 0.05);
-        return finalOk && receivedOk;
+        return finalOk && receivedOk && respectsPriceUpperCap();
       }
 
       // الفني/الورشة المعيّنة: تقدّم الحالة والإكمال — بلا تغيير customerId/commissionRate.
@@ -401,6 +481,7 @@ service cloud.firestore {
             'customerId', 'serviceId', 'commissionRate', 'useWallet', 'walletReserve'
           ])
           && respectsPriceReductionCap()
+          && commissionAmountOk()
           && keepsRating('customerToTech')
           && jobDiffKeys().hasOnly([
             'status', 'finalPrice', 'warranty', 'receivedAmount', 'commissionAmount',
@@ -685,8 +766,11 @@ service cloud.firestore {
           ])
           && request.resource.data.status == 'open'
           && request.resource.data.subject is string
+          && request.resource.data.subject.size() <= 200
           && request.resource.data.body is string
-          && request.resource.data.messages is list;
+          && request.resource.data.body.size() <= 5000
+          && request.resource.data.messages is list
+          && request.resource.data.messages.size() <= 100;
       }
       function supportOwnerReplyOk() {
         let prevCount = (resource.data.keys().hasAny(['messages'])
@@ -700,7 +784,10 @@ service cloud.firestore {
           && request.resource.data.body == resource.data.body
           && request.resource.data.status in ['open', 'closed']
           && request.resource.data.messages is list
-          && request.resource.data.messages.size() >= prevCount;
+          && request.resource.data.messages.size() >= prevCount
+          // حد علوي: لا يُضاف أكثر من رسالة واحدة في التحديث، وبسقف إجمالي.
+          && request.resource.data.messages.size() <= prevCount + 1
+          && request.resource.data.messages.size() <= 200;
       }
       allow read: if isOwner(resource.data.userId) || adminCanRead('support');
       allow create: if supportOwnerCreateOk() || adminCanWrite('support');
@@ -708,13 +795,30 @@ service cloud.firestore {
       allow delete: if adminCanWrite('support');
     }
     match /disputes/{id} {
+      // منشئ النزاع طرف في الطلب، والطلب يخصّه فعلاً، والحالة الابتدائية open فقط، مع حدود نصّية.
+      function disputeCreateOk() {
+        let jobId = request.resource.data.get('jobId', '');
+        let jobPath = /databases/$(database)/documents/jobs/$(jobId);
+        return (isOwner(request.resource.data.customerId)
+            || isOwner(request.resource.data.technicianId))
+          && jobId is string
+          && jobId.size() > 0
+          && exists(jobPath)
+          && (get(jobPath).data.customerId == request.resource.data.customerId
+            || get(jobPath).data.technicianId == request.resource.data.technicianId)
+          && (get(jobPath).data.customerId == request.auth.uid
+            || get(jobPath).data.technicianId == request.auth.uid)
+          && request.resource.data.get('status', '') == 'open'
+          && request.resource.data.get('reason', '') is string
+          && request.resource.data.get('reason', '').size() <= 500
+          && request.resource.data.get('description', '') is string
+          && request.resource.data.get('description', '').size() <= 5000;
+      }
       allow read: if isOwner(resource.data.customerId)
         || isOwner(resource.data.technicianId)
         || adminCanRead('orders')
         || adminCanRead('support');
-      allow create: if isOwner(request.resource.data.customerId)
-        || isOwner(request.resource.data.technicianId)
-        || adminCanWrite('orders');
+      allow create: if disputeCreateOk() || adminCanWrite('orders');
       allow update, delete: if adminCanWrite('orders') || adminCanWrite('support');
     }
 

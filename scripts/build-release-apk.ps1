@@ -22,13 +22,15 @@ $target = if ($Apk) { 'apk' } else { 'appbundle' }
 
 Write-Host "Building release $target with BARRR_API_BASE=$apiBase"
 & $flutter build $target --release `
+  --flavor production `
+  --dart-define="APP_ENV=production" `
   --dart-define="BARRR_API_BASE=$apiBase"
 if ($LASTEXITCODE -ne 0) { Write-Error "flutter build $target failed" }
 
 $out = if ($Apk) {
-  Join-Path $root 'build\app\outputs\flutter-apk\app-release.apk'
+  Join-Path $root 'build\app\outputs\flutter-apk\app-production-release.apk'
 } else {
-  Join-Path $root 'build\app\outputs\bundle\release\app-release.aab'
+  Join-Path $root 'build\app\outputs\bundle\productionRelease\app-production-release.aab'
 }
 if (Test-Path $out) {
   Write-Host "OK: $out"
