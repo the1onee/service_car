@@ -38,6 +38,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["appLabel"] = "البطريق"
     }
 
     flavorDimensions += "environment"
@@ -70,10 +71,40 @@ android {
     }
 
     buildTypes {
+        debug {
+            manifestPlaceholders["appLabel"] = "البطريق تجريبي"
+        }
         release {
             if (hasReleaseKeystore) {
                 signingConfig = signingConfigs.getByName("release")
             }
+        }
+    }
+}
+
+val googleServicesProd = file("google-services.prod.json")
+val googleServicesStaging = file("google-services.staging.json")
+val googleServicesActive = file("google-services.json")
+
+tasks.configureEach {
+    if (!name.contains("GoogleServices")) return@configureEach
+    if (!name.contains("Debug")) {
+        mustRunAfter(tasks.matching { it.name.contains("GoogleServices") && it.name.contains("Debug") })
+    }
+    val useStaging = name.contains("Debug")
+    doFirst {
+        val source = if (useStaging && googleServicesStaging.exists()) {
+            googleServicesStaging
+        } else {
+            googleServicesProd
+        }
+        if (source.exists()) {
+            source.copyTo(googleServicesActive, overwrite = true)
+        }
+    }
+    doLast {
+        if (googleServicesProd.exists()) {
+            googleServicesProd.copyTo(googleServicesActive, overwrite = true)
         }
     }
 }

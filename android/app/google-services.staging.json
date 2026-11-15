@@ -1,0 +1,82 @@
+{
+  "project_info": {
+    "project_number": "747129120691",
+    "project_id": "car-services-iraq-staging",
+    "storage_bucket": "car-services-iraq-staging.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:747129120691:android:33335397af7a73073dcdc6",
+        "android_client_info": {
+          "package_name": "com.albatariq.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "747129120691-sm1gjhgqveb0nu6iiv74ocutse0kl8pb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-YRAXHT9I68janjnY1DGoDr9UUssEyqI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "747129120691-sm1gjhgqveb0nu6iiv74ocutse0kl8pb.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "747129120691-0o1qqoi5ocumipbbsoe9m8mjvk2l04ht.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.albatariq.app.staging"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:747129120691:android:bbc2fe86d2338e9c3dcdc6",
+        "android_client_info": {
+          "package_name": "com.albatariq.app.staging"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "747129120691-sm1gjhgqveb0nu6iiv74ocutse0kl8pb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-YRAXHT9I68janjnY1DGoDr9UUssEyqI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "747129120691-sm1gjhgqveb0nu6iiv74ocutse0kl8pb.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "747129120691-0o1qqoi5ocumipbbsoe9m8mjvk2l04ht.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.albatariq.app.staging"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

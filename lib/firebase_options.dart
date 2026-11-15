@@ -2,22 +2,25 @@
 // ignore_for_file: type=lint
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+    show defaultTargetPlatform, kDebugMode, kIsWeb, TargetPlatform;
 
 class DefaultFirebaseOptions {
+  /// Debug يتصل بـ car-services-iraq-staging. Release وProfile يبقيان على الإنتاج.
+  static bool get useStaging => kDebugMode;
+
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      return web;
+      return useStaging ? stagingWeb : web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return android;
+        return useStaging ? stagingAndroid : android;
       case TargetPlatform.iOS:
-        return ios;
+        return useStaging ? stagingIos : ios;
       case TargetPlatform.macOS:
-        return ios;
+        return useStaging ? stagingIos : ios;
       case TargetPlatform.windows:
-        return web;
+        return useStaging ? stagingWeb : web;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux.',
@@ -53,6 +56,32 @@ class DefaultFirebaseOptions {
     messagingSenderId: '500429219707',
     projectId: 'car-services-iraq',
     storageBucket: 'car-services-iraq.firebasestorage.app',
+    iosBundleId: 'com.albatariq.app',
+  );
+
+  static const FirebaseOptions stagingWeb = FirebaseOptions(
+    apiKey: 'AIzaSyBcI_HE95NrlaGcBO2HnGEMkaPs9pbgBGY',
+    appId: '1:747129120691:web:c2b9fa6c83c9dd1e3dcdc6',
+    messagingSenderId: '747129120691',
+    projectId: 'car-services-iraq-staging',
+    authDomain: 'car-services-iraq-staging.firebaseapp.com',
+    storageBucket: 'car-services-iraq-staging.firebasestorage.app',
+  );
+
+  static const FirebaseOptions stagingAndroid = FirebaseOptions(
+    apiKey: 'AIzaSyD-YRAXHT9I68janjnY1DGoDr9UUssEyqI',
+    appId: '1:747129120691:android:33335397af7a73073dcdc6',
+    messagingSenderId: '747129120691',
+    projectId: 'car-services-iraq-staging',
+    storageBucket: 'car-services-iraq-staging.firebasestorage.app',
+  );
+
+  static const FirebaseOptions stagingIos = FirebaseOptions(
+    apiKey: 'AIzaSyDY_gzr7YbESjWF6csuSKpoCtJTLBppUIE',
+    appId: '1:747129120691:ios:97e1765ea371490f3dcdc6',
+    messagingSenderId: '747129120691',
+    projectId: 'car-services-iraq-staging',
+    storageBucket: 'car-services-iraq-staging.firebasestorage.app',
     iosBundleId: 'com.albatariq.app',
   );
 }
