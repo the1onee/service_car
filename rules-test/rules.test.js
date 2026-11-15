@@ -46,10 +46,11 @@ beforeEach(async () => {
 });
 
 describe('Firestore rules', () => {
-  it('admin can read and write any user doc', async () => {
+  it('super admin can read and write any user doc', async () => {
     await seed({
       'users/admin1': {
         role: 'admin',
+        adminLevel: 'super',
         name: 'Admin',
         phone: '7700000001',
         walletBalance: 0,
