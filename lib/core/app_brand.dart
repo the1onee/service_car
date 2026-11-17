@@ -28,7 +28,7 @@ class AppBrand {
 
   /// رقم تطبيق آبل من App Store Connect (App Information → Apple ID).
   /// املأه بعد إنشاء التطبيق حتى يفتح زر التحديث متجر آبل لا Play.
-  static const appleAppId = '';
+  static const appleAppId = '6825829192';
 
   /// رابط التطبيق في المتجر (للتحديث والمشاركة).
   static Uri get storeUri {
