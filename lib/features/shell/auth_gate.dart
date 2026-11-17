@@ -5,6 +5,7 @@ import 'package:barrr/core/service_unavailable_screen.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/features/auth/auth_screen.dart';
+import 'package:barrr/features/auth/onboarding_screen.dart';
 import 'package:barrr/features/legal/terms_accept_screen.dart';
 import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/shell/role_home.dart';
@@ -24,6 +25,7 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   AppUser? _cached;
+  bool? _seenOnboarding;
 
   @override
   void initState() {
@@ -31,6 +33,10 @@ class _AuthGateState extends State<AuthGate> {
     readCachedProfile().then((user) {
       if (!mounted) return;
       setState(() => _cached = user);
+    });
+    hasSeenOnboarding().then((seen) {
+      if (!mounted) return;
+      setState(() => _seenOnboarding = seen);
     });
   }
 
@@ -62,7 +68,16 @@ class _AuthGateState extends State<AuthGate> {
             return const BrandSplash();
           }
           final uid = snap.data;
-          if (uid == null) return const AuthScreen();
+          if (uid == null) {
+            final seen = _seenOnboarding;
+            if (seen == null) return const BrandSplash();
+            if (!seen) {
+              return OnboardingScreen(
+                onDone: () => setState(() => _seenOnboarding = true),
+              );
+            }
+            return const AuthScreen();
+          }
           return _HomeFromProfile(
             uid: uid,
             roleHomeBuilder: widget.roleHomeBuilder,

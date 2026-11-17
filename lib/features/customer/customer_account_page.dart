@@ -285,6 +285,15 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                       onTap: () => PrivacyViewScreen.open(context),
                     ),
                     const Divider(height: 1),
+                    Builder(
+                      builder: (tileContext) => _MenuTile(
+                        icon: Icons.share_outlined,
+                        title: 'مشاركة التطبيق',
+                        subtitle: 'أرسل رابط التطبيق لأصدقائك',
+                        onTap: () => AccountActions.shareApp(tileContext),
+                      ),
+                    ),
+                    const Divider(height: 1),
                     _MenuTile(
                       icon: Icons.support_agent_outlined,
                       title: 'الدعم',

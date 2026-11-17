@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -28,6 +29,21 @@ class AppBrand {
   /// رقم تطبيق آبل من App Store Connect (App Information → Apple ID).
   /// املأه بعد إنشاء التطبيق حتى يفتح زر التحديث متجر آبل لا Play.
   static const appleAppId = '';
+
+  /// رابط التطبيق في المتجر (للتحديث والمشاركة).
+  static Uri get storeUri {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      if (appleAppId.isNotEmpty) {
+        return Uri.parse('https://apps.apple.com/app/id$appleAppId');
+      }
+      return Uri.parse(
+        'https://apps.apple.com/search?term=${Uri.encodeComponent(appName)}',
+      );
+    }
+    return Uri.parse(
+      'https://play.google.com/store/apps/details?id=com.albatariq.app',
+    );
+  }
 
   /// يُستدعى من [main] قبل [runApp].
   static Future<void> load() async {

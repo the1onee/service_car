@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:barrr/core/app_brand.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/app_sound.dart';
@@ -489,6 +491,28 @@ class AccountActions {
     if (!saved || !context.mounted) return false;
     AppSnackBar.showSuccess(context, 'تم حفظ رقم الهاتف بنجاح');
     return true;
+  }
+
+  /// مشاركة رابط التطبيق عبر قائمة المشاركة في النظام.
+  static Future<void> shareApp(BuildContext context) async {
+    final box = context.findRenderObject() as RenderBox?;
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: 'جرّب تطبيق ${AppBrand.appName} — ${AppBrand.tagline}\n'
+              '${AppBrand.storeUri}',
+          sharePositionOrigin:
+              box == null ? null : box.localToGlobal(Offset.zero) & box.size,
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        AppSnackBar.showError(
+          context,
+          userFacingError(e, fallback: 'تعذّرت مشاركة التطبيق.'),
+        );
+      }
+    }
   }
 
   /// حذف حساب العميل نهائياً بعد تأكيد صريح.

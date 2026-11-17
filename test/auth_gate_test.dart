@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:barrr/features/auth/auth_screen.dart';
+import 'package:barrr/features/auth/onboarding_screen.dart';
 import 'package:barrr/features/shell/auth_gate.dart';
 import 'package:barrr/legal/terms_of_use.dart';
 import 'package:barrr/models/app_user.dart';
@@ -12,7 +13,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'onboarding_seen_v1': true});
   });
 
   AppUser user({
@@ -40,6 +41,21 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.byType(AuthScreen), findsOneWidget);
+  });
+
+  testWidgets('shows onboarding on first launch without session',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final session = TestSession(initialUid: null);
+    addTearDown(session.dispose);
+
+    await tester.pumpWidget(
+      session.wrap(AuthGate(roleHomeBuilder: stubRoleHome)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byType(OnboardingScreen), findsOneWidget);
   });
 
   testWidgets('shows AuthScreen while registering', (tester) async {

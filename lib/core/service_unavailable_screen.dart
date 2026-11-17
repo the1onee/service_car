@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -16,20 +15,6 @@ class ServiceUnavailableScreen extends StatelessWidget {
 
   final bool updateRequired;
   final Future<void> Function()? onRetry;
-
-  static Uri get _storeUri {
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      if (AppBrand.appleAppId.isNotEmpty) {
-        return Uri.parse('https://apps.apple.com/app/id${AppBrand.appleAppId}');
-      }
-      return Uri.parse(
-        'https://apps.apple.com/search?term=${Uri.encodeComponent(AppBrand.appName)}',
-      );
-    }
-    return Uri.parse(
-      'https://play.google.com/store/apps/details?id=com.albatariq.app',
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +56,7 @@ class ServiceUnavailableScreen extends StatelessWidget {
                   if (updateRequired)
                     FilledButton.icon(
                       onPressed: () => launchUrl(
-                        _storeUri,
+                        AppBrand.storeUri,
                         mode: LaunchMode.externalApplication,
                       ),
                       icon: const Icon(Icons.system_update_outlined),

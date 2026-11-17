@@ -253,6 +253,15 @@ class _ProviderAccountViewState extends State<ProviderAccountView> {
                       onTap: () => PrivacyViewScreen.open(context),
                     ),
                     const Divider(height: 1),
+                    Builder(
+                      builder: (tileContext) => AccountTile(
+                        icon: Icons.share_outlined,
+                        title: 'مشاركة التطبيق',
+                        subtitle: 'أرسل رابط التطبيق لأصدقائك',
+                        onTap: () => AccountActions.shareApp(tileContext),
+                      ),
+                    ),
+                    const Divider(height: 1),
                     AccountTile(
                       icon: Icons.support_agent_outlined,
                       title: 'الدعم',
