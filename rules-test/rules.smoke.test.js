@@ -32,8 +32,10 @@ describe('firestore.rules smoke', () => {
     assert.match(rules, /keepsProtectedFields/);
   });
 
-  it('blocks ratingAvg and oilWorkshopTier on user create', () => {
-    assert.match(rules, /'ratingAvg',\s*'oilWorkshopTier'/);
+  it('pins ratingAvg on user create and blocks oilWorkshopTier', () => {
+    assert.match(rules, /'oilWorkshopTier'/);
+    assert.match(rules, /get\('ratingAvg', 5\) == 5/);
+    assert.doesNotMatch(rules, /'ratingAvg',\s*'oilWorkshopTier'/);
   });
 
   it('jobs create requires owning customerId', () => {

@@ -20,7 +20,6 @@ class CustomerLanding extends StatefulWidget {
     required this.onServiceTap,
     required this.onEmergencyTap,
     required this.onOpenWarranties,
-    required this.onOpenAccount,
     required this.onRefresh,
   });
 
@@ -32,7 +31,6 @@ class CustomerLanding extends StatefulWidget {
   final ValueChanged<ServiceItem> onServiceTap;
   final VoidCallback onEmergencyTap;
   final VoidCallback onOpenWarranties;
-  final VoidCallback onOpenAccount;
   final Future<void> Function() onRefresh;
 
   @override
@@ -197,24 +195,6 @@ class _CustomerLandingState extends State<CustomerLanding> {
                         ),
                       ),
                       NotificationsBellButton(uid: widget.profile.id),
-                      const SizedBox(width: 4),
-                      InkWell(
-                        onTap: widget.onOpenAccount,
-                        borderRadius: BorderRadius.circular(999),
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                          decoration: const BoxDecoration(
-                            color: Colors.black,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.person,
-                            size: 18,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),

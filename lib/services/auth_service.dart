@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -57,15 +56,6 @@ class AuthService {
   /// صحيح أثناء إنشاء حساب لم يكتمل ملفه بعد.
   final ValueNotifier<bool> registering = ValueNotifier(false);
 
-  Stream<String?> get uidChanges =>
-      _uidChangesOverride ??
-      _auth.userChanges().asyncMap((u) async {
-        if (u == null) return null;
-        if (u.phoneNumber != null) return u.uid;
-        final doc = await _db.collection(Cols.users).doc(u.uid).get();
-        return doc.exists ? u.uid : null;
-      });
-
   String? get currentUid {
     final override = _currentUidOverride;
     if (override != null) return override();
@@ -73,6 +63,11 @@ class AuthService {
   }
 
   String? get currentPhone => _auth.currentUser?.phoneNumber ?? pendingPhone;
+
+  /// Firebase Auth يستعيد الجلسة المحفوظة قبل أول حدث، ويصدر كل تغيّر لاحق
+  /// بما فيه تسجيل الخروج وتبديل الحساب. وجود ملف المستخدم يُفحص في AuthGate.
+  late final Stream<String?> uidChanges =
+      _uidChangesOverride ?? _auth.authStateChanges().map((user) => user?.uid);
 
   Future<void> _ensureGoogleInitialized() async {
     if (kIsWeb || _googleInitialized) return;
@@ -83,6 +78,7 @@ class AuthService {
   }
 
   Future<GoogleAuthResult> signInWithGoogle() async {
+    registering.value = true;
     try {
       final UserCredential cred;
       if (kIsWeb) {
@@ -107,7 +103,6 @@ class AuthService {
       await _awaitSignedIn(user);
 
       if (await _hasProfile(user.uid)) {
-        registering.value = false;
         return GoogleAuthResult.signedIn;
       }
 
@@ -123,7 +118,6 @@ class AuthService {
         email: user.email ?? '',
         discardOnFailure: false,
       );
-      registering.value = false;
       return GoogleAuthResult.signedIn;
     } on GoogleSignInException catch (e) {
       if (e.code == GoogleSignInExceptionCode.canceled ||
@@ -140,6 +134,8 @@ class AuthService {
         return GoogleAuthResult.cancelled;
       }
       rethrow;
+    } finally {
+      registering.value = false;
     }
   }
 
@@ -151,6 +147,7 @@ class AuthService {
         message: 'تسجيل الدخول عبر Apple متاح على الآيفون فقط.',
       );
     }
+    registering.value = true;
     try {
       final rawNonce = _generateNonce();
       final nonce = _sha256ofString(rawNonce);
@@ -181,7 +178,6 @@ class AuthService {
       await _awaitSignedIn(user);
 
       if (await _hasProfile(user.uid)) {
-        registering.value = false;
         return GoogleAuthResult.signedIn;
       }
 
@@ -205,7 +201,6 @@ class AuthService {
         email: user.email ?? '',
         discardOnFailure: false,
       );
-      registering.value = false;
       return GoogleAuthResult.signedIn;
     } on SignInWithAppleAuthorizationException catch (e) {
       if (e.code == AuthorizationErrorCode.canceled) {
@@ -213,9 +208,8 @@ class AuthService {
       }
       throw FirebaseAuthException(
         code: 'apple-sign-in-failed',
-        message: e.message.isNotEmpty
-            ? e.message
-            : 'تعذّر تسجيل الدخول عبر Apple.',
+        message:
+            e.message.isNotEmpty ? e.message : 'تعذّر تسجيل الدخول عبر Apple.',
       );
     } on FirebaseAuthException catch (e) {
       if (e.code == 'invalid-credential' ||
@@ -235,6 +229,8 @@ class AuthService {
         );
       }
       rethrow;
+    } finally {
+      registering.value = false;
     }
   }
 
@@ -345,17 +341,14 @@ class AuthService {
         await user.updateDisplayName(trimmedName);
       }
       await _db.collection(Cols.users).doc(user.uid).set({
-        ...AppUser(
-          id: user.uid,
-          role: UserRole.customer,
+        ...customerCreateFields(
+          uid: user.uid,
           name: trimmedName,
           phone: phone,
           photoUrl: photoUrl,
-          verified: true,
-          verificationStatus: VerificationStatus.approved,
-        ).toMap(),
-        'email': email,
-        'authProvider': authProvider,
+          email: email,
+          authProvider: authProvider,
+        ),
         'createdAt': FieldValue.serverTimestamp(),
       });
       if (phone.isNotEmpty && looksLikeIraqiMobile(phone)) {
@@ -413,12 +406,10 @@ class AuthService {
     final user = _auth.currentUser;
     if (user == null) return;
     final token = await user.getIdToken(true);
-    final res = await http
-        .post(
-          ApiConfig.uri('/api/users/delete-self'),
-          headers: {'Authorization': 'Bearer $token'},
-        )
-        .timeout(const Duration(seconds: 30));
+    final res = await http.post(
+      ApiConfig.uri('/api/users/delete-self'),
+      headers: {'Authorization': 'Bearer $token'},
+    ).timeout(const Duration(seconds: 30));
     if (res.statusCode != 200) {
       String message = 'تعذّر حذف الحساب. حاول لاحقاً أو تواصل مع الدعم.';
       try {
@@ -488,4 +479,28 @@ class AuthService {
       await _auth.signOut();
     }
   }
+}
+
+/// حقول إنشاء ملف العميل. لا نرسل متوسط التقييم لأنه يُدار من الخادم.
+Map<String, dynamic> customerCreateFields({
+  required String uid,
+  required String name,
+  required String phone,
+  required String photoUrl,
+  required String email,
+  required String authProvider,
+}) {
+  final fields = AppUser(
+    id: uid,
+    role: UserRole.customer,
+    name: name,
+    phone: phone,
+    photoUrl: photoUrl,
+    verified: true,
+    verificationStatus: VerificationStatus.approved,
+  ).toMap()
+    ..remove('ratingAvg');
+  fields['email'] = email;
+  fields['authProvider'] = authProvider;
+  return fields;
 }

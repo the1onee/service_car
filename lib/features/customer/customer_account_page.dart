@@ -1,7 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/features/auth/add_phone_screen.dart';
@@ -24,15 +23,13 @@ class CustomerAccountPage extends StatefulWidget {
     required this.profile,
     required this.jobs,
     this.city,
-    required this.onOpenOrders,
-    required this.onOpenWallet,
+    this.topBarTrailing,
   });
 
   final AppUser profile;
   final Stream<List<Job>> jobs;
   final String? city;
-  final VoidCallback onOpenOrders;
-  final VoidCallback onOpenWallet;
+  final Widget? topBarTrailing;
 
   @override
   State<CustomerAccountPage> createState() => _CustomerAccountPageState();
@@ -43,39 +40,12 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
   var _photoSaved = false;
   var _savingName = false;
   var _savingAddress = false;
-  var _locationPrompted = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybePromptLocation());
-  }
-
-  @override
-  void didUpdateWidget(covariant CustomerAccountPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.profile.geo == null && widget.profile.geo != null) {
-      _locationPrompted = true;
-    }
-    if (!_locationPrompted && widget.profile.geo == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _maybePromptLocation());
-    }
-  }
-
-  void _maybePromptLocation() {
-    if (!mounted || _locationPrompted || _savingAddress) return;
-    if (widget.profile.geo != null) {
-      _locationPrompted = true;
-      return;
-    }
-    _locationPrompted = true;
-    _editAddress();
-  }
 
   Future<void> _changePhoto() async {
     if (_uploadingPhoto) return;
     setState(() => _uploadingPhoto = true);
-    final url = await AccountActions.changePhoto(context, uid: widget.profile.id);
+    final url =
+        await AccountActions.changePhoto(context, uid: widget.profile.id);
     if (!mounted) return;
     setState(() {
       _uploadingPhoto = false;
@@ -124,9 +94,8 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
   Future<void> _editAddress() async {
     if (_savingAddress) return;
     final me = widget.profile;
-    final LatLng? initial = me.geo != null
-        ? LatLng(me.geo!.latitude, me.geo!.longitude)
-        : null;
+    final LatLng? initial =
+        me.geo != null ? LatLng(me.geo!.latitude, me.geo!.longitude) : null;
     setState(() => _savingAddress = true);
     await AccountActions.editAddress(
       context,
@@ -157,7 +126,8 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
           FieldTopBar(
             city: city.isEmpty ? null : city,
             caption: 'حسابي',
-            trailing: NotificationsBellButton(uid: me.id),
+            trailing:
+                widget.topBarTrailing ?? NotificationsBellButton(uid: me.id),
           ),
           Expanded(
             child: ListView(
@@ -180,7 +150,8 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                         padding: EdgeInsets.symmetric(vertical: 8),
                         child: Text(
                           'تعذر تحميل إحصائيات الطلبات',
-                          style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
+                          style:
+                              TextStyle(color: AppColors.inkSoft, fontSize: 13),
                         ),
                       );
                     }
@@ -210,37 +181,9 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                   },
                 ),
                 const SizedBox(height: 20),
+                const _SectionLabel('بياناتي'),
                 _MenuCard(
                   children: [
-                    _MenuTile(
-                      icon: Icons.assignment_outlined,
-                      title: 'الطلبات',
-                      onTap: widget.onOpenOrders,
-                    ),
-                    const Divider(height: 1),
-                    _MenuTile(
-                      icon: Icons.account_balance_wallet_outlined,
-                      title: 'المحفظة',
-                      onTap: widget.onOpenWallet,
-                    ),
-                    const Divider(height: 1),
-                    _MenuTile(
-                      icon: Icons.verified_user_outlined,
-                      title: 'الضمان',
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => WarrantiesScreen(
-                              stream: AppScope.of(context)
-                                  .jobs
-                                  .watchRecentForCustomer(me.id),
-                              profile: me,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    const Divider(height: 1),
                     _MenuTile(
                       icon: Icons.phone_outlined,
                       title: AppStrings.phone,
@@ -258,18 +201,41 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                               : me.address),
                       onTap: _savingAddress ? () {} : _editAddress,
                     ),
-                    const Divider(height: 1),
-                    const AccountThemeTile(),
-                    const Divider(height: 1),
-                    const AccountSoundTile(),
-                    const Divider(height: 1),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const _SectionLabel('خدماتي'),
+                _MenuCard(
+                  children: [
                     _MenuTile(
-                      icon: Icons.info_outline_rounded,
-                      title: 'عن التطبيق',
-                      subtitle: AppBrand.appName,
-                      onTap: () => _showAbout(context),
+                      icon: Icons.verified_user_outlined,
+                      title: 'الضمان',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => WarrantiesScreen(
+                              stream: widget.jobs,
+                              profile: me,
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                    const Divider(height: 1),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const _SectionLabel('إعدادات التطبيق'),
+                const _MenuCard(
+                  children: [
+                    AccountThemeTile(),
+                    Divider(height: 1),
+                    AccountSoundTile(),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const _SectionLabel('الخصوصية'),
+                _MenuCard(
+                  children: [
                     _MenuTile(
                       icon: Icons.description_outlined,
                       title: 'شروط الاستخدام',
@@ -283,6 +249,18 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                       icon: Icons.privacy_tip_outlined,
                       title: 'سياسة الخصوصية',
                       onTap: () => PrivacyViewScreen.open(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const _SectionLabel('المساعدة'),
+                _MenuCard(
+                  children: [
+                    _MenuTile(
+                      icon: Icons.info_outline_rounded,
+                      title: 'عن التطبيق',
+                      subtitle: AppBrand.appName,
+                      onTap: () => _showAbout(context),
                     ),
                     const Divider(height: 1),
                     Builder(
@@ -424,8 +402,8 @@ class _ProfileHero extends StatelessWidget {
                               : CachedNetworkImage(
                                   imageUrl: photo,
                                   fit: BoxFit.cover,
-                                  placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
-
+                                  placeholder: (context, url) => const Center(
+                                      child: CircularProgressIndicator()),
                                   errorWidget: (context, url, error) => Center(
                                     child: Text(
                                       initial,
@@ -529,3 +507,27 @@ typedef _StatCard = AccountStatCard;
 typedef _MenuCard = AccountMenuCard;
 typedef _MenuTile = AccountTile;
 
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Semantics(
+      header: true,
+      child: Padding(
+        padding: const EdgeInsetsDirectional.only(start: 4, bottom: 8),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: isDark ? const Color(0xFF94A3B8) : AppColors.inkSoft,
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -6,6 +6,7 @@ import 'package:barrr/features/auth/onboarding_screen.dart';
 import 'package:barrr/features/shell/auth_gate.dart';
 import 'package:barrr/legal/terms_of_use.dart';
 import 'package:barrr/models/app_user.dart';
+import 'package:barrr/services/user_repository.dart';
 
 import 'support/test_app_scope.dart';
 
@@ -106,5 +107,78 @@ void main() {
 
     expect(find.byKey(const ValueKey('home-customer')), findsOneWidget);
     expect(find.text('stub-home-customer'), findsOneWidget);
+  });
+
+  testWidgets('returns to AuthScreen when the session signs out',
+      (tester) async {
+    final session = TestSession(
+      initialUid: 'u4',
+      profile: user(id: 'u4'),
+    );
+    addTearDown(session.dispose);
+
+    await tester.pumpWidget(
+      session.wrap(AuthGate(roleHomeBuilder: stubRoleHome)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-customer')), findsOneWidget);
+
+    session.setUid(null);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AuthScreen), findsOneWidget);
+  });
+
+  testWidgets('shows missing-profile recovery for a valid session',
+      (tester) async {
+    final session = TestSession(initialUid: 'u5');
+    addTearDown(session.dispose);
+
+    await tester.pumpWidget(
+      session.wrap(AuthGate(roleHomeBuilder: stubRoleHome)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('لم نجد بيانات هذا الحساب. أعد إنشاء الحساب من جديد.'),
+      findsOneWidget,
+    );
+    expect(find.text('تسجيل الخروج'), findsOneWidget);
+  });
+
+  testWidgets('uses matching cached profile when auth stream errors',
+      (tester) async {
+    final cached = user(id: 'u6');
+    await saveCachedProfile(cached);
+    final session = TestSession(
+      initialUid: 'u6',
+      profile: cached,
+      uidStreamOverride: Stream<String?>.error(StateError('auth stream')),
+    );
+    addTearDown(session.dispose);
+
+    await tester.pumpWidget(
+      session.wrap(AuthGate(roleHomeBuilder: stubRoleHome)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('home-customer')), findsOneWidget);
+  });
+
+  testWidgets('does not use a cached profile for another session',
+      (tester) async {
+    await saveCachedProfile(user(id: 'old-user'));
+    final session = TestSession(
+      initialUid: 'u7',
+      uidStreamOverride: Stream<String?>.error(StateError('auth stream')),
+    );
+    addTearDown(session.dispose);
+
+    await tester.pumpWidget(
+      session.wrap(AuthGate(roleHomeBuilder: stubRoleHome)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AuthScreen), findsOneWidget);
   });
 }

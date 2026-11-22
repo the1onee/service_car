@@ -139,8 +139,10 @@ service cloud.firestore {
           && request.resource.data.get('commissionPercent', 0) == 0
           && !request.resource.data.keys().hasAny([
             'adminLevel', 'adminPermissions', 'disabled', 'commissionRate',
-            'ratingAvg', 'oilWorkshopTier'
+            'oilWorkshopTier'
           ])
+          // التطبيق المنشور يرسل ratingAvg=5. القيمة مثبتة، والتعديل لاحقاً ممنوع.
+          && request.resource.data.get('ratingAvg', 5) == 5
           && (
             (request.resource.data.role == 'customer'
               && request.resource.data.verified == true

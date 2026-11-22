@@ -26,6 +26,7 @@ class TestSession {
     String? initialUid,
     AppUser? profile,
     bool registering = false,
+    Stream<String?>? uidStreamOverride,
   }) {
     _uid = initialUid;
     _uidController = StreamController<String?>.broadcast();
@@ -35,7 +36,7 @@ class TestSession {
       yield* _uidController.stream;
     }();
     auth = AuthService(
-      uidChangesOverride: uidStream,
+      uidChangesOverride: uidStreamOverride ?? uidStream,
       currentUidOverride: () => _uid,
     );
     auth.registering.value = registering;
@@ -52,7 +53,8 @@ class TestSession {
     location = LocationService();
     fcm = FcmService(users);
     settings = SettingsRepository(
-      watchOverride: Stream<AppSettings>.value(const AppSettings()).asBroadcastStream(),
+      watchOverride:
+          Stream<AppSettings>.value(const AppSettings()).asBroadcastStream(),
     );
   }
 
@@ -69,6 +71,10 @@ class TestSession {
   void setUid(String? uid) {
     _uid = uid;
     if (!_uidController.isClosed) _uidController.add(uid);
+  }
+
+  void addUidError(Object error) {
+    if (!_uidController.isClosed) _uidController.addError(error);
   }
 
   void dispose() {

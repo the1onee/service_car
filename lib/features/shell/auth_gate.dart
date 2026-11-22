@@ -56,6 +56,7 @@ class _AuthGateState extends State<AuthGate> {
               currentUid != null &&
               cached.id == currentUid &&
               (snap.connectionState == ConnectionState.waiting ||
+                  snap.hasError ||
                   snap.data == currentUid)) {
             return _HomeFromProfile(
               seed: cached,

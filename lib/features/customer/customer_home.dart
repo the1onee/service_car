@@ -436,8 +436,6 @@ class _CustomerHomeState extends State<CustomerHome> {
             profile: widget.profile,
             jobs: _ensureRecentJobs(),
             city: zoneName,
-            onOpenOrders: () => _onTab(1),
-            onOpenWallet: () => _onTab(2),
           ),
         _ => _homeTab(
             active: _ensureActiveJob(),
@@ -610,7 +608,6 @@ class _CustomerHomeState extends State<CustomerHome> {
               ),
             );
           },
-          onOpenAccount: () => _onTab(3),
           onRefresh: _refreshLanding,
         );
       },
