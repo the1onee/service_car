@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -66,8 +67,11 @@ class AuthService {
 
   /// Firebase Auth يستعيد الجلسة المحفوظة قبل أول حدث، ويصدر كل تغيّر لاحق
   /// بما فيه تسجيل الخروج وتبديل الحساب. وجود ملف المستخدم يُفحص في AuthGate.
-  late final Stream<String?> uidChanges =
-      _uidChangesOverride ?? _auth.authStateChanges().map((user) => user?.uid);
+  late final Stream<String?> uidChanges = _uidChangesOverride ??
+      stabilizeInitialAuthUid(
+        changes: _auth.authStateChanges().map((user) => user?.uid),
+        currentUid: () => _auth.currentUser?.uid,
+      );
 
   Future<void> _ensureGoogleInitialized() async {
     if (kIsWeb || _googleInitialized) return;
@@ -478,6 +482,31 @@ class AuthService {
     } catch (_) {
       await _auth.signOut();
     }
+  }
+}
+
+/// بعض أجهزة Android تصدر `null` لحظة إنشاء القناة قبل استعادة جلسة القرص.
+/// نؤخر أول `null` فقط، بينما يظل تسجيل الخروج اللاحق فورياً.
+Stream<String?> stabilizeInitialAuthUid({
+  required Stream<String?> changes,
+  required String? Function() currentUid,
+  Duration restoreDelay = const Duration(milliseconds: 1200),
+}) async* {
+  var first = true;
+  var emitted = false;
+  String? lastEmitted;
+
+  await for (final eventUid in changes) {
+    var uid = eventUid;
+    if (first && uid == null) {
+      await Future<void>.delayed(restoreDelay);
+      uid = currentUid();
+    }
+    first = false;
+    if (emitted && uid == lastEmitted) continue;
+    emitted = true;
+    lastEmitted = uid;
+    yield uid;
   }
 }
 
