@@ -389,6 +389,39 @@ class AuthService {
     }
   }
 
+  /// حساب بكلمة مرور (هاتف أو بريد). حسابات Google وApple فقط لا تُظهر التغيير.
+  bool get hasPasswordProvider {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    return user.providerData.any(
+      (info) => info.providerId == EmailAuthProvider.PROVIDER_ID,
+    );
+  }
+
+  /// يغيّر كلمة المرور بعد إعادة المصادقة بكلمة الحالية. بلا بريد أو SMS.
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    if (newPassword.length < 6) {
+      throw FirebaseAuthException(
+        code: 'weak-password',
+        message: 'كلمة المرور ضعيفة، استخدم ٦ أحرف على الأقل.',
+      );
+    }
+    final user = _auth.currentUser;
+    final email = user?.email?.trim() ?? '';
+    if (user == null || email.isEmpty) {
+      throw const FormatException('أعد تسجيل الدخول ثم غيّر كلمة المرور.');
+    }
+    final credential = EmailAuthProvider.credential(
+      email: email,
+      password: currentPassword,
+    );
+    await user.reauthenticateWithCredential(credential);
+    await user.updatePassword(newPassword);
+  }
+
   /// يرسل رابط استعادة كلمة المرور عبر Firebase للإيميل الحقيقي فقط.
   Future<void> sendPasswordResetForEmail(String rawEmail) async {
     final email = rawEmail.trim().toLowerCase();

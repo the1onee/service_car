@@ -7,6 +7,7 @@ import 'package:barrr/core/app_brand.dart';
 import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/app_snackbar.dart';
 import 'package:barrr/core/app_sound.dart';
+import 'package:barrr/core/strings.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/user_error.dart';
 import 'package:barrr/features/auth/add_phone_screen.dart';
@@ -35,7 +36,9 @@ class AccountStatCard extends StatelessWidget {
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isDark ? const Color(0xFF334155) : AppColors.outline.withValues(alpha: 0.5),
+          color: isDark
+              ? const Color(0xFF334155)
+              : AppColors.outline.withValues(alpha: 0.5),
         ),
         boxShadow: AppTheme.cardShadow(),
       ),
@@ -78,7 +81,8 @@ class AccountMenuCard extends StatelessWidget {
     return Material(
       color: isDark ? const Color(0xFF1E293B) : Colors.white,
       elevation: 1,
-      shadowColor: isDark ? Colors.black38 : AppColors.slate.withValues(alpha: 0.12),
+      shadowColor:
+          isDark ? Colors.black38 : AppColors.slate.withValues(alpha: 0.12),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
         side: BorderSide(
@@ -163,8 +167,8 @@ class AccountThemeTile extends StatelessWidget {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: AppTheme.themeModeNotifier,
       builder: (context, mode, _) {
-        final isDark = mode == ThemeMode.dark ||
-            (mode == ThemeMode.system && isDarkNow);
+        final isDark =
+            mode == ThemeMode.dark || (mode == ThemeMode.system && isDarkNow);
         return SwitchListTile(
           value: isDark,
           onChanged: (_) => AppTheme.toggleTheme(),
@@ -190,7 +194,9 @@ class AccountThemeTile extends StatelessWidget {
             ),
           ),
           subtitle: Text(
-            isDark ? 'مفعّل حالياً (Industrial Night)' : 'معطّل (الوضع النهاري)',
+            isDark
+                ? 'مفعّل حالياً (Industrial Night)'
+                : 'معطّل (الوضع النهاري)',
             style: TextStyle(
               fontSize: 12,
               color: isDark ? const Color(0xFF94A3B8) : AppColors.inkSoft,
@@ -331,8 +337,9 @@ class _AccountPromptDialogState extends State<AccountPromptDialog> {
         controller: _controller,
         autofocus: true,
         maxLines: widget.maxLines,
-        textInputAction:
-            widget.maxLines == 1 ? TextInputAction.done : TextInputAction.newline,
+        textInputAction: widget.maxLines == 1
+            ? TextInputAction.done
+            : TextInputAction.newline,
         decoration: InputDecoration(
           hintText: widget.maxLines == 1 ? 'الاسم' : 'العنوان',
           border: const OutlineInputBorder(),
@@ -458,10 +465,10 @@ class AccountActions {
 
     try {
       await AppScope.of(context).users.setAddressAndGeo(
-        uid,
-        address: confirmed,
-        geo: GeoPoint(picked.latLng.latitude, picked.latLng.longitude),
-      );
+            uid,
+            address: confirmed,
+            geo: GeoPoint(picked.latLng.latitude, picked.latLng.longitude),
+          );
       if (context.mounted) {
         AppSnackBar.showSuccess(context, 'تم تحديث العنوان بنجاح');
       }
@@ -475,6 +482,17 @@ class AccountActions {
       }
       return false;
     }
+  }
+
+  /// تغيير كلمة المرور بعد التحقق من الكلمة الحالية.
+  static Future<bool> changePassword(BuildContext context) async {
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => const _ChangePasswordDialog(),
+    );
+    if (saved != true || !context.mounted) return false;
+    AppSnackBar.showSuccess(context, 'تم تغيير كلمة المرور');
+    return true;
   }
 
   /// تعديل رقم الهاتف
@@ -535,7 +553,8 @@ class AccountActions {
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text(
               'حذف',
-              style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                  color: AppColors.danger, fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -552,5 +571,141 @@ class AccountActions {
         );
       }
     }
+  }
+}
+
+class _ChangePasswordDialog extends StatefulWidget {
+  const _ChangePasswordDialog();
+
+  @override
+  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _current = TextEditingController();
+  final _next = TextEditingController();
+  final _confirm = TextEditingController();
+  var _obscure = true;
+  var _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _current.dispose();
+    _next.dispose();
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final current = _current.text;
+    final next = _next.text;
+    if (current.isEmpty) {
+      setState(() => _error = 'أدخل كلمة المرور الحالية.');
+      return;
+    }
+    if (next.length < 6) {
+      setState(() => _error = 'كلمة المرور ضعيفة، استخدم ٦ أحرف على الأقل.');
+      return;
+    }
+    if (next != _confirm.text) {
+      setState(() => _error = 'كلمتا المرور غير متطابقتين.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await AppScope.of(context).auth.changePassword(
+            currentPassword: current,
+            newPassword: next,
+          );
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = userFacingError(e);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('تغيير كلمة المرور'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _field(_current, 'كلمة المرور الحالية'),
+            const SizedBox(height: 12),
+            _field(_next, AppStrings.newPassword),
+            const SizedBox(height: 12),
+            _field(
+              _confirm,
+              AppStrings.confirmPassword,
+              action: TextInputAction.done,
+              onSubmitted: (_) {
+                if (!_busy) _submit();
+              },
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: const TextStyle(color: AppColors.danger, height: 1.4),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(false),
+          child: const Text('إلغاء'),
+        ),
+        FilledButton(
+          onPressed: _busy ? null : _submit,
+          style: FilledButton.styleFrom(backgroundColor: AppColors.slate),
+          child: _busy
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('حفظ'),
+        ),
+      ],
+    );
+  }
+
+  Widget _field(
+    TextEditingController controller,
+    String label, {
+    TextInputAction action = TextInputAction.next,
+    ValueChanged<String>? onSubmitted,
+  }) {
+    return TextField(
+      controller: controller,
+      obscureText: _obscure,
+      enabled: !_busy,
+      textInputAction: action,
+      onSubmitted: onSubmitted,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        suffixIcon: IconButton(
+          onPressed: _busy ? null : () => setState(() => _obscure = !_obscure),
+          icon: Icon(
+            _obscure
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined,
+          ),
+        ),
+      ),
+    );
   }
 }

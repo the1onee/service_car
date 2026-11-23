@@ -120,9 +120,8 @@ class _ProviderAccountViewState extends State<ProviderAccountView> {
   Future<void> _editAddress() async {
     if (_savingAddress) return;
     final me = widget.me;
-    final LatLng? initial = me.geo != null
-        ? LatLng(me.geo!.latitude, me.geo!.longitude)
-        : null;
+    final LatLng? initial =
+        me.geo != null ? LatLng(me.geo!.latitude, me.geo!.longitude) : null;
     setState(() => _savingAddress = true);
     await AccountActions.editAddress(
       context,
@@ -222,6 +221,15 @@ class _ProviderAccountViewState extends State<ProviderAccountView> {
                       subtitle: profilePhoneLabel(me.phone),
                       onTap: _editPhone,
                     ),
+                    if (AppScope.of(context).auth.hasPasswordProvider) ...[
+                      const Divider(height: 1),
+                      AccountTile(
+                        icon: Icons.lock_outline_rounded,
+                        title: AppStrings.password,
+                        subtitle: 'تغيير كلمة المرور',
+                        onTap: () => AccountActions.changePassword(context),
+                      ),
+                    ],
                     const Divider(height: 1),
                     AccountTile(
                       icon: Icons.location_on_outlined,

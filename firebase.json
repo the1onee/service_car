@@ -2,10 +2,13 @@
   "auth": {
     "authorizedDomains": [
       "localhost",
+      "127.0.0.1",
       "albatariq.com",
       "www.albatariq.com",
       "car-services-iraq.firebaseapp.com",
-      "car-services-iraq.web.app"
+      "car-services-iraq.web.app",
+      "car-services-iraq-staging.firebaseapp.com",
+      "car-services-iraq-staging.web.app"
     ],
     "providers": {
       "emailPassword": true,

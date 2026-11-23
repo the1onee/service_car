@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/features/auth/add_phone_screen.dart';
@@ -190,6 +191,15 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                       subtitle: profilePhoneLabel(me.phone),
                       onTap: _editPhone,
                     ),
+                    if (AppScope.of(context).auth.hasPasswordProvider) ...[
+                      const Divider(height: 1),
+                      _MenuTile(
+                        icon: Icons.lock_outline_rounded,
+                        title: AppStrings.password,
+                        subtitle: 'تغيير كلمة المرور',
+                        onTap: () => AccountActions.changePassword(context),
+                      ),
+                    ],
                     const Divider(height: 1),
                     _MenuTile(
                       icon: Icons.location_on_outlined,
