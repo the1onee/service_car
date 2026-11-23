@@ -65,12 +65,21 @@ class AuthService {
 
   String? get currentPhone => _auth.currentUser?.phoneNumber ?? pendingPhone;
 
-  /// Firebase Auth يستعيد الجلسة المحفوظة قبل أول حدث، ويصدر كل تغيّر لاحق
-  /// بما فيه تسجيل الخروج وتبديل الحساب. وجود ملف المستخدم يُفحص في AuthGate.
-  late final Stream<String?> uidChanges = _uidChangesOverride ??
-      stabilizeInitialAuthUid(
+  /// أول قيمة هي الجلسة المستعادة من القرص، ثم كل تغيّر لاحق بما فيه تسجيل
+  /// الخروج وتبديل الحساب. وجود ملف المستخدم يُفحص في AuthGate.
+  late final Stream<String?> uidChanges =
+      _uidChangesOverride ?? _restoringUidChanges();
+
+  /// الجلسة المحفوظة بعد اكتمال استعادتها، أو `null` إن لم توجد.
+  Future<String?> restoreSession() async {
+    if (_uidChangesOverride != null) return currentUid;
+    return _restoringUidChanges().first;
+  }
+
+  Stream<String?> _restoringUidChanges() => restoreThenFollowAuthUid(
         changes: _auth.authStateChanges().map((user) => user?.uid),
         currentUid: () => _auth.currentUser?.uid,
+        expectSession: () async => await readCachedProfile() != null,
       );
 
   Future<void> _ensureGoogleInitialized() async {
@@ -389,11 +398,15 @@ class AuthService {
         message: 'أدخل بريداً إلكترونياً صالحاً لاستعادة كلمة المرور.',
       );
     }
-    if (_auth.currentUser != null) await _auth.signOut();
+    if (_auth.currentUser != null) {
+      authLog('signOut reason=password reset');
+      await _auth.signOut();
+    }
     await _auth.sendPasswordResetEmail(email: email);
   }
 
-  Future<void> signOut() async {
+  Future<void> signOut({String reason = 'user'}) async {
+    authLog('signOut reason=$reason uid=${_auth.currentUser?.uid ?? 'null'}');
     pendingPhone = null;
     registering.value = false;
     await clearCachedProfile();
@@ -423,7 +436,7 @@ class AuthService {
       } catch (_) {}
       throw FormatException(message);
     }
-    await signOut();
+    await signOut(reason: 'account deleted');
   }
 
   Future<void> cancelRegistration() async {
@@ -436,7 +449,7 @@ class AuthService {
       (p) => p.providerId == 'google.com' || p.providerId == 'apple.com',
     );
     if (isSocial) {
-      await signOut();
+      await signOut(reason: 'registration cancelled');
       return;
     }
     await _discardIncompleteAccount(user);
@@ -480,34 +493,123 @@ class AuthService {
     try {
       await user.delete();
     } catch (_) {
+      authLog('signOut reason=incomplete account');
       await _auth.signOut();
     }
   }
 }
 
-/// بعض أجهزة Android تصدر `null` لحظة إنشاء القناة قبل استعادة جلسة القرص.
-/// نؤخر أول `null` فقط، بينما يظل تسجيل الخروج اللاحق فورياً.
-Stream<String?> stabilizeInitialAuthUid({
+void authLog(String message) => debugPrint('[auth] $message');
+
+/// يصدر الجلسة المستعادة أولاً ثم يتابع التغييرات.
+///
+/// بعض الأجهزة تصدر `null` قبل اكتمال استعادة الجلسة من القرص أو Keychain.
+/// إن كان هناك ملف محفوظ ([expectSession]) ننتظر مستخدماً حتى [restoreTimeout]
+/// قبل اعتبار الجلسة فارغة. بعد الاستعادة يُصدَر تسجيل الخروج فوراً، وأخطاء
+/// البث لا تُعامَل كخروج بل تُستبدل بـ [currentUid].
+Stream<String?> restoreThenFollowAuthUid({
   required Stream<String?> changes,
   required String? Function() currentUid,
-  Duration restoreDelay = const Duration(milliseconds: 1200),
-}) async* {
-  var first = true;
+  Future<bool> Function()? expectSession,
+  Duration restoreTimeout = const Duration(seconds: 5),
+  Duration pollInterval = const Duration(milliseconds: 250),
+}) {
+  late final StreamController<String?> out;
+  StreamSubscription<String?>? sub;
+  Timer? timeout;
+  Timer? poll;
+  final started = Stopwatch()..start();
+  var restored = false;
+  var waiting = false;
   var emitted = false;
-  String? lastEmitted;
+  String? last;
 
-  await for (final eventUid in changes) {
-    var uid = eventUid;
-    if (first && uid == null) {
-      await Future<void>.delayed(restoreDelay);
-      uid = currentUid();
-    }
-    first = false;
-    if (emitted && uid == lastEmitted) continue;
+  String label(String? uid) => uid ?? 'null';
+
+  void emit(String? uid) {
+    if (emitted && uid == last) return;
     emitted = true;
-    lastEmitted = uid;
-    yield uid;
+    last = uid;
+    authLog('uid=${label(uid)} at ${started.elapsedMilliseconds}ms');
+    out.add(uid);
   }
+
+  void finishRestore(String? uid, String reason) {
+    if (restored) return;
+    restored = true;
+    timeout?.cancel();
+    poll?.cancel();
+    authLog('restore done ($reason) uid=${label(uid)} '
+        'after ${started.elapsedMilliseconds}ms');
+    emit(uid);
+  }
+
+  Future<void> waitForRestore() async {
+    if (restored || waiting) return;
+    waiting = true;
+    final expect = await (expectSession?.call() ?? Future.value(false))
+        .catchError((Object _) => false);
+    if (restored) return;
+    if (!expect) {
+      finishRestore(currentUid(), 'no saved session');
+      return;
+    }
+    authLog('saved session expected; waiting up to '
+        '${restoreTimeout.inMilliseconds}ms');
+    timeout = Timer(restoreTimeout, () {
+      finishRestore(currentUid(), 'timeout');
+    });
+    poll = Timer.periodic(pollInterval, (_) {
+      final uid = currentUid();
+      if (uid != null) finishRestore(uid, 'poll');
+    });
+  }
+
+  out = StreamController<String?>(
+    onListen: () {
+      final initial = currentUid();
+      authLog('start currentUser=${label(initial)}');
+      if (initial != null) {
+        finishRestore(initial, 'currentUser');
+      } else {
+        waitForRestore();
+      }
+      sub = changes.listen(
+        (uid) {
+          if (restored) {
+            emit(uid);
+          } else if (uid != null) {
+            finishRestore(uid, 'event');
+          } else {
+            waitForRestore();
+          }
+        },
+        onError: (Object error, StackTrace stack) {
+          final uid = currentUid();
+          authLog('stream error: $error; currentUser=${label(uid)}');
+          if (restored) {
+            emit(uid);
+          } else if (uid != null) {
+            finishRestore(uid, 'error with currentUser');
+          } else {
+            waitForRestore();
+          }
+        },
+        onDone: () {
+          finishRestore(currentUid(), 'stream closed');
+          timeout?.cancel();
+          poll?.cancel();
+          out.close();
+        },
+      );
+    },
+    onCancel: () async {
+      timeout?.cancel();
+      poll?.cancel();
+      await sub?.cancel();
+    },
+  );
+  return out.stream;
 }
 
 /// حقول إنشاء ملف العميل. لا نرسل متوسط التقييم لأنه يُدار من الخادم.

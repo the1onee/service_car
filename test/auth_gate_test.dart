@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -179,6 +181,92 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(AuthScreen), findsOneWidget);
+    expect(find.text('stub-home-customer'), findsNothing);
+    expect(find.byType(AuthScreen), findsNothing);
+  });
+
+  testWidgets('stays signed in when restore emits null before the user',
+      (tester) async {
+    final controller = StreamController<String?>();
+    addTearDown(controller.close);
+    final session = TestSession(
+      initialUid: 'u8',
+      profile: user(id: 'u8'),
+      uidStreamOverride: controller.stream,
+    );
+    addTearDown(session.dispose);
+
+    await tester.pumpWidget(
+      session.wrap(AuthGate(roleHomeBuilder: stubRoleHome)),
+    );
+    controller.add(null);
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.byType(AuthScreen), findsNothing);
+
+    controller.add('u8');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-customer')), findsOneWidget);
+  });
+
+  testWidgets('auth stream error with a live session never shows AuthScreen',
+      (tester) async {
+    final session = TestSession(
+      initialUid: 'u9',
+      profile: user(id: 'u9'),
+      uidStreamOverride: Stream<String?>.error(StateError('auth stream')),
+    );
+    addTearDown(session.dispose);
+
+    await tester.pumpWidget(
+      session.wrap(AuthGate(roleHomeBuilder: stubRoleHome)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AuthScreen), findsNothing);
+    expect(find.byKey(const ValueKey('home-customer')), findsOneWidget);
+  });
+
+  testWidgets('profile read failure keeps the cached profile on screen',
+      (tester) async {
+    final cached = user(id: 'u10');
+    await saveCachedProfile(cached);
+    final session = TestSession(
+      initialUid: 'u10',
+      profileStreamOverride: (_) => Stream<AppUser?>.error(
+        StateError('permission-denied'),
+      ),
+    );
+    addTearDown(session.dispose);
+
+    await tester.pumpWidget(
+      session.wrap(AuthGate(roleHomeBuilder: stubRoleHome)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('home-customer')), findsOneWidget);
+    expect(
+      find.text('لم نجد بيانات هذا الحساب. أعد إنشاء الحساب من جديد.'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('profile read failure without cache shows splash, not logout',
+      (tester) async {
+    final session = TestSession(
+      initialUid: 'u11',
+      profileStreamOverride: (_) => Stream<AppUser?>.error(
+        StateError('permission-denied'),
+      ),
+    );
+    addTearDown(session.dispose);
+
+    await tester.pumpWidget(
+      session.wrap(AuthGate(roleHomeBuilder: stubRoleHome)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byType(BrandSplash), findsOneWidget);
+    expect(find.byType(AuthScreen), findsNothing);
   });
 }

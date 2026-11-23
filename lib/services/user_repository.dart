@@ -58,13 +58,19 @@ class UserRepository {
     if (override != null) return override(uid);
     return _userStreams.putIfAbsent(
       uid,
-      () => _userRef(uid).snapshots().map((d) {
+      () => _userRef(uid).snapshots().where((d) {
+        // لقطة الكاش الفارغة تصل قبل السيرفر وتُظهر «لا توجد بيانات» بالخطأ.
+        return d.exists || !d.metadata.isFromCache;
+      }).map((d) {
         final user = d.exists ? AppUser.fromDoc(d) : null;
         if (user != null) saveCachedProfile(user);
         return user;
       }),
     );
   }
+
+  /// يُسقط بث الملف المخزّن ليُعاد الاشتراك بعد خطأ.
+  void resetWatch(String uid) => _userStreams.remove(uid);
 
   Future<AppUser?> get(String uid) async {
     final d = await _userRef(uid).get();

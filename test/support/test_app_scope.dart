@@ -27,6 +27,7 @@ class TestSession {
     AppUser? profile,
     bool registering = false,
     Stream<String?>? uidStreamOverride,
+    Stream<AppUser?> Function(String uid)? profileStreamOverride,
   }) {
     _uid = initialUid;
     _uidController = StreamController<String?>.broadcast();
@@ -41,7 +42,8 @@ class TestSession {
     );
     auth.registering.value = registering;
     users = UserRepository(
-      watchOverride: (uid) {
+      watchOverride: profileStreamOverride ??
+          (uid) {
         if (profile != null && profile.id == uid) {
           return Stream<AppUser?>.value(profile);
         }

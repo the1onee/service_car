@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:barrr/core/app_brand.dart';
 import 'package:barrr/core/app_scope.dart';
@@ -11,6 +13,7 @@ import 'package:barrr/features/shared/field_ui.dart';
 import 'package:barrr/features/shell/role_home.dart';
 import 'package:barrr/models/app_settings.dart';
 import 'package:barrr/models/app_user.dart';
+import 'package:barrr/services/auth_service.dart';
 import 'package:barrr/services/user_repository.dart';
 
 class AuthGate extends StatefulWidget {
@@ -50,25 +53,23 @@ class _AuthGateState extends State<AuthGate> {
         builder: (context, snap) {
           // أثناء التسجيل تبقى شاشة المصادقة حتى يُحفظ الملف كاملاً.
           if (registering) return const AuthScreen();
-          final cached = _cached;
           final currentUid = scope.auth.currentUid;
-          if (cached != null &&
-              currentUid != null &&
-              cached.id == currentUid &&
-              (snap.connectionState == ConnectionState.waiting ||
-                  snap.hasError ||
-                  snap.data == currentUid)) {
+          final restoring = snap.connectionState == ConnectionState.waiting &&
+              !snap.hasData &&
+              !snap.hasError;
+          if (restoring) {
+            final cached = _cachedFor(currentUid);
+            if (currentUid == null || cached == null) {
+              return const BrandSplash();
+            }
             return _HomeFromProfile(
               seed: cached,
               uid: currentUid,
               roleHomeBuilder: widget.roleHomeBuilder,
             );
           }
-          // الجلسة تنتظر قراءة الملف؛ لا نعرض الدخول قبل أن يصدر البث قيمة.
-          if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
-            return const BrandSplash();
-          }
-          final uid = snap.data;
+          // الخروج يتطلب أن يتفق البث وجلسة Firebase معاً؛ خطأ البث ليس خروجاً.
+          final uid = snap.hasError ? currentUid : (snap.data ?? currentUid);
           if (uid == null) {
             final seen = _seenOnboarding;
             if (seen == null) return const BrandSplash();
@@ -80,6 +81,7 @@ class _AuthGateState extends State<AuthGate> {
             return const AuthScreen();
           }
           return _HomeFromProfile(
+            seed: _cachedFor(uid),
             uid: uid,
             roleHomeBuilder: widget.roleHomeBuilder,
           );
@@ -87,9 +89,15 @@ class _AuthGateState extends State<AuthGate> {
       ),
     );
   }
+
+  AppUser? _cachedFor(String? uid) {
+    final cached = _cached;
+    if (uid == null || cached == null || cached.id != uid) return null;
+    return cached;
+  }
 }
 
-class _HomeFromProfile extends StatelessWidget {
+class _HomeFromProfile extends StatefulWidget {
   const _HomeFromProfile({
     required this.uid,
     this.seed,
@@ -99,6 +107,46 @@ class _HomeFromProfile extends StatelessWidget {
   final String uid;
   final AppUser? seed;
   final Widget Function(AppUser profile, String roleKey)? roleHomeBuilder;
+
+  @override
+  State<_HomeFromProfile> createState() => _HomeFromProfileState();
+}
+
+class _HomeFromProfileState extends State<_HomeFromProfile> {
+  static const _maxRetryDelay = Duration(seconds: 30);
+
+  Stream<AppUser?>? _profile;
+  Timer? _retry;
+  var _retryDelay = const Duration(seconds: 2);
+
+  @override
+  void didUpdateWidget(_HomeFromProfile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.uid != widget.uid) {
+      _retry?.cancel();
+      _profile = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _retry?.cancel();
+    super.dispose();
+  }
+
+  /// فشل القراءة (صلاحيات قبل إرفاق الرمز أو انقطاع الشبكة) لا يعني غياب الحساب.
+  void _scheduleRetry(AppScope scope, Object error) {
+    if (_retry?.isActive ?? false) return;
+    final delay = _retryDelay;
+    authLog('profile read failed: $error; retry in ${delay.inSeconds}s');
+    _retry = Timer(delay, () {
+      if (!mounted) return;
+      scope.users.resetWatch(widget.uid);
+      setState(() => _profile = null);
+    });
+    final next = delay * 2;
+    _retryDelay = next > _maxRetryDelay ? _maxRetryDelay : next;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -117,14 +165,15 @@ class _HomeFromProfile extends StatelessWidget {
 
   Widget _profileHome(AppScope scope) {
     return StreamBuilder<AppUser?>(
-      stream: scope.users.watch(uid),
+      stream: _profile ??= scope.users.watch(widget.uid),
       builder: (context, profile) {
-        final appUser = profile.data ?? seed;
+        if (profile.hasError) _scheduleRetry(scope, profile.error!);
+        final appUser = profile.data ?? widget.seed;
         if (appUser == null) {
-          if (profile.connectionState == ConnectionState.waiting &&
-              !profile.hasData) {
-            return const BrandSplash();
-          }
+          final loading = profile.hasError ||
+              (profile.connectionState == ConnectionState.waiting &&
+                  !profile.hasData);
+          if (loading) return const BrandSplash();
           return const _MissingProfile();
         }
         if (!appUser.hasAcceptedCurrentTerms) {
@@ -132,7 +181,7 @@ class _HomeFromProfile extends StatelessWidget {
         }
         return RoleHome(
           profile: appUser,
-          homeBuilder: roleHomeBuilder,
+          homeBuilder: widget.roleHomeBuilder,
         );
       },
     );
