@@ -443,7 +443,7 @@ class _CustomerLandingState extends State<CustomerLanding> {
                         fontSize: 17,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     if (core.isEmpty)
                       const Padding(
                         padding: EdgeInsets.all(24),
@@ -596,6 +596,7 @@ class _ServicesGrid extends StatelessWidget {
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
           itemCount: grid.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,

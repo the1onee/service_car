@@ -1,7 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:barrr/core/app_scope.dart';
 import 'package:barrr/core/theme.dart';
 import 'package:barrr/core/strings.dart';
 import 'package:barrr/features/auth/add_phone_screen.dart';
@@ -9,7 +8,6 @@ import 'package:barrr/features/shared/account_shared.dart';
 import 'package:barrr/features/jobs/job_present.dart';
 import 'package:barrr/features/notifications/notifications_screen.dart';
 import 'package:barrr/features/shared/field_ui.dart';
-import 'package:barrr/core/app_brand.dart';
 import 'package:barrr/features/legal/privacy_view_screen.dart';
 import 'package:barrr/features/legal/terms_view_screen.dart';
 import 'package:barrr/features/support/support_screen.dart';
@@ -68,28 +66,6 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
       currentName: widget.profile.name,
     );
     if (mounted) setState(() => _savingName = false);
-  }
-
-  void _showAbout(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(AppBrand.appName),
-        content: SingleChildScrollView(
-          child: Text(
-            '${AppBrand.tagline}\n\n${AppBrand.aboutBlurb}\n\n'
-            'الدعم: ${AppBrand.supportPhone}',
-            style: const TextStyle(height: 1.5),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('حسناً'),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _editAddress() async {
@@ -191,15 +167,13 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                       subtitle: profilePhoneLabel(me.phone),
                       onTap: _editPhone,
                     ),
-                    if (AppScope.of(context).auth.hasPasswordProvider) ...[
-                      const Divider(height: 1),
-                      _MenuTile(
-                        icon: Icons.lock_outline_rounded,
-                        title: AppStrings.password,
-                        subtitle: 'تغيير كلمة المرور',
-                        onTap: () => AccountActions.changePassword(context),
-                      ),
-                    ],
+                    const Divider(height: 1),
+                    _MenuTile(
+                      icon: Icons.lock_outline_rounded,
+                      title: AppStrings.password,
+                      subtitle: 'تغيير كلمة المرور',
+                      onTap: () => AccountActions.changePassword(context),
+                    ),
                     const Divider(height: 1),
                     _MenuTile(
                       icon: Icons.location_on_outlined,
@@ -266,13 +240,6 @@ class _CustomerAccountPageState extends State<CustomerAccountPage> {
                 const _SectionLabel('المساعدة'),
                 _MenuCard(
                   children: [
-                    _MenuTile(
-                      icon: Icons.info_outline_rounded,
-                      title: 'عن التطبيق',
-                      subtitle: AppBrand.appName,
-                      onTap: () => _showAbout(context),
-                    ),
-                    const Divider(height: 1),
                     Builder(
                       builder: (tileContext) => _MenuTile(
                         icon: Icons.share_outlined,

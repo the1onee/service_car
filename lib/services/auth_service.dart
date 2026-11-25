@@ -389,13 +389,17 @@ class AuthService {
     }
   }
 
-  /// حساب بكلمة مرور (هاتف أو بريد). حسابات Google وApple فقط لا تُظهر التغيير.
+  /// حساب بكلمة مرور (هاتف أو بريد). Google وApple فقط لا يملكان كلمة.
   bool get hasPasswordProvider {
     final user = _auth.currentUser;
     if (user == null) return false;
-    return user.providerData.any(
-      (info) => info.providerId == EmailAuthProvider.PROVIDER_ID,
-    );
+    final providers = user.providerData.map((info) => info.providerId).toSet();
+    if (providers.contains(EmailAuthProvider.PROVIDER_ID)) return true;
+    // بعض أجهزة أندرويد تتأخر في تعبئة providerData بعد فتح التطبيق.
+    if (providers.isEmpty) {
+      return (user.email ?? '').trim().isNotEmpty;
+    }
+    return false;
   }
 
   /// يغيّر كلمة المرور بعد إعادة المصادقة بكلمة الحالية. بلا بريد أو SMS.

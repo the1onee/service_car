@@ -221,15 +221,13 @@ class _ProviderAccountViewState extends State<ProviderAccountView> {
                       subtitle: profilePhoneLabel(me.phone),
                       onTap: _editPhone,
                     ),
-                    if (AppScope.of(context).auth.hasPasswordProvider) ...[
-                      const Divider(height: 1),
-                      AccountTile(
-                        icon: Icons.lock_outline_rounded,
-                        title: AppStrings.password,
-                        subtitle: 'تغيير كلمة المرور',
-                        onTap: () => AccountActions.changePassword(context),
-                      ),
-                    ],
+                    const Divider(height: 1),
+                    AccountTile(
+                      icon: Icons.lock_outline_rounded,
+                      title: AppStrings.password,
+                      subtitle: 'تغيير كلمة المرور',
+                      onTap: () => AccountActions.changePassword(context),
+                    ),
                     const Divider(height: 1),
                     AccountTile(
                       icon: Icons.location_on_outlined,

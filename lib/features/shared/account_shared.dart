@@ -598,6 +598,16 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
   }
 
   Future<void> _submit() async {
+    final auth = AppScope.of(context).auth;
+    try {
+      await FirebaseAuth.instance.currentUser?.reload();
+    } catch (_) {}
+    if (!auth.hasPasswordProvider) {
+      setState(() {
+        _error = 'هذا الحساب يدخل عبر Google أو Apple ولا يملك كلمة مرور.';
+      });
+      return;
+    }
     final current = _current.text;
     final next = _next.text;
     if (current.isEmpty) {
